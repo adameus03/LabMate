@@ -1,0 +1,3 @@
+[submodule "qps/plibsys"]
+	path = qps/plibsys
+	url = https://github.com/saprykin/plibsys
