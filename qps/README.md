@@ -9,7 +9,7 @@
 1. Create a build directory
 2. `cd` into the build directory
 3. Run `cmake ..`
-4. Run 'cmake --build .`
+4. Run `cmake --build .`
 
 ### Cross-compile for Windows
 1. Create a build directory
