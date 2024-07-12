@@ -23,7 +23,6 @@ static PMutex* pMutex = NULL;
  */
 static pboolean handle_error(PError *error, pboolean shouldExit) {
     if (error != NULL) {
-        printf("-- handle_error --\n");
         P_ERROR(p_error_get_message(error));
         p_error_free(error);
         if (shouldExit) { exit(EXIT_FAILURE); }
@@ -37,7 +36,6 @@ static pboolean handle_error(PError *error, pboolean shouldExit) {
  */
 static pboolean handle_error_boolean(PError *error, pboolean result, pboolean shouldExit) {
     if (!result) {
-        printf("-- handle_error_boolean --\n");
         handle_error(error, shouldExit);
         if (!shouldExit) { return TRUE; }
         P_ERROR("Error occurred, but no error object was provided.");
@@ -51,7 +49,7 @@ static void handle_client(PSocket* pClientSocket) {
     PError* error = NULL;
     PSocketAddress* pClientSocketAddress = p_socket_get_remote_address(pClientSocket, &error);
     if (handle_error(error, FALSE)) {
-        P_ERROR("Failed to get client address");
+        P_ERROR("[Failed to get client address]");
         p_socket_free(pClientSocket);
         return;
     }
@@ -66,14 +64,14 @@ static void handle_client(PSocket* pClientSocket) {
         static pchar rid[RID_SIZE];
         pssize rv = p_socket_receive(pClientSocket, rid, RID_SIZE, &error);
         if (handle_error_boolean(error, rv != -1, FALSE)) {
-            P_ERROR("Failed to receive RID");
+            P_ERROR("[Failed to receive RID]");
             break;
         }
         if (rv != RID_SIZE) {
             int status = QPS_STATUS_INVALID_RID_LENGTH;
             rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
             if (handle_error_boolean(error, rv != -1, FALSE)) {
-                P_ERROR("Failed to send  status QPS_STATUS_INVALID_RID_LENGTH");
+                P_ERROR("[Failed to send  status QPS_STATUS_INVALID_RID_LENGTH]");
                 break;
             }
         } else {
@@ -81,7 +79,7 @@ static void handle_client(PSocket* pClientSocket) {
                 int status = QPS_STATUS_READY;
                 rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
                 if (handle_error_boolean(error, rv != -1, FALSE)) {
-                    P_ERROR("Failed to send status QPS_STATUS_READY");
+                    P_ERROR("[Failed to send status QPS_STATUS_READY]");
                     break;
                 }
 
@@ -98,7 +96,7 @@ static void handle_client(PSocket* pClientSocket) {
                 status = QPS_STATUS_FINISHED;
                 rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
                 if (handle_error_boolean(error, rv != -1, FALSE)) {
-                    P_ERROR("Failed to send status QPS_STATUS_FINISHED");
+                    P_ERROR("[Failed to send status QPS_STATUS_FINISHED]");
                     break;
                 }
 
@@ -110,7 +108,7 @@ static void handle_client(PSocket* pClientSocket) {
                 int status = QPS_STATUS_BUSY;
                 rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
                 if (handle_error_boolean(error, rv != -1, FALSE)) {
-                    P_ERROR("Failed to send status QPS_STATUS_BUSY");
+                    P_ERROR("[Failed to send status QPS_STATUS_BUSY]");
                     break;
                 }
             }
