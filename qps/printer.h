@@ -1,1 +1,16 @@
-int printer_test_esc_v(void);
+#include <stdint.h>
+
+#define PRINTER_ESC_V_ERR_SUCCESS 0
+#define PRINTER_ESC_V_ERR_LIBUSB_INIT 1
+#define PRINTER_ESC_V_ERR_SEND_COMMAND 2
+#define PRINTER_ESC_V_ERR_DEVICE_NOT_FOUND 3
+#define PRINTER_ESC_V_ERR_INTERFACE_CLAIM 4
+#define PRINTER_ESC_V_ERR_READ_RESPONSE 5
+int printer_esc_v(void);
+
+#define PRINTER_ESC_D_ERR_SUCCESS 0
+#define PRINTER_ESC_D_ERR_LIBUSB_INIT 1
+#define PRINTER_ESC_D_ERR_DEVICE_NOT_FOUND 2
+#define PRINTER_ESC_D_ERR_INTERFACE_CLAIM 3
+#define PRINTER_ESC_D_ERR_SEND_COMMAND 4
+int printer_esc_d(uint8_t *data, int width, int height);

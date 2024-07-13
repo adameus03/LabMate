@@ -7,6 +7,7 @@
 #include <ptypes.h>
 
 #include "printer.h"
+#include "qr_data_adapter.h"
 
 #define IP_ADDR "127.0.0.1"
 #define PORT 3535
@@ -92,14 +93,28 @@ static void handle_client(PSocket* pClientSocket) {
                 p_uthread_sleep(1000);
                 P_DEBUG("Doing some work 3");
                 p_uthread_sleep(1000);
-                P_DEBUG("Calling printer_test_esc_v");
-                int rv = printer_test_esc_v();
-                fprintf(stdout, "print_test returned %d\n", rv);
+                P_DEBUG("Calling printer_esc_v");
+                int rv = printer_esc_v();
+                fprintf(stdout, "printer_esc_v returned %d\n", rv);
+                P_DEBUG("Converting to QR code");
+                uint8_t* pOutputData = NULL;
+                int nOutputWidth = 0;
+                int nOutputHeight = 0;
+                rv = qda_u8buf2bmp((const uint8_t*)rid, RID_SIZE, &pOutputData, &nOutputWidth, &nOutputHeight);
+                if (rv != QDA_U8BUF2BMP_ERR_SUCCESS) {
+                    P_ERROR("Failed to convert to QR code");
+                    fprintf(stderr, "qda_u8buf2bmp returned %d\n", rv);
+                    break;
+                }
+                P_DEBUG("Finished converting to QR code");
+                P_DEBUG("Calling printer_esc_d");
+                rv = printer_esc_d(pOutputData, nOutputWidth, nOutputHeight);
+                fprintf(stdout, "printer_esc_d returned %d\n", rv);
                 P_DEBUG("Finished work");
 
 
                 status = QPS_STATUS_FINISHED;
-                rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
+                rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error); // TODO Handle states / errors
                 if (handle_error_boolean(error, rv != -1, FALSE)) {
                     P_ERROR("[Failed to send status QPS_STATUS_FINISHED]");
                     break;

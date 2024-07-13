@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 project(qps)
 set(CMAKE_C_STANDARD 11)
 set(BUILD_SHARED_LIBS OFF)
+
+set(CMAKE_BUILD_TYPE Debug) # For debugging
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/plibsys)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libusb-cmake)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libqrencode)
@@ -11,6 +14,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libqrencode)
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/printer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/qr_data_adapter.c
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys usb-1.0 qrencode)

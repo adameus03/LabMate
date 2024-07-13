@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "libusb.h": "c",
-        "plibsys.h": "c"
-    }
+        "plibsys.h": "c",
+        "qrspec.h": "c"
+    },
+    "cmake.sourceDirectory": "/home/mundus/base/sem7/LabMate/qps"
 }
