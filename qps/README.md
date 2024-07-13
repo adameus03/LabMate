@@ -8,12 +8,12 @@
 ### Compile on the target system
 1. Create a build directory
 2. `cd` into the build directory
-3. Run `cmake -DWITHOUT_PNG=ON ..`
+3. Run `cmake -DWITHOUT_PNG=ON -DCMAKE_USE_PTHREADS_INIT=OFF -DCMAKE_THREAD_PREFER_PTHREAD=OFF ..`
 4. Run `cmake --build .`
 
 ### Cross-compile for Windows
 1. Create a build directory
 2. `cd` into the build directory
-3. Run `cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/windows-toolchain.cmake -DPLIBSYS_BUILD_STATIC=ON -DWITHOUT_PNG=ON -S ..`
+3. Run `cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/windows-toolchain.cmake -DPLIBSYS_BUILD_STATIC=ON -DWITHOUT_PNG=ON -DCMAKE_USE_PTHREADS_INIT=OFF -DCMAKE_THREAD_PREFER_PTHREAD=OFF -S ..`
 4. Run `cmake --build .`
 

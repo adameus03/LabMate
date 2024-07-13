@@ -6,4 +6,4 @@
 	url = https://github.com/libusb/libusb-cmake
 [submodule "qps/libqrencode"]
 	path = qps/libqrencode
-	url = https://github.com/fukuchi/libqrencode
+	url = https://github.com/adameus03/libqrencode
