@@ -4,14 +4,16 @@ set(CMAKE_C_STANDARD 11)
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/plibsys)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libusb-cmake)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libqrencode)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/plibsys/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libusb-cmake/libusb/libusb)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libqrencode)
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/printer.c
 )
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys usb-1.0)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys usb-1.0 qrencode)
 
 # include(ExternalProject)
 # ExternalProject_Add(
