@@ -1,6 +1,6 @@
 [submodule "qps/plibsys"]
 	path = qps/plibsys
 	url = https://github.com/adameus03/plibsys
-[submodule "qps/libusb"]
-	path = qps/libusb
-	url = https://github.com/libusb/libusb
+[submodule "qps/libusb-cmake"]
+	path = qps/libusb-cmake
+	url = https://github.com/libusb/libusb-cmake
