@@ -14,6 +14,7 @@
 
 #define RID_SIZE 64
 
+#define QPS_STATUS_QR_GENERATION_FAILED -3
 #define QPS_STATUS_BUSY -2
 #define QPS_STATUS_INVALID_RID_LENGTH -1
 #define QPS_STATUS_READY 0
@@ -64,7 +65,15 @@ static void handle_client(PSocket* pClientSocket) {
 
     while (TRUE) {
         // Receive RID (64 bytes)
-        static pchar rid[RID_SIZE];
+        pchar* rid = p_malloc(RID_SIZE);
+        if (rid == NULL) {
+            P_ERROR("[Failed to allocate memory for RID]");
+            break;
+        }
+        for (int i = 0; i < RID_SIZE; i++) {
+            rid[i] = 0;
+        }
+        
         pssize rv = p_socket_receive(pClientSocket, rid, RID_SIZE, &error);
         if (handle_error_boolean(error, rv != -1, FALSE)) {
             P_ERROR("[Failed to receive RID]");
@@ -86,31 +95,64 @@ static void handle_client(PSocket* pClientSocket) {
                     break;
                 }
 
-                // Do some work - sleeps for now
-                P_DEBUG("Doing some work 1");
-                p_uthread_sleep(1000);
-                P_DEBUG("Doing some work 2");
-                p_uthread_sleep(1000);
-                P_DEBUG("Doing some work 3");
-                p_uthread_sleep(1000);
+                // P_DEBUG("Doing some work 1");
+                // p_uthread_sleep(1000);
+                // P_DEBUG("Doing some work 2");
+                // p_uthread_sleep(1000);
+                // P_DEBUG("Doing some work 3");
+                // p_uthread_sleep(1000);
+
                 P_DEBUG("Calling printer_esc_v");
                 int rv = printer_esc_v();
                 fprintf(stdout, "printer_esc_v returned %d\n", rv);
                 P_DEBUG("Converting to QR code");
-                uint8_t* pOutputData = NULL;
-                int nOutputWidth = 0;
-                int nOutputHeight = 0;
-                rv = qda_u8buf2bmp((const uint8_t*)rid, RID_SIZE, &pOutputData, &nOutputWidth, &nOutputHeight);
+                uint8_t* pGrayscaleData = NULL;
+                int nGrayscaleDataWidth = 0;
+                int nGrayscaleDataHeight = 0;
+                rv = qda_dlw500u8buf_to_grayscale((const uint8_t*)rid, RID_SIZE, &pGrayscaleData, &nGrayscaleDataWidth, &nGrayscaleDataHeight);
                 if (rv != QDA_U8BUF2BMP_ERR_SUCCESS) {
                     P_ERROR("Failed to convert to QR code");
-                    fprintf(stderr, "qda_u8buf2bmp returned %d\n", rv);
-                    break;
+                    fprintf(stderr, "qda_dlw500u8buf_to_grayscale returned %d\n", rv);
+                    p_free(rid);
+                    int status = QPS_STATUS_QR_GENERATION_FAILED;
+                    rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
+                    if (handle_error_boolean(error, rv != -1, FALSE)) {
+                        P_ERROR("[Failed to send status QPS_STATUS_QR_GENERATION_FAILED]");
+                        break;
+                    }
                 }
                 P_DEBUG("Finished converting to QR code");
+                p_free(rid);
+
+                #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+                fprintf(stdout, "--- DEBUG EXTENSIONS ARE ENABLED ---\n");
+                qda_grayscale_print_to_console(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
+                uint8_t* pGrayscaleExpandedPixelsData = NULL;
+                int nGrayscaleExpandedPixelsDataWidth = 0;
+                int nGrayscaleExpandedPixelsDataHeight = 0;
+                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 8);
+                //p_free(pGrayscaleData);
+
+                uint8_t* pGrayscaleExpandedPaddedData = NULL;
+                int nGrayscaleExpandedPaddedDataWidth = 0;
+                int nGrayscaleExpandedPaddedDataHeight = 0;
+                qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, 8);
+                p_free(pGrayscaleExpandedPixelsData);
+
+                uint8_t* pRgbData = NULL;
+                int nRgbDataLen = 0;
+                qda_grayscale_to_rgb(pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, &pRgbData, &nRgbDataLen);
+                p_free(pGrayscaleExpandedPaddedData);
+
+                qda_rgb_save_to_bmp_file(pRgbData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, 3, "qr.bmp");
+                #endif
+
+
                 P_DEBUG("Calling printer_esc_d");
-                rv = printer_esc_d(pOutputData, nOutputWidth, nOutputHeight);
+                rv = printer_esc_d(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
                 fprintf(stdout, "printer_esc_d returned %d\n", rv);
                 P_DEBUG("Finished work");
+                p_free(pGrayscaleData);
 
 
                 status = QPS_STATUS_FINISHED;
