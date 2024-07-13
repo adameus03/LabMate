@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <plibsys.h>
+#include "plibsys.h"
 #include <psocket.h>
 #include <plibsysconfig.h>
 #include <pmacros.h>
 #include <ptypes.h>
+
+#include "printer.h"
 
 #define IP_ADDR "127.0.0.1"
 #define PORT 3535
@@ -90,6 +92,9 @@ static void handle_client(PSocket* pClientSocket) {
                 p_uthread_sleep(1000);
                 P_DEBUG("Doing some work 3");
                 p_uthread_sleep(1000);
+                P_DEBUG("Calling print_test");
+                int rv = print_test();
+                fprintf(stdout, "print_test returned %d\n", rv);
                 P_DEBUG("Finished work");
 
 
