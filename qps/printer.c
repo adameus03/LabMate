@@ -5,9 +5,9 @@
 #include "printer.h"
 
 #define DYMO_VENDOR_ID 0x0922
-#define DYMO_PRODUCT_ID 0x1007
+#define DYMO_PRODUCT_ID 0x0028
 
-int print_test(void) {
+int printer_test_esc_v(void) {
     libusb_device_handle *handle;
     libusb_context *context = NULL;
     int r;

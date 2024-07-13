@@ -92,8 +92,8 @@ static void handle_client(PSocket* pClientSocket) {
                 p_uthread_sleep(1000);
                 P_DEBUG("Doing some work 3");
                 p_uthread_sleep(1000);
-                P_DEBUG("Calling print_test");
-                int rv = print_test();
+                P_DEBUG("Calling printer_test_esc_v");
+                int rv = printer_test_esc_v();
                 fprintf(stdout, "print_test returned %d\n", rv);
                 P_DEBUG("Finished work");
 
