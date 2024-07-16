@@ -17,3 +17,5 @@
 3. Run `cmake -DCMAKE_TOOLCHAIN_FILE=../toolchains/windows-toolchain.cmake -DPLIBSYS_BUILD_STATIC=ON -DWITHOUT_PNG=ON -DCMAKE_USE_PTHREADS_INIT=OFF -DCMAKE_THREAD_PREFER_PTHREAD=OFF -S ..`
 4. Run `cmake --build .`
 
+### Enable libusb-cmake debug logging
+You can do it by setting option `-DLIBUSB_ENABLE_DEBUG_LOGGING=ON` with cmake

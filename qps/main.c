@@ -9,11 +9,15 @@
 #include "printer.h"
 #include "qr_data_adapter.h"
 
+// TODO NOW: Adjust to changed printer.h API
+// TODO: Abstract away plibsys calls? 
+
 #define IP_ADDR "127.0.0.1"
 #define PORT 3535
 
 #define RID_SIZE 64
 
+#define QPS_STATUS_USB_FAIL -4
 #define QPS_STATUS_QR_GENERATION_FAILED -3
 #define QPS_STATUS_BUSY -2
 #define QPS_STATUS_INVALID_RID_LENGTH -1
@@ -25,7 +29,7 @@ static PMutex* pMutex = NULL;
 /**
  * @return TRUE if an error was handled, FALSE otherwise.
  */
-static pboolean handle_error(PError *error, pboolean shouldExit) {
+static pboolean qps_handle_error(PError *error, pboolean shouldExit) {
     if (error != NULL) {
         P_ERROR(p_error_get_message(error));
         p_error_free(error);
@@ -38,9 +42,9 @@ static pboolean handle_error(PError *error, pboolean shouldExit) {
 /**
  * @return TRUE if an error was handled, FALSE otherwise.
  */
-static pboolean handle_error_boolean(PError *error, pboolean result, pboolean shouldExit) {
+static pboolean qps_handle_error_boolean(PError *error, pboolean result, pboolean shouldExit) {
     if (!result) {
-        handle_error(error, shouldExit);
+        qps_handle_error(error, shouldExit);
         if (!shouldExit) { return TRUE; }
         P_ERROR("Error occurred, but no error object was provided.");
         if (shouldExit) { exit(EXIT_FAILURE); }
@@ -49,10 +53,54 @@ static pboolean handle_error_boolean(PError *error, pboolean result, pboolean sh
     return FALSE;
 }
 
-static void handle_client(PSocket* pClientSocket) {
+static const char* qps_get_status_symbol(int status) {
+    switch (status) {
+        case QPS_STATUS_USB_FAIL:
+            return "QPS_STATUS_USB_FAIL";
+        case QPS_STATUS_QR_GENERATION_FAILED:
+            return "QPS_STATUS_QR_GENERATION_FAILED";
+        case QPS_STATUS_BUSY:
+            return "PQPS_STATUS_BUSY";
+        case QPS_STATUS_INVALID_RID_LENGTH:
+            return "QPS_STATUS_INVALID_RID_LENGTH";
+        case QPS_STATUS_READY:
+            return "QPS_STATUS_READY";
+        case QPS_STATUS_FINISHED:
+            return "QPS_STATUS_FINISHED";
+        default:
+            return "Unknown status";
+    }
+}
+
+/**
+ * @returns TRUE if the status was sent to the client successfully, FALSE otherwise.
+ */
+static pboolean qps_server_send_status(PSocket* pClientSocket, int status) {
+    PError* error = NULL;
+    int rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
+    if (qps_handle_error_boolean(error, rv != -1, FALSE)) {
+        const char* statusSymbol = qps_get_status_symbol(status);
+        fprintf(stderr, "[Failed to send status %s]", statusSymbol);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static void qps_nop() {}
+#define BREAK_IF_FALSE(rv) if (!(rv)) { break; } qps_nop() 
+
+static void qps_stall(int n, int ms) {
+    for (int i = 0; i < n; i++) {
+        printf("Stalling for %d ms (%d / %d)\n", ms, i + 1, n);
+        p_uthread_sleep(ms);
+    }
+    
+}
+
+static void qps_handle_client(PSocket* pClientSocket) {
     PError* error = NULL;
     PSocketAddress* pClientSocketAddress = p_socket_get_remote_address(pClientSocket, &error);
-    if (handle_error(error, FALSE)) {
+    if (qps_handle_error(error, FALSE)) {
         P_ERROR("[Failed to get client address]");
         p_socket_free(pClientSocket);
         return;
@@ -75,35 +123,32 @@ static void handle_client(PSocket* pClientSocket) {
         }
         
         pssize rv = p_socket_receive(pClientSocket, rid, RID_SIZE, &error);
-        if (handle_error_boolean(error, rv != -1, FALSE)) {
+        if (qps_handle_error_boolean(error, rv != -1, FALSE)) {
             P_ERROR("[Failed to receive RID]");
             break;
         }
         if (rv != RID_SIZE) {
-            int status = QPS_STATUS_INVALID_RID_LENGTH;
-            rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
-            if (handle_error_boolean(error, rv != -1, FALSE)) {
-                P_ERROR("[Failed to send  status QPS_STATUS_INVALID_RID_LENGTH]");
+            if (!qps_server_send_status(pClientSocket, QPS_STATUS_INVALID_RID_LENGTH)) {
                 break;
             }
         } else {
             if(p_mutex_trylock(pMutex)) {
-                int status = QPS_STATUS_READY;
-                rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
-                if (handle_error_boolean(error, rv != -1, FALSE)) {
-                    P_ERROR("[Failed to send status QPS_STATUS_READY]");
-                    break;
+                BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_READY));
+
+                // qps_stall(3, 1000);
+
+                P_DEBUG("Calling printer_take");
+                printer_ctx_t ctx = {};
+                int rv = printer_take(&ctx);
+                if (rv != PRINTER_TAKE_ERR_SUCCESS) {
+                    P_ERROR("USB related error");
+                    fprintf(stdout, "printer_take returned %d\n", rv);
+                    BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_USB_FAIL));
+                    break; // Failed to connect to the printer so it doesn't make sense to proceed; the client has been notified hopefully
                 }
 
-                // P_DEBUG("Doing some work 1");
-                // p_uthread_sleep(1000);
-                // P_DEBUG("Doing some work 2");
-                // p_uthread_sleep(1000);
-                // P_DEBUG("Doing some work 3");
-                // p_uthread_sleep(1000);
-
                 P_DEBUG("Calling printer_esc_v");
-                int rv = printer_esc_v();
+                rv = printer_esc_v(&ctx);
                 fprintf(stdout, "printer_esc_v returned %d\n", rv);
                 P_DEBUG("Converting to QR code");
                 uint8_t* pGrayscaleData = NULL;
@@ -114,12 +159,7 @@ static void handle_client(PSocket* pClientSocket) {
                     P_ERROR("Failed to convert to QR code");
                     fprintf(stderr, "qda_dlw500u8buf_to_grayscale returned %d\n", rv);
                     p_free(rid);
-                    int status = QPS_STATUS_QR_GENERATION_FAILED;
-                    rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
-                    if (handle_error_boolean(error, rv != -1, FALSE)) {
-                        P_ERROR("[Failed to send status QPS_STATUS_QR_GENERATION_FAILED]");
-                        break;
-                    }
+                    BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_QR_GENERATION_FAILED));
                 }
                 P_DEBUG("Finished converting to QR code");
                 p_free(rid);
@@ -148,31 +188,23 @@ static void handle_client(PSocket* pClientSocket) {
                 #endif
 
 
-                P_DEBUG("Calling printer_esc_d");
-                rv = printer_esc_d(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
-                fprintf(stdout, "printer_esc_d returned %d\n", rv);
+                P_DEBUG("NOT CALLING PRINtER_ESC_D FOR NOW");
+                // P_DEBUG("Calling printer_esc_d");
+                // rv = printer_esc_d(&ctx, pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
+                // fprintf(stdout, "printer_esc_d returned %d\n", rv);
                 P_DEBUG("Finished work");
                 p_free(pGrayscaleData);
 
+                printer_release(&ctx);
 
-                status = QPS_STATUS_FINISHED;
-                rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error); // TODO Handle states / errors
-                if (handle_error_boolean(error, rv != -1, FALSE)) {
-                    P_ERROR("[Failed to send status QPS_STATUS_FINISHED]");
-                    break;
-                }
+                BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_FINISHED));
 
                 if (!p_mutex_unlock(pMutex)) {
                     P_ERROR("Failed to unlock mutex");
                     exit(EXIT_FAILURE);
                 }
             } else {
-                int status = QPS_STATUS_BUSY;
-                rv = p_socket_send(pClientSocket, (const pchar*)&status, sizeof(int), &error);
-                if (handle_error_boolean(error, rv != -1, FALSE)) {
-                    P_ERROR("[Failed to send status QPS_STATUS_BUSY]");
-                    break;
-                }
+                BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_BUSY));
             }
         }
     }
@@ -191,24 +223,24 @@ int main() {
     PError *error = NULL;
     pboolean result = FALSE;
     PSocket* pSocket = p_socket_new(P_SOCKET_FAMILY_INET, P_SOCKET_TYPE_STREAM, P_SOCKET_PROTOCOL_TCP, &error);
-    handle_error(error, TRUE);
+    qps_handle_error(error, TRUE);
 
     PSocketAddress* pSocketAddress = p_socket_address_new(IP_ADDR, PORT);
     
     result = p_socket_bind(pSocket, pSocketAddress, FALSE, &error);
-    handle_error_boolean(error, result, TRUE);
+    qps_handle_error_boolean(error, result, TRUE);
 
     result = p_socket_listen(pSocket, &error);
-    handle_error_boolean(error, result, TRUE);
+    qps_handle_error_boolean(error, result, TRUE);
 
     while (TRUE) {
         PSocket* pClientSocket = p_socket_accept(pSocket, &error);
-        if (handle_error(error, FALSE)) {
+        if (qps_handle_error(error, FALSE)) {
             P_ERROR("Failed to accept client socket");
             continue;
         }
 
-        PUThread *pThread = p_uthread_create((PUThreadFunc)handle_client, pClientSocket, FALSE, NULL);
+        PUThread *pThread = p_uthread_create((PUThreadFunc)qps_handle_client, pClientSocket, FALSE, NULL);
         if (pThread == NULL) {
             P_ERROR("Failed to create thread for client");
             p_socket_free(pClientSocket);

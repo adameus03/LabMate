@@ -166,8 +166,8 @@ void qda_grayscale_print_to_console(const uint8_t* pInputData, const int nWidth,
 }
 
 int qda_rgb_save_to_bmp_file(const uint8_t* pInputData, const int nWidth, const int nHeight, const int nChannels, const char* pFilePath) {
-    // For debugging purposes, write the this greyscale bitmap to a file.
-    fprintf(stdout, "Converting and writing QR code to file %s\n", pFilePath);
+    // For debugging purposes, save the RGB bitmap to a BMP file.
+    fprintf(stdout, "Writing QR code rgb bitmap to file %s\n", pFilePath);
     fprintf(stdout, "Absolute containing directory path: %s\n", __FILE__);
 
     int nInputLen = nWidth * nHeight * nChannels;
