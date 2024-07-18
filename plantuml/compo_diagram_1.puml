@@ -1,0 +1,50 @@
+@startuml
+
+[Dyspozytor frontendu] as CRouter
+
+[Komponent widoku przeglądarki] as VCBrowser
+
+[Komponent QPS] as CPrintingService
+
+[Komponent ReagentsRU] as CReagentsRU
+
+[Application client module] as CAppClient
+
+note top of VCBrowser
+    Wyszukiwarka po nazwie, kodzie producenta,
+    umożliwia dodawanie kodu producenta do bazy danych (+ zmienianie i usuwanie), 
+    aby ułatwić wyszukiwanie w przyszłości
+end note
+
+note bottom of CRouter
+    Obsługuje prezentowanie klientowi właściwych
+    widoków w zależności od kontekstu aplikacji
+end note
+
+note right of CPrintingService
+    //QR Printing Service// - generuje kod QR na podstawie przekazanego RID i steruje drukarką. 
+Uwzględnia liczbę etykiet do wydrukowania dla tego samego kodu producenta 
+(jednocześnie kody QR - unikalne dla każdego egzemplarza)
+end note
+
+note left of CReagentsRU
+    Read (search) & update the reagents database
+end note
+
+note bottom of CAppClient
+Communicates with local server
+end note
+    
+
+CRouter -right-( Kontekst
+VCBrowser -left- Kontekst 
+VCBrowser -right-( PrintJobControl
+CPrintingService -left- PrintJobControl
+
+VCBrowser -down-( DataControl
+CReagentsRU -up- DataControl
+
+VCBrowser -down-( AccountManager
+CAppClient -up- AccountManager
+
+@enduml
