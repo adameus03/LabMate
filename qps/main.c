@@ -160,6 +160,7 @@ static void qps_handle_client(PSocket* pClientSocket) {
                     BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_USB_FAIL));
                     break;
                 }
+                fprintf(stdout, "Printer revision: %s\n", revision);
 
                 P_DEBUG("Converting to QR code");
                 uint8_t* pGrayscaleData = NULL;
