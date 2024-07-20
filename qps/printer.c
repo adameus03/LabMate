@@ -120,7 +120,7 @@ static int printer_detach_kernel_drivers(printer_ctx_t* pCtx) {
     switch (rv) {
         case 0:
             // No kernel driver active so nothing to do
-            break;
+            return PRINTER_DETACH_KERNEL_DRIVERS_ERR_SUCCESS;
         case LIBUSB_ERROR_NO_DEVICE:
             return PRINTER_DETACH_KERNEL_DRIVERS_ERR_NO_DEVICE_WHEN_CHECKING;
         case LIBUSB_ERROR_NOT_SUPPORTED:
