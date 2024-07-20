@@ -1,6 +1,6 @@
 # QR Printing Service
 ## Target features
-- [ ] Connects with Dymo LabelWriter 550 (libusb)
+- [ ] Connects with Dymo LabelWriter ~~550~~ 400 (libusb)
 - [x] Converts plaintext to QR code bitmap (libqrencode)
 - [x] Acts as a simple TCP server listening on the loopback interface & providing easy way to print a label using RID (reagent identifier), as well as enabling the client to be notified when the printer job state changes. (plibsys socket API)
 
