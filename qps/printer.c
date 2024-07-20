@@ -148,7 +148,7 @@ printer_err_t printer_get_revision(printer_ctx_t *pCtx, char *pcRevision_out) {
         }
     }
     memcpy(pcRevision_out, revision, sizeof(revision) / sizeof(___revision_basetype_t));
-    revision[PRINTER_REVISION_STRING_LENGTH] = '\0';
+    pcRevision_out[PRINTER_REVISION_STRING_LENGTH] = '\0';
     return PRINTER_GET_REVISION_ERR_SUCCESS;
     #else
     return PRINTER_GET_REVISION_ERR_UNKNOWN_PRINTER_MODEL;
