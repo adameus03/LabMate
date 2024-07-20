@@ -92,7 +92,7 @@ int qda_grayscale_expand_pixels(const uint8_t* pInputData, const int nInputWidth
 
 int qda_grayscale_pad(qda_grayscale_pad_mode mode, const uint8_t* pInputData, const int nInputWidth, const int nInputHeight, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight, const int nPxPadding) {
     switch (mode) {
-        case QDA_GRAYSCALE_PAD_MODE_ALL_SIDES:
+        case QDA_GRAYSCALE_PAD_MODE_ALL_SIDES:;
             int nOutputWidth = nInputWidth + 2 * nPxPadding;
             int nOutputHeight = nInputHeight + 2 * nPxPadding;
             uint8_t* pPaddedData = (uint8_t*)malloc(nOutputWidth * nOutputHeight);
