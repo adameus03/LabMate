@@ -14,6 +14,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libqrencode)
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/printer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/lw400.c
     ${CMAKE_CURRENT_SOURCE_DIR}/qr_data_adapter.c
 )
 

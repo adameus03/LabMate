@@ -147,9 +147,20 @@ static void qps_handle_client(PSocket* pClientSocket) {
                     break; // Failed to connect to the printer so it doesn't make sense to proceed; the client has been notified hopefully
                 }
 
-                P_DEBUG("Calling printer_esc_v");
-                rv = printer_esc_v(&ctx);
-                fprintf(stdout, "printer_esc_v returned %d\n", rv);
+                // P_DEBUG("Calling printer_esc_V");
+                // rv = printer_esc_V(&ctx);
+                // fprintf(stdout, "printer_esc_V returned %d\n", rv);
+
+                P_DEBUG("Calling printer_get_revision");
+                char revision[PRINTER_REVISION_STRING_LENGTH + 1];
+                rv = printer_get_revision(&ctx, revision);
+                if (rv != PRINTER_GET_REVISION_ERR_SUCCESS) {
+                    P_ERROR("Failed to get printer revision");
+                    fprintf(stdout, "printer_get_revision returned %d\n", rv);
+                    BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_USB_FAIL));
+                    break;
+                }
+
                 P_DEBUG("Converting to QR code");
                 uint8_t* pGrayscaleData = NULL;
                 int nGrayscaleDataWidth = 0;

@@ -1,38 +1,20 @@
 #include <stdint.h>
-#include "libusb.h"
+#include "printer_common.h"
 
-#define PRINTER_USE_DEBUG_EXTENSIONS 1
-#define PRINTER_USB_IFACE_IX 0
-//#define PRINTER_USB_IFACE_IX 50
+#define PRINTER_MODEL_DYMO_LABELWRITER_400 1
+#define PRINTER_MODEL PRINTER_MODEL_DYMO_LABELWRITER_400
 
-#define PRINTER_ERR_SUCCESS 0
-#define PRINTER_ERR_LIBUSB_INIT 1
-#define PRINTER_ERR_DEVICE_NOT_FOUND 2
-#define PRINTER_ERR_INTERFACE_CLAIM 3
-#define PRINTER_ERR_READ_RESPONSE 4
-#define PRINTER_ERR_SEND_COMMAND 5
-#define PRINTER_ERR_INTERFACE_RELEASE 6
+#if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
+    #define PRINTER_VENDOR_ID 0x0922
+    #define PRINTER_PRODUCT_ID 0x0019
+    #define PRINTER_USB_IFACE_IX 0
+    #define PRINTER_REVISION_STRING_LENGTH 8
+    #define PRINTER_REVISION_STRING_SUPPORTED
+#else
+#error "Unknown printer model"
+#endif
 
-typedef struct {
-    libusb_device_handle *handle;
-    libusb_context *context;
-} printer_ctx_t;
 
-#define PRINTER_ESC_V_ERR_SUCCESS PRINTER_ERR_SUCCESS
-#define PRINTER_ESC_V_ERR_SEND_COMMAND PRINTER_ERR_SEND_COMMAND
-#define PRINTER_ESC_V_ERR_READ_RESPONSE PRINTER_ERR_READ_RESPONSE
-/**
- * @brief Request print engine version
- * TODO: Don't print to stdout, but return response via a pointer. Or keep it? for additional layer of logs...
- */
-int printer_esc_v(printer_ctx_t* pCtx);
-
-#define PRINTER_ESC_D_ERR_SUCCESS PRINTER_ERR_SUCCESS
-#define PRINTER_ESC_D_ERR_SEND_COMMAND PRINTER_ERR_SEND_COMMAND
-/**
- * @brief 
- */
-int printer_esc_d(printer_ctx_t* pCtx, uint8_t *data, int width, int height);
 
 #define PRINTER_TAKE_ERR_SUCCESS PRINTER_ERR_SUCCESS
 #define PRINTER_TAKE_ERR_LIBUSB_INIT PRINTER_ERR_LIBUSB_INIT
@@ -41,9 +23,31 @@ int printer_esc_d(printer_ctx_t* pCtx, uint8_t *data, int width, int height);
 /**
  * @brief Initializes underlying USB library and attempts to find the printer and claim the interface
  */
-int printer_take(printer_ctx_t *pCtx_out);
+printer_err_t printer_take(printer_ctx_t *pCtx_out);
 
 /**
  * @brief Releases the interface and closes the device
  */
 void printer_release(printer_ctx_t *pCtx);
+
+// #if PRINTER_MODEL == DYMO_LABELWRITER_400
+// typedef union {
+//     uint8_t raw[8];
+//     struct {
+//         char model_number[4];
+//         char lowercase_letter[1];
+//         char firmware_version[2];
+//     };
+// } printer_dymo_lw400_revision_t;
+// #endif
+
+#define PRINTER_GET_REVISION_ERR_SUCCESS PRINTER_ERR_SUCCESS
+#define PRINTER_GET_REVISION_ERR_SEND_COMMAND PRINTER_ERR_SEND_COMMAND
+#define PRINTER_GET_REVISION_ERR_READ_RESPONSE PRINTER_ERR_READ_RESPONSE
+#define PRINTER_GET_REVISION_ERR_NOT_SUPPORTED PRINTER_ERR_NOT_SUPPORTED
+#define PRINTER_GET_REVISION_ERR_UNKNOWN_PRINTER_MODEL PRINTER_ERR_UNKNOWN_PRINTER_MODEL
+/**
+ * @brief Obtains the printer's revision string if supported
+ * @param pcRevision_out pointer to output string - you should allocate PRINTER_REVISION_STRING_LENGTH+1 bytes (PRINTER_REVISION_STRING_LENGTH for the revision and 1 for the null terminator)
+ */
+printer_err_t printer_get_revision(printer_ctx_t *pCtx, char *pcRevision_out);
