@@ -248,6 +248,7 @@ int qda_grayscale_to_dlw400u8buf(const uint8_t* pInputData, const int nWidth, co
 }
 
 int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, const uint8_t* pInputDataDiptychRight, const int nWidth, const int nHeight, const int nSeparationWidth, uint8_t** ppOutputData, int* pnOutputLen) {
+    
     int nTotalWidth = nWidth + nSeparationWidth + nWidth;
     //assert(nTotalWidth % 8 == 0);
     if (nTotalWidth % 8 != 0) {
@@ -260,6 +261,26 @@ int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, c
         *pnOutputLen = 0;
         return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_MALLOC;
     }
+
+    // ///<dummy test>
+    // qda_grayscale_to_dlw400u8buf(pInputDataDiptychLeft, nWidth, nHeight, &pOutputData, pnOutputLen);
+    // for (int i = 0; i < nHeight; i++) {
+    //     for (int j = 0; j < nWidth; j++) {
+    //         //pOutputData[i * nTotalWidth + j + nWidth + nSeparationWidth] = pInputDataDiptychLeft[i * nWidth + j];
+    //         pOutputData[i * nTotalWidth] = pInputDataDiptychLeft[i * nWidth + j];
+    //     }
+    // }
+
+    // *ppOutputData = pOutputData;
+    // *pnOutputLen = nOutputLen;
+    // return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_SUCCESS;
+    // ///</dummy test>
+
+
+
+
+
+
 
     int nBytesPerOutputLine = nTotalWidth / 8;
 
@@ -280,7 +301,7 @@ int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, c
     for (int i = 0; i < nHeight; i++, pMergedLine+=nTotalWidth) {
         for (int j = 0; j < nWidth; j++, pDiptychLeftByte++, pDiptychRightByte++) {
             pMergedLine[j] = *pDiptychLeftByte;
-            pMergedLine[j + nWidth + nSeparationWidth] = *pDiptychRightByte;
+            // [experiment] pMergedLine[j + nWidth + nSeparationWidth] = *pDiptychRightByte;
         }
     }
 
