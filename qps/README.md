@@ -3,7 +3,7 @@
 - [x] Connects with Dymo LabelWriter ~~550~~ 400 (libusb)
 - [x] Converts plaintext to QR code bitmap (libqrencode)
 - [x] Acts as a simple TCP server listening on the loopback interface & providing easy way to print a label using RID (reagent identifier), as well as enabling the client to be notified when the printer job state changes. (plibsys socket API)
-- [ ] Properly handles double labels
+- [x] Properly handles double labels
 
 The project is currently aimed at handling the Dymo 11353 labels only (Label size for eppendorfs - 25 x 13 mm)
 
