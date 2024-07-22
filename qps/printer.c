@@ -166,6 +166,10 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         uint16_t nDotsPerLine = (uint16_t)(((double)PRINTER_LABEL_WIDTH_MM) / 25.4 * 300); //TODO replace magic number 300
         assert(nDotsPerLine == 153U); // TODO: Remove after testing
         nDotsPerLine = 144U; //Set constant for now to test printing with eppendorfs size labels (4(pixel expansion) * 33(QR width or height) + 12(padding) = 144) //TODO remove this assignment and make it work for different label sizes
+        #if PRINTER_LABEL_IS_SUBDIVIDED == 1
+            // Diptych
+            nDotsPerLine <<= 1;
+        #endif //PRINTER_LABEL_IS_SUBDIVIDED == 1
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
 
         printer_err_t err = lw400_esc_D(pCtx, nBytesPerLine);
@@ -237,7 +241,11 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
     #endif
 }
 
+#if PRINTER_LABEL_IS_SUBDIVIDED == 0
 printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleData, const int labelGrayscaleDataWidth, const int labelGrayscaleDataHeight) {
+#else
+printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleDataDiptychLeft, const uint8_t* pLabelGrayscaleDataDiptychRight, const int labelGrayscaleDataWidth, const int labelGrayscaleDataHeight) {
+#endif // PRINTER_LABEL_IS_SUBDIVIDED == 0
     #if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
         // TODO complete this
         // TODO test data conversion before completing this (don't actually print while doing the first-time test?)
@@ -246,6 +254,8 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         // Prepare data buffer in format that the printer will understand
         uint8_t* pPrinterDbuf = NULL;
         int nPrinterDbufSize = 0;
+
+        #if PRINTER_LABEL_IS_SUBDIVIDED == 0
         int rv = qda_grayscale_to_dlw400u8buf(pLabelGrayscaleData, labelGrayscaleDataWidth, labelGrayscaleDataHeight, &pPrinterDbuf, &nPrinterDbufSize);
         if (rv != QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_SUCCESS) {
             switch (rv) {
@@ -258,10 +268,19 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
             }
         }
         assert(nPrinterDbufSize == labelGrayscaleDataWidth / 8 * labelGrayscaleDataHeight);
+        #else
+        int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - labelGrayscaleDataWidth; // separation dots between two parts of the diptych print regions
+        assert(separationWidth < labelGrayscaleDataWidth); // violation of this assertion would be suspiscious - we can expect the separation width be smaller than the diptych part print width
+        int rv = qda_grayscale_diptych_to_dlw400u8buf(pLabelGrayscaleDataDiptychLeft, pLabelGrayscaleDataDiptychRight, labelGrayscaleDataWidth, labelGrayscaleDataHeight, separationWidth, &pPrinterDbuf, &nPrinterDbufSize);
+        #endif // PRINTER_LABEL_IS_SUBDIVIDED == 0
 
         int nBytesPerLine = labelGrayscaleDataWidth / 8;
         assert(nBytesPerLine == pCtx->config.nBytesPerLine);
+        #if PRINTER_LABEL_IS_SUBDIVIDED == 0
         assert(nBytesPerLine == 18); // 144/8 = 18 //TODO: Handle different print widths
+        #else
+        assert(nBytesPerLine == 36);
+        #endif // PRINTER_LABEL_IS_SUBDIVIDED == 1
         assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions
         // Send print cmd+data stream
         uint8_t* pHeadData = pPrinterDbuf; // pointer to current data line

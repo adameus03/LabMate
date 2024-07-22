@@ -5,7 +5,7 @@
 #define PRINTER_MODEL PRINTER_MODEL_DYMO_LABELWRITER_400
 
 #define PRINTER_LABEL_TYPE_FOR_EPPENDORFS 1
-/* Rozmiar dla eppendorfów */
+/* 11353 Dymo labels - Rozmiar dla eppendorfów */
 #define PRINTER_LABEL_TYPE PRINTER_LABEL_TYPE_FOR_EPPENDORFS
 
 #if PRINTER_LABEL_TYPE == PRINTER_LABEL_TYPE_FOR_EPPENDORFS
@@ -88,6 +88,8 @@ printer_err_t printer_setup(printer_ctx_t *pCtx);
 #define PRINTER_PRINT_ERR_CONVERSION_FAILED PRINTER_ERR_CONVERSION_FAILED
 //#define PRINTER_PRINT_ERR_MALLOC PRINTER_ERR_MALLOC
 #define PRINTER_PRINT_ERR_UNKNOWN_PRINTER_MODEL PRINTER_ERR_UNKNOWN_PRINTER_MODEL
+
+#if PRINTER_LABEL_IS_SUBDIVIDED == 0
 /**
  * @brief Prints a label
  * @param pLabelGrayscaleData pointer to the label grayscale data
@@ -97,6 +99,18 @@ printer_err_t printer_setup(printer_ctx_t *pCtx);
  * @note labelGrayscaleDataWidth and labelGrayscaleDataHeight can be smaller than (physical) label width and height respectively
  */
 printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleData, const int labelGrayscaleDataWidth, const int labelGrayscaleDataHeight);
+#else
+/**
+ * @brief Prints a label
+ * @param pLabelGrayscaleDataDiptychLeft pointer to the label grayscale data for the left part of the diptych
+ * @param pLabelGrayscaleDataDiptychRight pointer to the label grayscale data for the right part of the diptych
+ * @param labelGrayscaleDataWidth width of the label grayscale data for each part of the diptych
+ * @param labelGrayscaleDataHeight height of the label grayscale data for each part of the diptych
+ * 
+ * @note labelGrayscaleDataWidth and labelGrayscaleDataHeight can be smaller than (physical) label width and height respectively
+ */
+printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleDataDiptychLeft, const uint8_t* pLabelGrayscaleDataDiptychRight, const int labelGrayscaleDataWidth, const int labelGrayscaleDataHeight);
+#endif //PRINTER_LABEL_IS_SUBDIVIDED == 0
 
 
 

@@ -45,4 +45,16 @@ int qda_rgb_save_to_bmp_file(const uint8_t* pInputData, const int nWidth, const 
  */
 int qda_grayscale_to_dlw400u8buf(const uint8_t* pInputData, const int nWidth, const int nHeight, uint8_t** ppOutputData, int* pnOutputLen);
 
-
+#define QDA_GRAYSCALE_DIPTYCH_TO_DLW400U8BUF_ERR_SUCCESS QDA_ERR_SUCCESS
+#define QDA_GRAYSCALE_DIPTYCH_TO_DLW400U8BUF_ERR_MALLOC QDA_ERR_MALLOC
+/**
+ * @brief Utility function for converting a grayscale diptych to a single DLW400U8BUF buffer. It is particulary useful for printing two QR codes on a label which consists of two separate tearable parts aligned horizontally (diptych).
+ * @param pInputDataDiptychLeft Pointer to the grayscale diptych data for the left part of the diptych.
+ * @param pInputDataDiptychRight Pointer to the grayscale diptych data for the right part of the diptych.
+ * @param nWidth Width of each part of the 2 parts of the diptych.
+ * @param nHeight Height of each part of the 2 parts of the diptych.
+ * @param nSeparationWidth Width of the separation between the 2 parts of the diptych.
+ * @param ppOutputData Pointer to the output buffer containing the DLW400U8BUF data which can be used for printing on a single 11353 label.
+ * 
+ */
+int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, const uint8_t* pInputDataDiptychRight, const int nWidth, const int nHeight, const int nSeparationWidth, uint8_t** ppOutputData, int* pnOutputLen);

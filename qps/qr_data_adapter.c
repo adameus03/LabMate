@@ -246,3 +246,62 @@ int qda_grayscale_to_dlw400u8buf(const uint8_t* pInputData, const int nWidth, co
     *pnOutputLen = nOutputLen;
     return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_SUCCESS;
 }
+
+int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, const uint8_t* pInputDataDiptychRight, const int nWidth, const int nHeight, const int nSeparationWidth, uint8_t** ppOutputData, int* pnOutputLen) {
+    int nTotalWidth = nWidth + nSeparationWidth + nWidth;
+    assert(nTotalWidth % 8 == 0); //TODO: handle better
+    int nOutputLen = (nTotalWidth / 8) * nHeight;
+    uint8_t* pOutputData = (uint8_t*)malloc(nOutputLen);
+    if (pOutputData == (uint8_t*)0) {
+        *ppOutputData = (uint8_t*)0;
+        *pnOutputLen = 0;
+        return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_MALLOC;
+    }
+
+    int nBytesPerOutputLine = nTotalWidth / 8;
+
+    int nMergedDiptychDataLen = nTotalWidth * nHeight;
+    uint8_t* pMergedDiptychData = (uint8_t*)malloc(nMergedDiptychDataLen);
+    if (pMergedDiptychData == (uint8_t*)0) {
+        free(pOutputData);
+        *ppOutputData = (uint8_t*)0;
+        *pnOutputLen = 0;
+        return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_MALLOC;
+    }
+
+    // TODO move diptych parts merging to a separate function?
+    for (int i = 0; i < nMergedDiptychDataLen; i++) { pMergedDiptychData[i] = 0x0U; }
+    const uint8_t* pDiptychLeftByte = pInputDataDiptychLeft;
+    const uint8_t* pDiptychRightByte = pInputDataDiptychRight;
+    uint8_t* pMergedLine = pMergedDiptychData;
+    for (int i = 0; i < nHeight; i++, pMergedLine+=nTotalWidth) {
+        for (int j = 0; j < nWidth; j++, pDiptychLeftByte++, pDiptychRightByte++) {
+            pMergedLine[j] = *pDiptychLeftByte;
+            pMergedLine[j + nWidth + nSeparationWidth] = *pDiptychRightByte;
+        }
+    }
+
+    uint8_t* pOutputLine = pOutputData;
+    const uint8_t* pInputLine = pMergedDiptychData;
+    for (int i = 0; i < nHeight; i++, pOutputLine += nBytesPerOutputLine, pInputLine += nTotalWidth) {
+        uint8_t* pOutputByte = pOutputLine;
+        const uint8_t* pInputPixelsOctet = pInputLine;
+        for (int j = 0; j < nBytesPerOutputLine; j++, pOutputByte++, pInputPixelsOctet+=8) {
+            const uint8_t* o = pInputPixelsOctet;
+            uint16_t w = (o[0] & 0x80) << 1;
+            w = (w | (o[1] & 0x80)) << 1;
+            w = (w | (o[2] & 0x80)) << 1;
+            w = (w | (o[3] & 0x80)) << 1;
+            w = (w | (o[4] & 0x80)) << 1;
+            w = (w | (o[5] & 0x80)) << 1;
+            w = (w | (o[6] & 0x80)) << 1;
+            w = (w | (o[7] & 0x80)) << 1;
+            //b = (b >> 1) | (o[7] & 0x80);
+            *pOutputByte = ~(uint8_t)(w >> 8);
+        }
+    }
+
+    *ppOutputData = pOutputData;
+    *pnOutputLen = nOutputLen;
+    return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_SUCCESS;
+}

@@ -220,7 +220,7 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 // fprintf(stdout, "printer_esc_d returned %d\n", rv);
                 assert(nGrayscaleExpandedPaddedDataWidth == 144); // TODO: Remove this and the below assert and handle different print sizes
                 assert(nGrayscaleExpandedPaddedDataHeight == 144);
-                rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
+                rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
                 if (rv != PRINTER_PRINT_ERR_SUCCESS) {
                     P_ERROR("Failed to print");
                     fprintf(stdout, "printer_print returned %d\n", rv);
