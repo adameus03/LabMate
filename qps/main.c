@@ -17,6 +17,7 @@
 #define PORT 3535
 
 #define RID_SIZE 64
+#define NUM_RIDS_PER_LABEL 2
 
 #define QPS_STATUS_USB_FAIL -4
 #define QPS_STATUS_QR_GENERATION_FAILED -3
@@ -98,6 +99,49 @@ static void qps_stall(int n, int ms) {
     
 }
 
+// static void qps_prepare_print_data() {
+//     uint8_t* pGrayscaleData = NULL;
+//     int nGrayscaleDataWidth = 0;
+//     int nGrayscaleDataHeight = 0;
+//     rv = qda_qrencu8buf_to_grayscale((const uint8_t*)rid, RID_SIZE, &pGrayscaleData, &nGrayscaleDataWidth, &nGrayscaleDataHeight);
+//     if (rv != QDA_QRENCU8BUF2BMP_ERR_SUCCESS) {
+//         P_ERROR("Failed to convert to QR code");
+//         fprintf(stderr, "qda_dlw500u8buf_to_grayscale returned %d\n", rv);
+//         p_free(rid);
+//         BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_QR_GENERATION_FAILED));
+//     }
+//     P_DEBUG("Finished converting to QR code");
+//     p_free(rid);
+
+//     #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+//     fprintf(stdout, "--- DEBUG EXTENSIONS ARE ENABLED ---\n");
+//     qda_grayscale_print_to_console(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
+//     #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+    
+//     uint8_t* pGrayscaleExpandedPixelsData = NULL;
+//     int nGrayscaleExpandedPixelsDataWidth = 0;
+//     int nGrayscaleExpandedPixelsDataHeight = 0;
+//     qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, /*4*//*2*/3);
+//     p_free(pGrayscaleData);
+
+//     uint8_t* pGrayscaleExpandedPaddedData = NULL;
+//     int nGrayscaleExpandedPaddedDataWidth = 0;
+//     int nGrayscaleExpandedPaddedDataHeight = 0;
+//     //qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, /*6*//*39*/);
+//     qda_grayscale_pad_asymetric(pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, 20, 25, 20, 25);
+//     p_free(pGrayscaleExpandedPixelsData);
+
+//     #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+//     uint8_t* pRgbData = NULL;
+//     int nRgbDataLen = 0;
+//     qda_grayscale_to_rgb(pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, &pRgbData, &nRgbDataLen);
+//     //p_free(pGrayscaleExpandedPaddedData); // freed after printing data lines
+
+//     qda_rgb_save_to_bmp_file(pRgbData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, 3, "qr.bmp");
+//     p_free(pRgbData);
+//     #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+// }
+
 static void qps_handle_client(PSocket* pClientSocket) {
     PError* error = NULL;
     PSocketAddress* pClientSocketAddress = p_socket_get_remote_address(pClientSocket, &error);
@@ -114,21 +158,21 @@ static void qps_handle_client(PSocket* pClientSocket) {
 
     while (TRUE) {
         // Receive RID (64 bytes)
-        pchar* rid = p_malloc(RID_SIZE);
-        if (rid == NULL) {
-            P_ERROR("[Failed to allocate memory for RID]");
+        pchar* rids = p_malloc(RID_SIZE * NUM_RIDS_PER_LABEL);
+        if (rids == NULL) {
+            P_ERROR("[Failed to allocate memory for RIDs]");
             break;
         }
-        for (int i = 0; i < RID_SIZE; i++) {
-            rid[i] = 0;
+        for (int i = 0; i < RID_SIZE * NUM_RIDS_PER_LABEL; i++) {
+            rids[i] = 0;
         }
         
-        pssize rv = p_socket_receive(pClientSocket, rid, RID_SIZE, &error);
+        pssize rv = p_socket_receive(pClientSocket, rids, RID_SIZE * NUM_RIDS_PER_LABEL, &error);
         if (qps_handle_error_boolean(error, rv != -1, FALSE)) {
-            P_ERROR("[Failed to receive RID]");
+            P_ERROR("[Failed to receive RIDs]");
             break;
         }
-        if (rv != RID_SIZE) {
+        if (rv != RID_SIZE * NUM_RIDS_PER_LABEL) {
             if (!qps_server_send_status(pClientSocket, QPS_STATUS_INVALID_RID_LENGTH)) {
                 break;
             }
@@ -172,7 +216,11 @@ static void qps_handle_client(PSocket* pClientSocket) {
                     break;
                 }
 
-                P_DEBUG("Converting to QR code");
+                // TODO: Add a function to prepare print data to prevent repeating similar code
+
+                P_DEBUG("Converting RID1 to QR code");
+                pchar* rid = rids;
+                
                 uint8_t* pGrayscaleData = NULL;
                 int nGrayscaleDataWidth = 0;
                 int nGrayscaleDataHeight = 0;
@@ -183,8 +231,8 @@ static void qps_handle_client(PSocket* pClientSocket) {
                     p_free(rid);
                     BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_QR_GENERATION_FAILED));
                 }
-                P_DEBUG("Finished converting to QR code");
-                p_free(rid);
+                P_DEBUG("Finished converting RID1 to QR code");
+                //p_free(rid);
 
                 #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
                 fprintf(stdout, "--- DEBUG EXTENSIONS ARE ENABLED ---\n");
@@ -210,9 +258,54 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 qda_grayscale_to_rgb(pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, &pRgbData, &nRgbDataLen);
                 //p_free(pGrayscaleExpandedPaddedData); // freed after printing data lines
 
-                qda_rgb_save_to_bmp_file(pRgbData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, 3, "qr.bmp");
+                qda_rgb_save_to_bmp_file(pRgbData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, 3, "qr1.bmp");
                 p_free(pRgbData);
                 #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+
+                P_DEBUG("Converting RID2 to QR code");
+                rid += RID_SIZE;
+
+                uint8_t* pGrayscaleData2 = NULL;
+                int nGrayscaleDataWidth2 = 0;
+                int nGrayscaleDataHeight2 = 0;
+                rv = qda_qrencu8buf_to_grayscale((const uint8_t*)rid, RID_SIZE, &pGrayscaleData2, &nGrayscaleDataWidth2, &nGrayscaleDataHeight2);
+                if (rv != QDA_QRENCU8BUF2BMP_ERR_SUCCESS) {
+                    P_ERROR("Failed to convert to QR code");
+                    fprintf(stderr, "qda_dlw500u8buf_to_grayscale returned %d\n", rv);
+                    p_free(rid);
+                    BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_QR_GENERATION_FAILED));
+                }
+                P_DEBUG("Finished converting RID2 to QR code");
+                p_free(rids);
+
+                #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+                qda_grayscale_print_to_console(pGrayscaleData2, nGrayscaleDataWidth2, nGrayscaleDataHeight2);
+                #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+
+                uint8_t* pGrayscaleExpandedPixelsData2 = NULL;
+                int nGrayscaleExpandedPixelsDataWidth2 = 0;
+                int nGrayscaleExpandedPixelsDataHeight2 = 0;
+                qda_grayscale_expand_pixels(pGrayscaleData2, nGrayscaleDataWidth2, nGrayscaleDataHeight2, &pGrayscaleExpandedPixelsData2, &nGrayscaleExpandedPixelsDataWidth2, &nGrayscaleExpandedPixelsDataHeight2, /*4*//*2*/3);
+                p_free(pGrayscaleData2);
+
+                uint8_t* pGrayscaleExpandedPaddedData2 = NULL;
+                int nGrayscaleExpandedPaddedDataWidth2 = 0;
+                int nGrayscaleExpandedPaddedDataHeight2 = 0;
+                //qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData2, nGrayscaleExpandedPixelsDataWidth2, nGrayscaleExpandedPixelsDataHeight2, &pGrayscaleExpandedPaddedData2, &nGrayscaleExpandedPaddedDataWidth2, &nGrayscaleExpandedPaddedDataHeight2, /*6*//*39*/);
+                qda_grayscale_pad_asymetric(pGrayscaleExpandedPixelsData2, nGrayscaleExpandedPixelsDataWidth2, nGrayscaleExpandedPixelsDataHeight2, &pGrayscaleExpandedPaddedData2, &nGrayscaleExpandedPaddedDataWidth2, &nGrayscaleExpandedPaddedDataHeight2, 20, 25, 20, 25);
+                p_free(pGrayscaleExpandedPixelsData2);
+
+                #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+                uint8_t* pRgbData2 = NULL;
+                int nRgbDataLen2 = 0;
+                qda_grayscale_to_rgb(pGrayscaleExpandedPaddedData2, nGrayscaleExpandedPaddedDataWidth2, nGrayscaleExpandedPaddedDataHeight2, &pRgbData2, &nRgbDataLen2);
+                //p_free(pGrayscaleExpandedPaddedData2); // freed after printing data lines
+
+                qda_rgb_save_to_bmp_file(pRgbData2, nGrayscaleExpandedPaddedDataWidth2, nGrayscaleExpandedPaddedDataHeight2, 3, "qr2.bmp");
+                p_free(pRgbData2);
+                #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+
+
 
 
                 P_DEBUG("CALLING printer_print");
