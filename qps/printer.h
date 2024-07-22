@@ -4,12 +4,27 @@
 #define PRINTER_MODEL_DYMO_LABELWRITER_400 1
 #define PRINTER_MODEL PRINTER_MODEL_DYMO_LABELWRITER_400
 
+#define PRINTER_LABEL_TYPE_FOR_EPPENDORFS 1
+/* Rozmiar dla eppendorfów */
+#define PRINTER_LABEL_TYPE PRINTER_LABEL_TYPE_FOR_EPPENDORFS
+
+#if PRINTER_LABEL_TYPE == PRINTER_LABEL_TYPE_FOR_EPPENDORFS
+    #define PRINTER_LABEL_WIDTH_MM 13
+    #define PRINTER_LABEL_HEIGHT_MM 25
+    #define PRINTER_LABEL_NUM_SUBLABELS_HORIZONTAL 2
+    #define PRINTER_LABEL_NUM_SUBLABELS_VERTICAL 1
+    #define PRINTER_LABEL_IS_SUBDIVIDED 1
+#else
+#error "Unknown label type"
+#endif
+
 #if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
     #define PRINTER_VENDOR_ID 0x0922
     #define PRINTER_PRODUCT_ID 0x0019
     #define PRINTER_USB_IFACE_IX 0
     #define PRINTER_REVISION_STRING_LENGTH 8
     #define PRINTER_REVISION_STRING_SUPPORTED
+    #define PRINTER_MAX_LABEL_WIDTH_MM 57
 #else
 #error "Unknown printer model"
 #endif
@@ -51,3 +66,19 @@ void printer_release(printer_ctx_t *pCtx);
  * @param pcRevision_out pointer to output string - you should allocate PRINTER_REVISION_STRING_LENGTH+1 bytes (PRINTER_REVISION_STRING_LENGTH for the revision and 1 for the null terminator)
  */
 printer_err_t printer_get_revision(printer_ctx_t *pCtx, char *pcRevision_out);
+
+// TODO: For now we are assuming no label subdivision (printing on the first sublabel only), but this should be fixed later after no-subdivision testing.
+// TODO: Convert PRINTER_LABEL_TYPE to a function parameter?
+// TODO: Detect the printer model automatically using its VID+PID and a list of supported printer models
+
+#define PRINTER_SETUP_ERR_SUCCESS PRINTER_ERR_SUCCESS
+#define PRINTER_SETUP_ERR_SEND_COMMAND PRINTER_ERR_SEND_COMMAND
+#define PRINTER_SETUP_ERR_READ_RESPONSE PRINTER_ERR_READ_RESPONSE
+#define PRINTER_SETUP_ERR_UNKNOWN_PRINTER_MODEL PRINTER_ERR_UNKNOWN_PRINTER_MODEL
+/**
+ * @brief Configures the printer settings depending on PRINTER_LABEL_TYPE
+ */
+printer_err_t printer_setup(printer_ctx_t *pCtx);
+
+
+

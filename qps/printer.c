@@ -157,3 +157,48 @@ printer_err_t printer_get_revision(printer_ctx_t *pCtx, char *pcRevision_out) {
     return PRINTER_GET_REVISION_ERR_NOT_SUPPORTED;
     #endif // PRINTER_REVISION_STRING_SUPPORTED
 }
+
+printer_err_t printer_setup(printer_ctx_t *pCtx) {
+    #if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
+        assert(PRINTER_LABEL_WIDTH_MM <= PRINTER_MAX_LABEL_WIDTH_MM);
+        uint16_t nDotsPerLine = (uint16_t)(((double)PRINTER_LABEL_WIDTH_MM) / 25.4 * 300);
+        assert(nDotsPerLine == 153U); // TODO: Remove after testing
+        uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
+
+        printer_err_t err = lw400_esc_D(pCtx, nBytesPerLine);
+        if (err != LW400_ESC_D_ERR_SUCCESS) {
+            switch (err) {
+                case LW400_ESC_D_ERR_SEND_COMMAND:
+                    return PRINTER_SETUP_ERR_SEND_COMMAND;
+                default:
+                    fprintf(stderr, "lw400_esc_D returned unknown error code: %d\n", err);
+                    assert(0);
+                    break;
+            }
+        }
+
+        // TODO Set label length as well (not too short!)
+
+        // Check status for testing
+        // TODO Do that status check before printing, and if not ready, either wait until ready or return a not ready/error status
+        err = lw400_esc_A(pCtx, NULL);
+        if (err != LW400_ESC_A_ERR_SUCCESS) {
+            switch (err) {
+                case LW400_ESC_A_ERR_SEND_COMMAND:
+                    return PRINTER_SETUP_ERR_SEND_COMMAND;
+                case LW400_ESC_A_ERR_READ_RESPONSE:
+                    fprintf(stderr, "Error reading response\n");
+                    return PRINTER_SETUP_ERR_READ_RESPONSE;
+                default:
+                    fprintf(stderr, "lw400_esc_A returned unknown error code: %d\n", err);
+                    assert(0);
+                    break;
+            }
+        }
+
+
+        return PRINTER_SETUP_ERR_SUCCESS;
+    #else
+    return PRINTER_PRINT_LABEL_ERR_UNKNOWN_PRINTER_MODEL;
+    #endif
+}

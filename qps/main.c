@@ -162,6 +162,15 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 }
                 fprintf(stdout, "Printer revision: %s\n", revision);
 
+                P_DEBUG("Calling printer_setup");
+                rv = printer_setup(&ctx);
+                if (rv != PRINTER_SETUP_ERR_SUCCESS) {
+                    P_ERROR("Failed to setup printer");
+                    fprintf(stdout, "printer_setup returned %d\n", rv);
+                    BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_USB_FAIL));
+                    break;
+                }
+
                 P_DEBUG("Converting to QR code");
                 uint8_t* pGrayscaleData = NULL;
                 int nGrayscaleDataWidth = 0;

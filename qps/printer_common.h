@@ -19,9 +19,17 @@
 #define PRINTER_ERR_NOT_SUPPORTED 7
 #define PRINTER_ERR_UNKNOWN_PRINTER_MODEL 8
 
+typedef enum {
+    PRINTER_RESOLUTION_300x300_DPI,
+    PRINTER_RESOLUTION_203x300_DPI
+} printer_resolution_t;
+
 typedef struct {
     libusb_device_handle *handle;
     libusb_context *context;
+    struct printer_settings { // TODO: Add more settings? (common/model-specific)
+        printer_resolution_t resolution;
+    } settings;
 } printer_ctx_t;
 
 typedef int printer_err_t;

@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "printer.h": "c"
+        "printer.h": "c",
+        "ip.h": "c",
+        "ip_icmp.h": "c"
     }
 }
