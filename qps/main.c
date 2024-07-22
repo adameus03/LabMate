@@ -194,13 +194,13 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 uint8_t* pGrayscaleExpandedPixelsData = NULL;
                 int nGrayscaleExpandedPixelsDataWidth = 0;
                 int nGrayscaleExpandedPixelsDataHeight = 0;
-                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 4);
+                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, /*4*/2);
                 p_free(pGrayscaleData);
 
                 uint8_t* pGrayscaleExpandedPaddedData = NULL;
                 int nGrayscaleExpandedPaddedDataWidth = 0;
                 int nGrayscaleExpandedPaddedDataHeight = 0;
-                qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, 6);
+                qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, /*6*/39);
                 p_free(pGrayscaleExpandedPixelsData);
 
                 #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
