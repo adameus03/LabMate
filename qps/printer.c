@@ -15,6 +15,8 @@
 #include "lw400.h"
 #endif
 
+#include "qr_data_adapter.h"
+
 #define PRINTER_DETACH_KERNEL_DRIVERS_ERR_SUCCESS 0
 #define PRINTER_DETACH_KERNEL_DRIVERS_ERR_NO_DEVICE_WHEN_CHECKING 1
 #define PRINTER_DETACH_KERNEL_DRIVERS_ERR_NOT_SUPPORTED_WHEN_CHECKING 2
@@ -164,6 +166,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         uint16_t nDotsPerLine = (uint16_t)(((double)PRINTER_LABEL_WIDTH_MM) / 25.4 * 300);
         assert(nDotsPerLine == 153U); // TODO: Remove after testing
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
+        nBytesPerLine = 140U; //Set constant for now to test printing with eppendorfs size labels (4(pixel expansion) * 33(QR width or height) + 8(padding) = 140) //TODO remove this assignment and make it work for different label sizes
 
         printer_err_t err = lw400_esc_D(pCtx, nBytesPerLine);
         if (err != LW400_ESC_D_ERR_SUCCESS) {
@@ -203,12 +206,55 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
     #endif
 }
 
-printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleData, const int labelGrayscaleDataSize) {
+printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleData, const int labelGrayscaleDataWidth, const int labelGrayscaleDataHeight) {
     #if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
         // TODO complete this
         // TODO test data conversion before completing this (don't actually print while doing the first-time test?)
-        // Send form feed for now (print blank label)
-        printer_err_t err = lw400_esc_E(pCtx);
+        // TODO include a printer status check before printing (and after printing as well?)
+
+        // Prepare data buffer in format that the printer will understand
+        uint8_t* pPrinterDbuf = NULL;
+        int nPrinterDbufSize = 0;
+        int rv = qda_grayscale_to_dlw400u8buf(pLabelGrayscaleData, labelGrayscaleDataWidth, labelGrayscaleDataHeight, &pPrinterDbuf, &nPrinterDbufSize);
+        if (rv != QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_SUCCESS) {
+            switch (rv) {
+                case QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_MALLOC:
+                    return PRINTER_PRINT_ERR_CONVERSION_FAILED;
+                default:
+                    fprintf(stderr, "qda_grayscale_to_dlw400u8buf returned unknown error code: %d\n", rv);
+                    assert(0);
+                    break;
+            }
+        }
+        assert(nPrinterDbufSize == labelGrayscaleDataWidth / 8 * labelGrayscaleDataHeight);
+
+        int nBytesPerLine = labelGrayscaleDataWidth / 8;
+        assert(nBytesPerLine == pCtx->config.nBytesPerLine);
+        assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions
+        // Send print cmd+data stream
+        uint8_t* pHeadData = pPrinterDbuf; // pointer to current data line
+        printer_err_t err;
+        fprintf(stdout, "-- Printing data lines --\n");
+        for (int i = 0; i < labelGrayscaleDataHeight; i++, pHeadData+=nBytesPerLine) {
+            // print current data line
+            err = lw400_syn(pCtx, pHeadData, nBytesPerLine);
+            if (err != LW400_SYN_ERR_SUCCESS) {
+                switch (err) {
+                    case LW400_SYN_ERR_SEND_COMMAND:
+                        fprintf(stdout, "NOTICE: THE PRINTING PROCESS HAS BEEN INTERRUPTED, YOU SHOULD TAKE CARE OF THE PRINTER\n"); // TODO: Handle this. Either retry or reset the printer and try to complete the remaining lines? (or form feed incomplete label?) Or maybe the usb connection is lost?
+                        return PRINTER_PRINT_ERR_SEND_COMMAND;
+                    default:
+                        fprintf(stderr, "lw400_syn returned unknown error code: %d\n", err);
+                        assert(0);
+                        break;
+                }
+            }
+            fprintf(stdout, "."); // TODO remove this fprintf after testing
+        }
+        fprintf(stdout, "\n-- Printing lines completed --\n");
+
+        // Send form feed command so that the label can be torn off
+        err = lw400_esc_E(pCtx);
         if (err != LW400_ESC_E_ERR_SUCCESS) {
             switch (err) {
                 case LW400_ESC_E_ERR_SEND_COMMAND:

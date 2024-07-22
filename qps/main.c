@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "plibsys.h"
 #include <psocket.h>
 #include <plibsysconfig.h>
@@ -213,7 +214,9 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 // P_DEBUG("Calling printer_esc_d");
                 // rv = printer_esc_d(&ctx, pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
                 // fprintf(stdout, "printer_esc_d returned %d\n", rv);
-                rv = printer_print(&ctx, pGrayscaleData, nGrayscaleDataWidth * nGrayscaleDataHeight);
+                assert(nGrayscaleDataWidth == 140); // TODO: Remove this and the below assert and handle different print sizes
+                assert(nGrayscaleDataHeight == 140);
+                rv = printer_print(&ctx, pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
                 if (rv != PRINTER_PRINT_ERR_SUCCESS) {
                     P_ERROR("Failed to print");
                     fprintf(stdout, "printer_print returned %d\n", rv);
