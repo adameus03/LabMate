@@ -5,6 +5,8 @@
 - [x] Acts as a simple TCP server listening on the loopback interface & providing easy way to print a label using RID (reagent identifier), as well as enabling the client to be notified when the printer job state changes. (plibsys socket API)
 - [ ] Properly handles double labels
 
+The project is currently aimed at handling the Dymo 11353 labelels only (Label size or eppendorfs - 25 x 13 mm)
+
 ## Compilation
 ### Compile on the target system
 1. Create a build directory
