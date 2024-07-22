@@ -312,7 +312,7 @@ int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, c
     //p_free(pGrayscaleExpandedPaddedData); // freed after printing data lines
 
     qda_rgb_save_to_bmp_file(pRgbData, nTotalWidth, nHeight, 3, "diptych.bmp");
-    p_free(pRgbData);
+    free(pRgbData);
     /// </save diptych to bmp>
 
 

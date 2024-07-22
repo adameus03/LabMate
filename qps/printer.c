@@ -170,7 +170,8 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
             // Diptych
             //nDotsPerLine <<= 1;
             //nDotsPerLine = ((double)PRINTER_LABEL_WIDTH_MM * 2.0) / 25.4 * 300; // TODO replace magic number 300
-            int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - 144; // TODO: Replace magic number 144
+            //int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - 144; // TODO: Replace magic number 144
+            int separationWidth = 16; // TODO: replace magic
             nDotsPerLine = 144 * 2 + separationWidth; // TODO: Replace magic number 144
         #endif //PRINTER_LABEL_IS_SUBDIVIDED == 1
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
@@ -276,7 +277,8 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         }
         assert(nPrinterDbufSize == labelGrayscaleDataWidth / 8 * labelGrayscaleDataHeight);
         #else
-        int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - labelGrayscaleDataWidth; // separation dots between two parts of the diptych print regions
+        //int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - labelGrayscaleDataWidth; // separation dots between two parts of the diptych print regions
+        int separationWidth = 16; // TODO: replace magic
         assert(separationWidth < labelGrayscaleDataWidth); // violation of this assertion would be suspiscious - we can expect the separation width be smaller than the diptych part print width
         assert(separationWidth >= 0);
         int rv = qda_grayscale_diptych_to_dlw400u8buf(pLabelGrayscaleDataDiptychLeft, pLabelGrayscaleDataDiptychRight, labelGrayscaleDataWidth, labelGrayscaleDataHeight, separationWidth, &pPrinterDbuf, &nPrinterDbufSize);
