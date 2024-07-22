@@ -169,8 +169,9 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         #if PRINTER_LABEL_IS_SUBDIVIDED == 1
             // Diptych
             //nDotsPerLine <<= 1;
-            nDotsPerLine = ((double)PRINTER_LABEL_WIDTH_MM * 2.0) / 25.4 * 300; // TODO replace magic number 300
-            //int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - labelGrayscaleDataWidth;
+            //nDotsPerLine = ((double)PRINTER_LABEL_WIDTH_MM * 2.0) / 25.4 * 300; // TODO replace magic number 300
+            int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - 144; // TODO: Replace magic number 144
+            nDotsPerLine = 144 * 2 + separationWidth; // TODO: Replace magic number 144
         #endif //PRINTER_LABEL_IS_SUBDIVIDED == 1
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
         if (nDotsPerLine % 8 != 0) {
@@ -300,6 +301,7 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         uint8_t* pHeadData = pPrinterDbuf; // pointer to current data line
         printer_err_t err;
         fprintf(stdout, "-- Printing data lines --\n");
+
         for (int i = 0; i < labelGrayscaleDataHeight; i++, pHeadData+=nBytesPerLine) {
             // print current data line
             err = lw400_syn(pCtx, pHeadData, nBytesPerLine);
