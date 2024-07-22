@@ -165,8 +165,8 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         assert(PRINTER_LABEL_WIDTH_MM <= PRINTER_MAX_LABEL_WIDTH_MM);
         uint16_t nDotsPerLine = (uint16_t)(((double)PRINTER_LABEL_WIDTH_MM) / 25.4 * 300);
         assert(nDotsPerLine == 153U); // TODO: Remove after testing
+        nDotsPerLine = 144U; //Set constant for now to test printing with eppendorfs size labels (4(pixel expansion) * 33(QR width or height) + 12(padding) = 144) //TODO remove this assignment and make it work for different label sizes
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
-        nBytesPerLine = 140U; //Set constant for now to test printing with eppendorfs size labels (4(pixel expansion) * 33(QR width or height) + 8(padding) = 140) //TODO remove this assignment and make it work for different label sizes
 
         printer_err_t err = lw400_esc_D(pCtx, nBytesPerLine);
         if (err != LW400_ESC_D_ERR_SUCCESS) {
@@ -230,6 +230,7 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
 
         int nBytesPerLine = labelGrayscaleDataWidth / 8;
         assert(nBytesPerLine == pCtx->config.nBytesPerLine);
+        assert(nBytesPerLine == 18); // 144/8 = 18 //TODO: Handle different print widths
         assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions
         // Send print cmd+data stream
         uint8_t* pHeadData = pPrinterDbuf; // pointer to current data line

@@ -192,7 +192,7 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 uint8_t* pGrayscaleExpandedPixelsData = NULL;
                 int nGrayscaleExpandedPixelsDataWidth = 0;
                 int nGrayscaleExpandedPixelsDataHeight = 0;
-                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 4);
+                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 6);
                 //p_free(pGrayscaleData);
 
                 uint8_t* pGrayscaleExpandedPaddedData = NULL;
