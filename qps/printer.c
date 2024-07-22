@@ -285,12 +285,15 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         int nBytesPerLine = labelGrayscaleDataWidth / 8;
         #else
         int nBytesPerLine = (labelGrayscaleDataWidth * 2 + separationWidth) / 8;
+        if ((labelGrayscaleDataWidth * 2 + separationWidth) % 8 != 0) {
+            nBytesPerLine++;
+        }
         #endif // PRINTER_LABEL_IS_SUBDIVIDED == 0
         //assert(nBytesPerLine == pCtx->config.nBytesPerLine); // @note Assertion removed, because extra padding bytes are used for diptych printing (lazy approach)
         #if PRINTER_LABEL_IS_SUBDIVIDED == 0
         assert(nBytesPerLine == 18); // 144/8 = 18 //TODO: Handle different print widths
         #else
-        assert(nBytesPerLine == 36 + separationWidth);
+        //assert(nBytesPerLine == 36 + separationWidth / 8); // it wouldn't work if separationWidth is not a multiple of 8
         #endif // PRINTER_LABEL_IS_SUBDIVIDED == 1
         // assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions // assertion removed because of 'lazy' diptych printing
         // Send print cmd+data stream
