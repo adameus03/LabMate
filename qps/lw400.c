@@ -131,7 +131,9 @@ printer_err_t lw400_esc_A(printer_ctx_t* pCtx, uint8_t* pStatus_out) {
     }
     printf("ESC_A response received: %02X\n", data_in[0]);
 
-    *pStatus_out = data_in[0];
+    if (pStatus_out != NULL) {
+        *pStatus_out = data_in[0];
+    }
     return LW400_ESC_A_ERR_SUCCESS;
 
 }
