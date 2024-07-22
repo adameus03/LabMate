@@ -302,36 +302,36 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         printer_err_t err;
         fprintf(stdout, "-- Printing data lines --\n");
 
-        for (int i = 0; i < labelGrayscaleDataHeight; i++, pHeadData+=nBytesPerLine) {
-            // print current data line
-            err = lw400_syn(pCtx, pHeadData, nBytesPerLine);
-            if (err != LW400_SYN_ERR_SUCCESS) {
-                switch (err) {
-                    case LW400_SYN_ERR_SEND_COMMAND:
-                        fprintf(stdout, "NOTICE: THE PRINTING PROCESS HAS BEEN INTERRUPTED, YOU SHOULD TAKE CARE OF THE PRINTER\n"); // TODO: Handle this. Either retry or reset the printer and try to complete the remaining lines? (or form feed incomplete label?) Or maybe the usb connection is lost?
-                        return PRINTER_PRINT_ERR_SEND_COMMAND;
-                    default:
-                        fprintf(stderr, "lw400_syn returned unknown error code: %d\n", err);
-                        assert(0);
-                        break;
-                }
-            }
-            fprintf(stdout, "."); // TODO remove this fprintf after testing
-        }
-        fprintf(stdout, "\n-- Printing lines completed --\n");
+        // for (int i = 0; i < labelGrayscaleDataHeight; i++, pHeadData+=nBytesPerLine) {
+        //     // print current data line
+        //     err = lw400_syn(pCtx, pHeadData, nBytesPerLine);
+        //     if (err != LW400_SYN_ERR_SUCCESS) {
+        //         switch (err) {
+        //             case LW400_SYN_ERR_SEND_COMMAND:
+        //                 fprintf(stdout, "NOTICE: THE PRINTING PROCESS HAS BEEN INTERRUPTED, YOU SHOULD TAKE CARE OF THE PRINTER\n"); // TODO: Handle this. Either retry or reset the printer and try to complete the remaining lines? (or form feed incomplete label?) Or maybe the usb connection is lost?
+        //                 return PRINTER_PRINT_ERR_SEND_COMMAND;
+        //             default:
+        //                 fprintf(stderr, "lw400_syn returned unknown error code: %d\n", err);
+        //                 assert(0);
+        //                 break;
+        //         }
+        //     }
+        //     fprintf(stdout, "."); // TODO remove this fprintf after testing
+        // }
+        // fprintf(stdout, "\n-- Printing lines completed --\n");
 
-        // Send form feed command so that the label can be torn off
-        err = lw400_esc_E(pCtx);
-        if (err != LW400_ESC_E_ERR_SUCCESS) {
-            switch (err) {
-                case LW400_ESC_E_ERR_SEND_COMMAND:
-                    return PRINTER_PRINT_ERR_SEND_COMMAND;
-                default:
-                    fprintf(stderr, "lw400_esc_E returned unknown error code: %d\n", err);
-                    assert(0);
-                    break;
-            }
-        }
+        // // Send form feed command so that the label can be torn off
+        // err = lw400_esc_E(pCtx);
+        // if (err != LW400_ESC_E_ERR_SUCCESS) {
+        //     switch (err) {
+        //         case LW400_ESC_E_ERR_SEND_COMMAND:
+        //             return PRINTER_PRINT_ERR_SEND_COMMAND;
+        //         default:
+        //             fprintf(stderr, "lw400_esc_E returned unknown error code: %d\n", err);
+        //             assert(0);
+        //             break;
+        //     }
+        // }
         return PRINTER_PRINT_ERR_SUCCESS;
     #else
     return PRINTER_PRINT_ERR_UNKNOWN_PRINTER_MODEL;

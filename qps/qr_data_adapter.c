@@ -305,6 +305,19 @@ int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, c
         }
     }
 
+    /// <save diptych to bmp>
+    uint8_t* pRgbData = NULL;
+    int nRgbDataLen = 0;
+    qda_grayscale_to_rgb(pMergedDiptychData, nTotalWidth, nHeight, &pRgbData, &nRgbDataLen);
+    //p_free(pGrayscaleExpandedPaddedData); // freed after printing data lines
+
+    qda_rgb_save_to_bmp_file(pRgbData, nTotalWidth, nHeight, 3, "diptych.bmp");
+    p_free(pRgbData);
+    /// </save diptych to bmp>
+
+
+
+
     uint8_t* pOutputLine = pOutputData;
     const uint8_t* pInputLine = pMergedDiptychData;
     for (int i = 0; i < nHeight; i++, pOutputLine += nBytesPerOutputLine, pInputLine += nTotalWidth) {
