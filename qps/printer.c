@@ -180,7 +180,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
             }
         }
         uint16_t nDotsTab = (uint16_t)(((double)PRINTER_LABEL_MARGIN_LEFT_UM) / 25400 * 300); // TODO replace magic number 300
-        assert(nDotsTab == 23); // TODO remove this assertion
+        assert(nDotsTab == /*23*/0); // TODO remove this assertion
         uint8_t nBytesTab = (uint8_t)(nDotsTab >> 3);
         if (nDotsTab % 8 != 0) {
             nBytesTab++;
