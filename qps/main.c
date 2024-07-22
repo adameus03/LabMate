@@ -315,7 +315,8 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 assert(nGrayscaleExpandedPaddedDataWidth == 144); // TODO: Remove this and the below assert and handle different print sizes
                 assert(nGrayscaleExpandedPaddedDataHeight == 144);
                 #if PRINTER_LABEL_IS_SUBDIVIDED == 1
-                rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
+                //rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
+                rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, pGrayscaleExpandedPaddedData2, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
                 #else
                 rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
                 #endif // PRINTER_LABEL_IS_SUBDIVIDED == 1
