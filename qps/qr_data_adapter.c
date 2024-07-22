@@ -229,15 +229,16 @@ int qda_grayscale_to_dlw400u8buf(const uint8_t* pInputData, const int nWidth, co
         const uint8_t* pInputPixelsOctet = pInputLine;
         for (int j = 0; j < nBytesPerOutputLine; j++, pOutputByte++, pInputPixelsOctet+=8) {
             const uint8_t* o = pInputPixelsOctet;
-            uint8_t b = o[0] & 0x80; // TODO: Check if the endianess is correct
-            b = (b >> 1) | (o[1] & 0x80);
-            b = (b >> 1) | (o[2] & 0x80);
-            b = (b >> 1) | (o[3] & 0x80);
-            b = (b >> 1) | (o[4] & 0x80);
-            b = (b >> 1) | (o[5] & 0x80);
-            b = (b >> 1) | (o[6] & 0x80);
-            b = (b >> 1) | (o[7] & 0x80);
-            *pOutputByte = b;
+            uint16_t b = (o[0] & 0x80) << 1;
+            b = (b | (o[1] & 0x80)) << 1;
+            b = (b | (o[2] & 0x80)) << 1;
+            b = (b | (o[3] & 0x80)) << 1;
+            b = (b | (o[4] & 0x80)) << 1;
+            b = (b | (o[5] & 0x80)) << 1;
+            b = (b | (o[6] & 0x80)) << 1;
+            b = (b | (o[7] & 0x80)) << 1;
+            //b = (b >> 1) | (o[7] & 0x80);
+            *pOutputByte = ~(uint8_t)(b >> 8);
         }
     }
 
