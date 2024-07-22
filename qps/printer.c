@@ -190,7 +190,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         if (err != LW400_ESC_B_ERR_SUCCESS) {
             switch (err) {
                 case LW400_ESC_B_ERR_SEND_COMMAND:
-                    return PRINTER_SETUP_ERR_SEND_COMMAND; // TODO return more specific error codes to indicate when the error happened - e.g. here it happened while trying to set the tab size so we could return a new error code PRINTER_SETUP_ERR_SET_TAB_SIZE_SEND_COMMAND_FAILED or in the default case we could return PRINTER_SETUP_ERR_SET_TAB_SIZE_UNKNOWN_ERROR
+                    return PRINTER_SETUP_ERR_SEND_COMMAND; // TODO return more specific error codes to indicate when the error happened - e.g. here it happened while trying to set the tab size so we could return a new error code PRINTER_SETUP_ERR_SET_TAB_SIZE_SEND_COMMAND_FAILED or in the default case we could return PRINTER_SETUP_ERR_SET_TAB_SIZE_UNKNOWN_ERROR. It applies also to the other switch statements in this function.
                 default:
                     fprintf(stderr, "lw400_esc_B returned unknown error code: %d\n", err);
                     assert(0);
@@ -198,7 +198,19 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
             }
         }
 
-        // TODO Set label length as well (not too short!) If too long, the printer's motor should stop just at the IR detection hole (between labels). 
+        // Set label length as well (not too short!) If too long, the printer's motor should stop just at the IR detection hole (between labels). It should, right? It should? :D
+        int16_t labelLength = (int16_t)(1.5 * ((double)PRINTER_LABEL_HEIGHT_MM) / 25.4 * 300); // TODO replace magic numbers 300 and 1.5
+        err = lw400_esc_L(pCtx, labelLength);
+        if (err != LW400_ESC_L_ERR_SUCCESS) {
+            switch (err) {
+                case LW400_ESC_L_ERR_SEND_COMMAND:
+                    return PRINTER_SETUP_ERR_SEND_COMMAND;
+                default:
+                    fprintf(stderr, "lw400_esc_L returned unknown error code: %d\n", err);
+                    assert(0);
+                    break;
+            }
+        }
 
         // Check status for testing
         // TODO Do that status check before printing, and if not ready, either wait until ready or return a not ready/error status
@@ -216,6 +228,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
                     break;
             }
         }
+        // TODO Return an error if the printer is not ready for printing (response to <esc> A is not 0x03)
 
         pCtx->config.nBytesPerLine = (int)nBytesPerLine;
         return PRINTER_SETUP_ERR_SUCCESS;
