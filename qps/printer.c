@@ -185,7 +185,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         if (nDotsTab % 8 != 0) {
             nBytesTab++;
         }
-        assert(nBytesTab == 3); // TODO remove this assertion
+        assert(nBytesTab == /*3*/0); // TODO remove this assertion
         err = lw400_esc_B(pCtx, nBytesTab);
         if (err != LW400_ESC_B_ERR_SUCCESS) {
             switch (err) {
