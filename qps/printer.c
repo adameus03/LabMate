@@ -171,6 +171,10 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
             nDotsPerLine <<= 1;
         #endif //PRINTER_LABEL_IS_SUBDIVIDED == 1
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
+        if (nDotsPerLine % 8 != 0) {
+            nBytesPerLine++;
+            fprintf(stdout, "WARNING: nBytesPerLine is not a multiple of 8, padding with an extra byte(s)\n");
+        }
 
         printer_err_t err = lw400_esc_D(pCtx, nBytesPerLine);
         if (err != LW400_ESC_D_ERR_SUCCESS) {

@@ -249,7 +249,10 @@ int qda_grayscale_to_dlw400u8buf(const uint8_t* pInputData, const int nWidth, co
 
 int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, const uint8_t* pInputDataDiptychRight, const int nWidth, const int nHeight, const int nSeparationWidth, uint8_t** ppOutputData, int* pnOutputLen) {
     int nTotalWidth = nWidth + nSeparationWidth + nWidth;
-    assert(nTotalWidth % 8 == 0); //TODO: handle better
+    //assert(nTotalWidth % 8 == 0);
+    if (nTotalWidth % 8 != 0) {
+        fprintf(stdout, "WARNING: nTotalWidth % 8 != 0\n");
+    }
     int nOutputLen = (nTotalWidth / 8) * nHeight;
     uint8_t* pOutputData = (uint8_t*)malloc(nOutputLen);
     if (pOutputData == (uint8_t*)0) {
