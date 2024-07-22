@@ -284,9 +284,9 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         #if PRINTER_LABEL_IS_SUBDIVIDED == 0
         assert(nBytesPerLine == 18); // 144/8 = 18 //TODO: Handle different print widths
         #else
-        assert(nBytesPerLine == 36);
+        // assert(nBytesPerLine == 36); // assertion removed because of 'lazy' diptych printing
         #endif // PRINTER_LABEL_IS_SUBDIVIDED == 1
-        assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions
+        // assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions // assertion removed because of 'lazy' diptych printing
         // Send print cmd+data stream
         uint8_t* pHeadData = pPrinterDbuf; // pointer to current data line
         printer_err_t err;
