@@ -175,8 +175,8 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 uint8_t* pGrayscaleData = NULL;
                 int nGrayscaleDataWidth = 0;
                 int nGrayscaleDataHeight = 0;
-                rv = qda_dlw500u8buf_to_grayscale((const uint8_t*)rid, RID_SIZE, &pGrayscaleData, &nGrayscaleDataWidth, &nGrayscaleDataHeight);
-                if (rv != QDA_U8BUF2BMP_ERR_SUCCESS) {
+                rv = qda_qrencu8buf_to_grayscale((const uint8_t*)rid, RID_SIZE, &pGrayscaleData, &nGrayscaleDataWidth, &nGrayscaleDataHeight);
+                if (rv != QDA_QRENCU8BUF2BMP_ERR_SUCCESS) {
                     P_ERROR("Failed to convert to QR code");
                     fprintf(stderr, "qda_dlw500u8buf_to_grayscale returned %d\n", rv);
                     p_free(rid);
@@ -191,13 +191,13 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 uint8_t* pGrayscaleExpandedPixelsData = NULL;
                 int nGrayscaleExpandedPixelsDataWidth = 0;
                 int nGrayscaleExpandedPixelsDataHeight = 0;
-                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 8);
+                qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 4);
                 //p_free(pGrayscaleData);
 
                 uint8_t* pGrayscaleExpandedPaddedData = NULL;
                 int nGrayscaleExpandedPaddedDataWidth = 0;
                 int nGrayscaleExpandedPaddedDataHeight = 0;
-                qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, 8);
+                qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, 4);
                 p_free(pGrayscaleExpandedPixelsData);
 
                 uint8_t* pRgbData = NULL;
@@ -209,10 +209,18 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 #endif
 
 
-                P_DEBUG("NOT CALLING PRINtER_ESC_D FOR NOW");
+                P_DEBUG("CALLING printer_print");
                 // P_DEBUG("Calling printer_esc_d");
                 // rv = printer_esc_d(&ctx, pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
                 // fprintf(stdout, "printer_esc_d returned %d\n", rv);
+                rv = printer_print(&ctx, pGrayscaleData, nGrayscaleDataWidth * nGrayscaleDataHeight);
+                if (rv != PRINTER_PRINT_ERR_SUCCESS) {
+                    P_ERROR("Failed to print");
+                    fprintf(stdout, "printer_print returned %d\n", rv);
+                    BREAK_IF_FALSE(qps_server_send_status(pClientSocket, QPS_STATUS_USB_FAIL)); // TODO: Change/add error codes (not only this one, but also the other few - look lines above)
+                    break;
+                }
+                P_DEBUG("Done printing");
                 P_DEBUG("Finished work");
                 p_free(pGrayscaleData);
 

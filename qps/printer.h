@@ -80,5 +80,16 @@ printer_err_t printer_get_revision(printer_ctx_t *pCtx, char *pcRevision_out);
  */
 printer_err_t printer_setup(printer_ctx_t *pCtx);
 
+#define PRINTER_PRINT_ERR_SUCCESS PRINTER_ERR_SUCCESS
+#define PRINTER_PRINT_ERR_SEND_COMMAND PRINTER_ERR_SEND_COMMAND
+#define PRINTER_PRINT_ERR_READ_RESPONSE PRINTER_ERR_READ_RESPONSE
+#define PRINTER_PRINT_ERR_UNKNOWN_PRINTER_MODEL PRINTER_ERR_UNKNOWN_PRINTER_MODEL
+/**
+ * @brief Prints a label
+ * @param pLabelGrayscaleData pointer to the label grayscale data
+ * @param labelGrayscaleDataSize size of the label grayscale data buffer
+ */
+printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleData, const int labelGrayscaleDataSize);
+
 
 

@@ -1,6 +1,7 @@
 #include "qrencode.h"
 #include <stdlib.h>
 #include <stdio.h> // For debugging purposes
+#include <assert.h>
 
 #include "qr_data_adapter.h"
 
@@ -28,13 +29,13 @@ typedef struct {
 #pragma pack(pop)
 
 
-int qda_dlw500u8buf_to_grayscale(const uint8_t* pInputData, const int nInputDataLen, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight) {
+int qda_qrencu8buf_to_grayscale(const uint8_t* pInputData, const int nInputDataLen, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight) {
     QRcode* pQRcode = QRcode_encodeData(nInputDataLen, pInputData, 0, QR_ECLEVEL_L);
     if (pQRcode == (QRcode*)0) {
         *ppOutputData = (uint8_t*)0;
         *pnOutputWidth = 0;
         *pnOutputHeight = 0;
-        return QDA_U8BUF2BMP_ERR_QRCODE_ENCODE_DATA;
+        return QDA_QRENCU8BUF2BMP_ERR_QRCODE_ENCODE_DATA;
     }
 
     // The output bitmap is greyscale, so we only need one byte per pixel. Pixel is either black or white depending on LSB of bytes in pQRcode->data.
@@ -45,7 +46,7 @@ int qda_dlw500u8buf_to_grayscale(const uint8_t* pInputData, const int nInputData
         *ppOutputData = (uint8_t*)0;
         *pnOutputWidth = 0;
         *pnOutputHeight = 0;
-        return QDA_U8BUF2BMP_ERR_MALLOC;
+        return QDA_QRENCU8BUF2BMP_ERR_MALLOC;
     }
 
     for (int i = 0; i < nOutputDataLen; i++) {
@@ -57,7 +58,7 @@ int qda_dlw500u8buf_to_grayscale(const uint8_t* pInputData, const int nInputData
     *pnOutputHeight = pQRcode->width;
 
     QRcode_free(pQRcode);
-    return QDA_U8BUF2BMP_ERR_SUCCESS;
+    return QDA_QRENCU8BUF2BMP_ERR_SUCCESS;
 }
 
 int qda_grayscale_expand_pixels(const uint8_t* pInputData, const int nInputWidth, const int nInputHeight, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight, const int nPxPerDotDim) {
@@ -206,4 +207,41 @@ int qda_rgb_save_to_bmp_file(const uint8_t* pInputData, const int nWidth, const 
         return QDA_RGB_SAVE_TO_BMP_FILE_ERR_FILE_OPEN_FAILED;
     }
 }
-#endif
+#endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+
+// TODO: Document pInputData (orientation)
+int qda_grayscale_to_dlw400u8buf(const uint8_t* pInputData, const int nWidth, const int nHeight, uint8_t** ppOutputData, int* pnOutputLen) {
+    assert(nWidth % 8 == 0); //TODO: handle better
+    int nOutputLen = (nWidth / 8) * nHeight;
+    uint8_t* pOutputData = (uint8_t*)malloc(nOutputLen);
+    if (pOutputData == (uint8_t*)0) {
+        *ppOutputData = (uint8_t*)0;
+        *pnOutputLen = 0;
+        return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_MALLOC;
+    }
+
+    int nBytesPerOutputLine = nWidth / 8;
+
+    uint8_t* pOutputLine = pOutputData;
+    const uint8_t* pInputLine = pInputData;
+    for (int i = 0; i < nHeight; i++, pOutputLine += nBytesPerOutputLine, pInputLine += nWidth) {
+        uint8_t* pOutputByte = pOutputLine;
+        const uint8_t* pInputPixelsOctet = pInputLine;
+        for (int j = 0; j < nBytesPerOutputLine; j++, pOutputByte++, pInputPixelsOctet+=8) {
+            const uint8_t* o = pInputPixelsOctet;
+            uint8_t b = o[0] & 0x80; // TODO: Check if the endianess is correct
+            b = (b >> 1) | (o[1] & 0x80);
+            b = (b >> 1) | (o[2] & 0x80);
+            b = (b >> 1) | (o[3] & 0x80);
+            b = (b >> 1) | (o[4] & 0x80);
+            b = (b >> 1) | (o[5] & 0x80);
+            b = (b >> 1) | (o[6] & 0x80);
+            b = (b >> 1) | (o[7] & 0x80);
+            *pOutputByte = b;
+        }
+    }
+
+    *ppOutputData = pOutputData;
+    *pnOutputLen = nOutputLen;
+    return QDA_GRAYSCALE_TO_DLW400U8BUF_ERR_SUCCESS;
+}

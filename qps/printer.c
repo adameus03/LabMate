@@ -202,3 +202,25 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
     return PRINTER_PRINT_LABEL_ERR_UNKNOWN_PRINTER_MODEL;
     #endif
 }
+
+printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleData, const int labelGrayscaleDataSize) {
+    #if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
+        // TODO complete this
+        // TODO test data conversion before completing this (don't actually print while doing the first-time test?)
+        // Send form feed for now (print blank label)
+        printer_err_t err = lw400_esc_E(pCtx);
+        if (err != LW400_ESC_E_ERR_SUCCESS) {
+            switch (err) {
+                case LW400_ESC_E_ERR_SEND_COMMAND:
+                    return PRINTER_PRINT_ERR_SEND_COMMAND;
+                default:
+                    fprintf(stderr, "lw400_esc_E returned unknown error code: %d\n", err);
+                    assert(0);
+                    break;
+            }
+        }
+        return PRINTER_PRINT_ERR_SUCCESS;
+    #else
+    return PRINTER_PRINT_ERR_UNKNOWN_PRINTER_MODEL;
+    #endif
+}
