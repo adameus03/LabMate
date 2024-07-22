@@ -199,7 +199,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
             }
         }
 
-
+        pCtx->config.nBytesPerLine = (int)nBytesPerLine;
         return PRINTER_SETUP_ERR_SUCCESS;
     #else
     return PRINTER_PRINT_LABEL_ERR_UNKNOWN_PRINTER_MODEL;
