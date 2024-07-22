@@ -170,6 +170,7 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
             // Diptych
             //nDotsPerLine <<= 1;
             nDotsPerLine = ((double)PRINTER_LABEL_WIDTH_MM * 2.0) / 25.4 * 300; // TODO replace magic number 300
+            //int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - labelGrayscaleDataWidth;
         #endif //PRINTER_LABEL_IS_SUBDIVIDED == 1
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
         if (nDotsPerLine % 8 != 0) {
@@ -276,15 +277,20 @@ printer_err_t printer_print(printer_ctx_t *pCtx, const uint8_t* pLabelGrayscaleD
         #else
         int separationWidth = (PRINTER_LABEL_WIDTH_MM - (PRINTER_LABEL_MARGIN_LEFT_UM/1000)) / 25.4 * 300 - labelGrayscaleDataWidth; // separation dots between two parts of the diptych print regions
         assert(separationWidth < labelGrayscaleDataWidth); // violation of this assertion would be suspiscious - we can expect the separation width be smaller than the diptych part print width
+        assert(separationWidth >= 0);
         int rv = qda_grayscale_diptych_to_dlw400u8buf(pLabelGrayscaleDataDiptychLeft, pLabelGrayscaleDataDiptychRight, labelGrayscaleDataWidth, labelGrayscaleDataHeight, separationWidth, &pPrinterDbuf, &nPrinterDbufSize);
         #endif // PRINTER_LABEL_IS_SUBDIVIDED == 0
 
+        #if PRINTER_LABEL_IS_SUBDIVIDED == 0
         int nBytesPerLine = labelGrayscaleDataWidth / 8;
+        #else
+        int nBytesPerLine = (labelGrayscaleDataWidth * 2 + separationWidth) / 8;
+        #endif // PRINTER_LABEL_IS_SUBDIVIDED == 0
         //assert(nBytesPerLine == pCtx->config.nBytesPerLine); // @note Assertion removed, because extra padding bytes are used for diptych printing (lazy approach)
         #if PRINTER_LABEL_IS_SUBDIVIDED == 0
         assert(nBytesPerLine == 18); // 144/8 = 18 //TODO: Handle different print widths
         #else
-        // assert(nBytesPerLine == 36); // assertion removed because of 'lazy' diptych printing
+        assert(nBytesPerLine == 36 + separationWidth);
         #endif // PRINTER_LABEL_IS_SUBDIVIDED == 1
         // assert(PRINTER_RESOLUTION_300x300_DPI == pCtx->config.resolution); // TODO: Handle different resolutions // assertion removed because of 'lazy' diptych printing
         // Send print cmd+data stream

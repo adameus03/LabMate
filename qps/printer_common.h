@@ -31,6 +31,7 @@ typedef struct {
     struct printer_config { // TODO: Add more settings? (common/model-specific)
         printer_resolution_t resolution;
         int nBytesPerLine;
+        //int nDiptychSeparationWidth; // for diptych printing, in dots // NO - it is print data dependent
     } config;
 } printer_ctx_t;
 
