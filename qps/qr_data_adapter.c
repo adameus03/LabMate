@@ -134,6 +134,52 @@ int qda_grayscale_pad(qda_grayscale_pad_mode mode, const uint8_t* pInputData, co
     }
 }
 
+int qda_grayscale_pad_asymetric(const uint8_t* pInputData, const int nInputWidth, const int nInputHeight, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight, const int nPxPaddingTop, const int nPxPaddingBottom, const int nPxPaddingLeft, const int nPxPaddingRight) {
+    int nOutputWidth = nInputWidth + nPxPaddingLeft + nPxPaddingRight;
+    int nOutputHeight = nInputHeight + nPxPaddingTop + nPxPaddingBottom;
+    uint8_t* pPaddedData = (uint8_t*)malloc(nOutputWidth * nOutputHeight);
+    if (pPaddedData == (uint8_t*)0) {
+        *ppOutputData = (uint8_t*)0;
+        *pnOutputWidth = 0;
+        *pnOutputHeight = 0;
+        return QDA_GRAYSCALE_PAD_ASYMETRIC_ERR_MALLOC;
+    }
+
+    for (int i = 0; i < nInputHeight; i++) {
+        for (int j = 0; j < nInputWidth; j++) {
+            pPaddedData[(i + nPxPaddingTop) * nOutputWidth + j + nPxPaddingLeft] = pInputData[i * nInputWidth + j];
+        }
+    }
+
+    for (int i = 0; i < nPxPaddingTop; i++) {
+        for (int j = 0; j < nOutputWidth; j++) {
+            pPaddedData[i * nOutputWidth + j] = 0xFF;
+        }
+    }
+
+    for (int i = 0; i < nPxPaddingBottom; i++) {
+        for (int j = 0; j < nOutputWidth; j++) {
+            pPaddedData[(nOutputHeight - 1 - i) * nOutputWidth + j] = 0xFF;
+        }
+    }
+
+    for (int i = 0; i < nOutputHeight; i++) {
+        for (int j = 0; j < nPxPaddingLeft; j++) {
+            pPaddedData[i * nOutputWidth + j] = 0xFF;
+        }
+        for (int j = 0; j < nPxPaddingRight; j++) {
+            pPaddedData[i * nOutputWidth + nOutputWidth - 1 - j] = 0xFF;
+        }
+    }
+
+    *ppOutputData = pPaddedData;
+    *pnOutputWidth = nOutputWidth;
+    *pnOutputHeight = nOutputHeight;
+
+    return QDA_GRAYSCALE_PAD_ASYMETRIC_ERR_SUCCESS;
+
+}
+
 int qda_grayscale_to_rgb(const uint8_t* pInputData, const int nWidth, const int nHeight, uint8_t** ppOutputData, int* pnOutputLen) {
     int nInputLen = nWidth * nHeight;
     int nOutputLen = nInputLen * 3;

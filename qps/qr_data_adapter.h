@@ -26,6 +26,10 @@ int qda_grayscale_expand_pixels(const uint8_t* pInputData, const int nInputWidth
 #define QDA_GRAYSCALE_PAD_ERR_INVALID_MODE QDA_ERR_INVALID_MODE
 int qda_grayscale_pad(qda_grayscale_pad_mode mode, const uint8_t* pInputData, const int nInputWidth, const int nInputHeight, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight, const int nPxPadding);
 
+#define QDA_GRAYSCALE_PAD_ASYMETRIC_ERR_SUCCESS QDA_ERR_SUCCESS
+#define QDA_GRAYSCALE_PAD_ASYMETRIC_ERR_MALLOC QDA_ERR_MALLOC
+int qda_grayscale_pad_asymetric(const uint8_t* pInputData, const int nInputWidth, const int nInputHeight, uint8_t** ppOutputData, int* pnOutputWidth, int* pnOutputHeight, const int nPxPaddingTop, const int nPxPaddingBottom, const int nPxPaddingLeft, const int nPxPaddingRight);
+
 #define QDA_GRAYSCALE_TO_RGB_ERR_SUCCESS QDA_ERR_SUCCESS
 #define QDA_GRAYSCALE_TO_RGB_ERR_MALLOC QDA_ERR_MALLOC
 int qda_grayscale_to_rgb(const uint8_t* pInputData, const int nWidth, const int nHeight, uint8_t** ppOutputData, int* pnOutputLen);
