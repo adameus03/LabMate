@@ -163,7 +163,7 @@ printer_err_t printer_get_revision(printer_ctx_t *pCtx, char *pcRevision_out) {
 printer_err_t printer_setup(printer_ctx_t *pCtx) {
     #if PRINTER_MODEL == PRINTER_MODEL_DYMO_LABELWRITER_400
         assert(PRINTER_LABEL_WIDTH_MM <= PRINTER_MAX_LABEL_WIDTH_MM);
-        uint16_t nDotsPerLine = (uint16_t)(((double)PRINTER_LABEL_WIDTH_MM) / 25.4 * 300);
+        uint16_t nDotsPerLine = (uint16_t)(((double)PRINTER_LABEL_WIDTH_MM) / 25.4 * 300); //TODO replace magic number 300
         assert(nDotsPerLine == 153U); // TODO: Remove after testing
         nDotsPerLine = 144U; //Set constant for now to test printing with eppendorfs size labels (4(pixel expansion) * 33(QR width or height) + 12(padding) = 144) //TODO remove this assignment and make it work for different label sizes
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
@@ -179,8 +179,26 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
                     break;
             }
         }
+        uint16_t nDotsTab = (uint16_t)(((double)PRINTER_LABEL_MARGIN_LEFT_UM) / 25400 * 300); // TODO replace magic number 300
+        assert(nDotsTab == 23); // TODO remove this assertion
+        uint8_t nBytesTab = (uint8_t)(nDotsTab >> 3);
+        if (nDotsTab % 8 != 0) {
+            nBytesTab++;
+        }
+        assert(nBytesTab == 3); // TODO remove this assertion
+        err = lw400_esc_B(pCtx, nBytesTab);
+        if (err != LW400_ESC_B_ERR_SUCCESS) {
+            switch (err) {
+                case LW400_ESC_B_ERR_SEND_COMMAND:
+                    return PRINTER_SETUP_ERR_SEND_COMMAND; // TODO return more specific error codes to indicate when the error happened - e.g. here it happened while trying to set the tab size so we could return a new error code PRINTER_SETUP_ERR_SET_TAB_SIZE_SEND_COMMAND_FAILED or in the default case we could return PRINTER_SETUP_ERR_SET_TAB_SIZE_UNKNOWN_ERROR
+                default:
+                    fprintf(stderr, "lw400_esc_B returned unknown error code: %d\n", err);
+                    assert(0);
+                    break;
+            }
+        }
 
-        // TODO Set label length as well (not too short!)
+        // TODO Set label length as well (not too short!) If too long, the printer's motor should stop just at the IR detection hole (between labels). 
 
         // Check status for testing
         // TODO Do that status check before printing, and if not ready, either wait until ready or return a not ready/error status
