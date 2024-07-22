@@ -301,7 +301,7 @@ int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, c
     for (int i = 0; i < nHeight; i++, pMergedLine+=nTotalWidth) {
         for (int j = 0; j < nWidth; j++, pDiptychLeftByte++, pDiptychRightByte++) {
             pMergedLine[j] = *pDiptychLeftByte;
-            // [experiment] pMergedLine[j + nWidth + nSeparationWidth] = *pDiptychRightByte;
+            pMergedLine[j + nWidth + nSeparationWidth] = *pDiptychRightByte;
         }
     }
 
