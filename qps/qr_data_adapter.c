@@ -294,7 +294,7 @@ int qda_grayscale_diptych_to_dlw400u8buf(const uint8_t* pInputDataDiptychLeft, c
     }
 
     // TODO move diptych parts merging to a separate function?
-    for (int i = 0; i < nMergedDiptychDataLen; i++) { pMergedDiptychData[i] = 0x0U; }
+    for (int i = 0; i < nMergedDiptychDataLen; i++) { pMergedDiptychData[i] = 0xFFU; }
     const uint8_t* pDiptychLeftByte = pInputDataDiptychLeft;
     const uint8_t* pDiptychRightByte = pInputDataDiptychRight;
     uint8_t* pMergedLine = pMergedDiptychData;
