@@ -168,7 +168,8 @@ printer_err_t printer_setup(printer_ctx_t *pCtx) {
         nDotsPerLine = 144U; //Set constant for now to test printing with eppendorfs size labels (4(pixel expansion) * 33(QR width or height) + 12(padding) = 144) //TODO remove this assignment and make it work for different label sizes
         #if PRINTER_LABEL_IS_SUBDIVIDED == 1
             // Diptych
-            nDotsPerLine <<= 1;
+            //nDotsPerLine <<= 1;
+            nDotsPerLine = ((double)PRINTER_LABEL_WIDTH_MM * 2.0) / 25.4 * 300; // TODO replace magic number 300
         #endif //PRINTER_LABEL_IS_SUBDIVIDED == 1
         uint8_t nBytesPerLine = (uint8_t)(nDotsPerLine >> 3);
         if (nDotsPerLine % 8 != 0) {
