@@ -189,11 +189,13 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
                 fprintf(stdout, "--- DEBUG EXTENSIONS ARE ENABLED ---\n");
                 qda_grayscale_print_to_console(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
+                #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
+                
                 uint8_t* pGrayscaleExpandedPixelsData = NULL;
                 int nGrayscaleExpandedPixelsDataWidth = 0;
                 int nGrayscaleExpandedPixelsDataHeight = 0;
                 qda_grayscale_expand_pixels(pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight, &pGrayscaleExpandedPixelsData, &nGrayscaleExpandedPixelsDataWidth, &nGrayscaleExpandedPixelsDataHeight, 4);
-                //p_free(pGrayscaleData);
+                p_free(pGrayscaleData);
 
                 uint8_t* pGrayscaleExpandedPaddedData = NULL;
                 int nGrayscaleExpandedPaddedDataWidth = 0;
@@ -201,22 +203,24 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 qda_grayscale_pad(QDA_GRAYSCALE_PAD_MODE_ALL_SIDES, pGrayscaleExpandedPixelsData, nGrayscaleExpandedPixelsDataWidth, nGrayscaleExpandedPixelsDataHeight, &pGrayscaleExpandedPaddedData, &nGrayscaleExpandedPaddedDataWidth, &nGrayscaleExpandedPaddedDataHeight, 6);
                 p_free(pGrayscaleExpandedPixelsData);
 
+                #if QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
                 uint8_t* pRgbData = NULL;
                 int nRgbDataLen = 0;
                 qda_grayscale_to_rgb(pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, &pRgbData, &nRgbDataLen);
-                p_free(pGrayscaleExpandedPaddedData);
+                //p_free(pGrayscaleExpandedPaddedData); // freed after printing data lines
 
                 qda_rgb_save_to_bmp_file(pRgbData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight, 3, "qr.bmp");
-                #endif
+                p_free(pRgbData);
+                #endif // QR_DATA_ADAPTER_USE_DEBUG_EXTENSIONS == 1
 
 
                 P_DEBUG("CALLING printer_print");
                 // P_DEBUG("Calling printer_esc_d");
                 // rv = printer_esc_d(&ctx, pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
                 // fprintf(stdout, "printer_esc_d returned %d\n", rv);
-                assert(nGrayscaleDataWidth == 144); // TODO: Remove this and the below assert and handle different print sizes
-                assert(nGrayscaleDataHeight == 144);
-                rv = printer_print(&ctx, pGrayscaleData, nGrayscaleDataWidth, nGrayscaleDataHeight);
+                assert(nGrayscaleExpandedPaddedDataWidth == 144); // TODO: Remove this and the below assert and handle different print sizes
+                assert(nGrayscaleExpandedPaddedDataHeight == 144);
+                rv = printer_print(&ctx, pGrayscaleExpandedPaddedData, nGrayscaleExpandedPaddedDataWidth, nGrayscaleExpandedPaddedDataHeight);
                 if (rv != PRINTER_PRINT_ERR_SUCCESS) {
                     P_ERROR("Failed to print");
                     fprintf(stdout, "printer_print returned %d\n", rv);
@@ -225,7 +229,7 @@ static void qps_handle_client(PSocket* pClientSocket) {
                 }
                 P_DEBUG("Done printing");
                 P_DEBUG("Finished work");
-                p_free(pGrayscaleData);
+                p_free(pGrayscaleExpandedPaddedData);
 
                 printer_release(&ctx);
 
