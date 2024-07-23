@@ -14,6 +14,9 @@ typedef enum {
     YPDR200_X03_PARAM_MANUFACTURER
 } ypdr200_x03_param_t;
 
+#define YPDR200_X03_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X03_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X03_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
 /**
  * @brief Get reader/writer module information
  * @param infoType Type of information to be retrieved

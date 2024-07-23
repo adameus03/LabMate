@@ -5,6 +5,11 @@
 #include <assert.h>
 
 // TODO Unify some implementations related to USB with printer.c? Could be as a small shared library for QPS and RSCS
+// TODO Reattach kernel drivers when exiting program? Or not? What about qps as well? (Though the programs should never really exit)
+
+#if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    #include "ypdr200.h"
+#endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_SUCCESS 0
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_NO_DEVICE_WHEN_CHECKING 1
@@ -117,19 +122,58 @@ void uhfman_device_release(uhfman_ctx_t *pCtx) {
 }
 
 uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {
-    // TODO implement
-    fprintf(stderr, "uhfman_get_hardware_version not implemented\n");
-    assert(0);
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_HARDWARE_VERSION, ppcVersion_out);
+    switch (rv) {
+        case YPDR200_X03_ERR_SUCCESS:
+            return UHFMAN_GET_HARDWARE_VERSION_ERR_SUCCESS;
+        case YPDR200_X03_ERR_SEND_COMMAND:
+            return UHFMAN_GET_HARDWARE_VERSION_ERR_SEND_COMMAND;
+        case YPDR200_X03_ERR_READ_RESPONSE:
+            return UHFMAN_GET_HARDWARE_VERSION_ERR_READ_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
+            return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
 uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {
-    // TODO implement
-    fprintf(stderr, "uhfman_get_hardware_version not implemented\n");
-    assert(0);
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_SOFTWARE_VERSION, ppcVersion_out);
+    switch (rv) {
+        case YPDR200_X03_ERR_SUCCESS:
+            return UHFMAN_GET_SOFTWARE_VERSION_ERR_SUCCESS;
+        case YPDR200_X03_ERR_SEND_COMMAND:
+            return UHFMAN_GET_SOFTWARE_VERSION_ERR_SEND_COMMAND;
+        case YPDR200_X03_ERR_READ_RESPONSE:
+            return UHFMAN_GET_SOFTWARE_VERSION_ERR_READ_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
+            return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
 uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_out) {
-    // TODO implement
-    fprintf(stderr, "uhfman_get_hardware_version not implemented\n");
-    assert(0);
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_MANUFACTURER, ppcManufacturer_out);
+    switch (rv) {
+        case YPDR200_X03_ERR_SUCCESS:
+            return UHFMAN_GET_MANUFACTURER_ERR_SUCCESS;
+        case YPDR200_X03_ERR_SEND_COMMAND:
+            return UHFMAN_GET_MANUFACTURER_ERR_SEND_COMMAND;
+        case YPDR200_X03_ERR_READ_RESPONSE:
+            return UHFMAN_GET_MANUFACTURER_ERR_READ_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
+            return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
