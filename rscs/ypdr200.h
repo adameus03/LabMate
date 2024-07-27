@@ -1,4 +1,11 @@
+#ifndef YPDR200_H
+#define YPDR200_H
+
 #include "uhfman_common.h"
+
+#ifndef YPDR200_INTERFACE_TYPE
+#error "YPDR200_INTERFACE_TYPE is not defined"
+#endif
 
 // typedef struct {
 //     libusb_device_handle *handle;
@@ -22,3 +29,5 @@ typedef enum {
  * @param infoType Type of information to be retrieved
  */
 int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo_out);
+
+#endif // YPDR200_H

@@ -2,14 +2,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
+#include <unistd.h>
 #include <assert.h>
+#include <asm-generic/termbits-common.h>
+
+#include "ch340.h"
 
 // TODO Unify some implementations related to USB with printer.c? Could be as a small shared library for QPS and RSCS
 // TODO Reattach kernel drivers when exiting program? Or not? What about qps as well? (Though the programs should never really exit)
 
-#if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-    #include "ypdr200.h"
-#endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+#if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_UART
+    #error "UHFMAN_DEVICE_CONNECTION_TYPE_UART not supported for now"
+#elif UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB
+    #include <libusb.h>
+    #define UHFMAN_CH340_CTRL_IN (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_IN)
+    #define UHFMAN_CH340_CTRL_OUT (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT)
+    #define UHFMAN_CH340_VENDOR_ID 0x1a86
+    #define UHFMAN_CH340_PRODUCT_ID 0x7523
+    #define UHFMAN_CH340_USB_IFACE_IX 0
+    #if UHFMAN_CH340_USE_KERNEL_DRIVER == 1
+        #include <fcntl.h> 
+        #include <termios.h>
+    #endif
+#else
+    #error "Unknown UHFMAN_DEVICE_CONNECTION_TYPE"
+#endif
 
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_SUCCESS 0
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_NO_DEVICE_WHEN_CHECKING 1
@@ -20,7 +38,7 @@
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_OTHER_WHEN_CHECKING 6
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_OTHER_WHEN_DETACHING 7
 static int uhfman_detach_kernel_drivers(uhfman_ctx_t* pCtx) {
-    int rv = libusb_kernel_driver_active(pCtx->handle, UHFMAN_USB_IFACE_IX);
+    int rv = libusb_kernel_driver_active(pCtx->handle, UHFMAN_CH340_USB_IFACE_IX);
 
     switch (rv) {
         case 0:
@@ -32,7 +50,7 @@ static int uhfman_detach_kernel_drivers(uhfman_ctx_t* pCtx) {
             return UHFMAN_DETACH_KERNEL_DRIVERS_ERR_NOT_SUPPORTED_WHEN_CHECKING;
         case 1:
             // Kernel driver active, detach it
-            rv = libusb_detach_kernel_driver(pCtx->handle, UHFMAN_USB_IFACE_IX);
+            rv = libusb_detach_kernel_driver(pCtx->handle, UHFMAN_CH340_USB_IFACE_IX);
             switch (rv) {
                 case 0:
                     fprintf(stdout, "Kernel driver detached successfully\n");
@@ -54,7 +72,69 @@ static int uhfman_detach_kernel_drivers(uhfman_ctx_t* pCtx) {
     }
 }
 
+#if (UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB) && (UHFMAN_CH340_USE_KERNEL_DRIVER == 1)
+static int uhfman_usbserial_set_interface_attribs (int fd, int speed, int parity)
+{
+        struct termios tty;
+        if (tcgetattr (fd, &tty) != 0)
+        {
+                fprintf (stderr, "error %d from tcgetattr", errno);
+                return -1;
+        }
+
+        cfsetospeed (&tty, speed);
+        cfsetispeed (&tty, speed);
+
+        tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
+        // disable IGNBRK for mismatched speed tests; otherwise receive break
+        // as \000 chars
+        tty.c_iflag &= ~IGNBRK;         // disable break processing
+        tty.c_lflag = 0;                // no signaling chars, no echo,
+                                        // no canonical processing
+        tty.c_oflag = 0;                // no remapping, no delays
+        tty.c_cc[VMIN]  = 0;            // read doesn't block
+        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+
+        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
+
+        tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
+                                        // enable reading
+        tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
+        tty.c_cflag |= parity;
+        tty.c_cflag &= ~CSTOPB;
+        tty.c_cflag &= ~CRTSCTS;
+
+        if (tcsetattr (fd, TCSANOW, &tty) != 0)
+        {
+                fprintf (stderr, "error %d from tcsetattr", errno);
+                return -1;
+        }
+        return 0;
+}
+
+static void uhfman_usbserial_set_blocking (int fd, int should_block)
+{
+        struct termios tty;
+        memset (&tty, 0, sizeof tty);
+        if (tcgetattr (fd, &tty) != 0)
+        {
+                fprintf (stderr, "error %d from tggetattr", errno);
+                return;
+        }
+
+        tty.c_cc[VMIN]  = should_block ? 1 : 0;
+        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+
+        if (tcsetattr (fd, TCSANOW, &tty) != 0)
+                fprintf (stderr, "error %d setting term attributes", errno);
+}
+#endif // UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB AND UHFMAN_CH340_USE_KERNEL_DRIVER == 1
+
 uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
+#if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_UART
+#error "UHFMAN_DEVICE_CONNECTION_TYPE_UART not supported for now"
+#elif UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB
+    #if UHFMAN_CH340_USE_KERNEL_DRIVER == 0
     libusb_device_handle *handle;
     libusb_context *context = NULL;
     int r;
@@ -67,7 +147,7 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
     }
 
     // Open the device 
-    handle = libusb_open_device_with_vid_pid(context, UHFMAN_VENDOR_ID, UHFMAN_PRODUCT_ID);
+    handle = libusb_open_device_with_vid_pid(context, UHFMAN_CH340_VENDOR_ID, UHFMAN_CH340_PRODUCT_ID);
     //libusb_open(experiment_global_dev_ptr, &handle);
 
     if (handle == NULL) {
@@ -99,7 +179,7 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
     }
 
     // Claim the interface (assuming interface UHFMAN_USB_IFACE_IX)
-    r = libusb_claim_interface(handle, UHFMAN_USB_IFACE_IX);
+    r = libusb_claim_interface(handle, UHFMAN_CH340_USB_IFACE_IX);
     if (r < 0) {
         fprintf(stderr, "Error claiming interface: %s\n", libusb_error_name(r));
         #if UHFMAN_USE_DEBUG_EXTENSIONS == 1
@@ -110,15 +190,90 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         return UHFMAN_TAKE_ERR_INTERFACE_CLAIM;
     }
 
+    // Initialize ch340
+    r = ch340_init(handle);
+    if (r < 0) {
+        fprintf(stderr, "Error initializing ch340: %d\n", r);
+        libusb_release_interface(handle, UHFMAN_CH340_USB_IFACE_IX);
+        libusb_close(handle);
+        libusb_exit(context);
+        return UHFMAN_TAKE_ERR_BRIDGE_INIT_FAIL;
+    }
+
     return UHFMAN_TAKE_ERR_SUCCESS;
+    #elif UHFMAN_CH340_USE_KERNEL_DRIVER
+        #ifndef UHFMAN_CH340_PORT_NAME
+            #error "UHFMAN_CH340_PORT_NAME is undefined"
+        #endif
+        int fd = open(UHFMAN_CH340_PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC | O_EXCL);
+        if (fd < 0) {
+            fprintf(stderr, "Error %d opening %s: %s", errno, UHFMAN_CH340_PORT_NAME, strerror (errno));
+            return -1;
+        }
+
+        //uhfman_usbserial_set_interface_attribs(fd, B9600, 0); // set speed to 9600 bps, 8n1 (no parity)
+        //uhfman_usbserial_set_blocking(fd, 0); // set no blocking
+
+        if (!isatty(fd)) {
+            fprintf(stderr, "%s is not a tty\n", UHFMAN_CH340_PORT_NAME);
+            close(fd);
+            return -1;
+        } else {
+            fprintf(stdout, "%s is a tty\n", UHFMAN_CH340_PORT_NAME);
+        }
+
+        struct termios config;
+        if (tcgetattr(fd, &config) < 0) {
+            fprintf(stderr, "Error getting termios attributes: %s\n", strerror(errno));
+            close(fd);
+            return -1;
+        }
+
+        cfsetispeed(&config, B115200);
+        cfsetospeed(&config, B115200);
+
+        config.c_lflag &= ~(ICANON | ECHO); // ~ICANON for non-canonical mode, ~ECHO for no echo
+        config.c_cc[VMIN] = 1; // Read at least 1 byte
+        config.c_cc[VTIME] = 0; // No timeout
+        config.c_cflag |= CRTSCTS;
+
+        if (tcsetattr(fd, TCSANOW, &config) < 0) {
+            fprintf(stderr, "Error setting termios attributes: %s\n", strerror(errno));
+            close(fd);
+            return -1;
+        } else {
+            fprintf(stdout, "Termios attributes set successfully\n");
+        }
+
+        tcflush(fd, TCIOFLUSH); // Flush just in case there is any garbage in the buffer
+
+        pCtx_out->fd = fd;
+        //printf("EXITING FOR NOW\n"); exit(EXIT_SUCCESS);
+        return UHFMAN_TAKE_ERR_SUCCESS;
+    #else
+    #error "Invalid value of UHFMAN_CH340_USE_KERNEL_DRIVER"pCtx_out
+    #endif
+#else
+#error "Unknown UHFMAN_DEVICE_CONNECTION_TYPE"
+#endif
 }
 
 void uhfman_device_release(uhfman_ctx_t *pCtx) {
+#if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_UART
+#error "UHFMAN_DEVICE_CONNECTION_TYPE_UART not supported for now"
+#elif UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB
+    #if UHFMAN_CH340_USE_KERNEL_DRIVER == 0
     if (0 != libusb_release_interface(pCtx->handle, 0)) {
         fprintf(stderr, "Error releasing interface\n");
     }
     libusb_close(pCtx->handle);
     libusb_exit(pCtx->context);
+    #else
+    close(pCtx->fd);
+    #endif
+#else
+#error "Unknown UHFMAN_DEVICE_CONNECTION_TYPE"
+#endif
 }
 
 uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {

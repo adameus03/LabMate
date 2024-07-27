@@ -5,21 +5,11 @@
 
 #include "uhfman_common.h"
 
-#define UHFMAN_DEVICE_MODEL_YDPR200 1
-#define UHFMAN_DEVICE_MODEL UHFMAN_DEVICE_MODEL_YDPR200
-
-#if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-    #define UHFMAN_VENDOR_ID 0x1a86
-    #define UHFMAN_PRODUCT_ID 0x7523
-    #define UHFMAN_USB_IFACE_IX 0
-#else
-#error "Unknown device model for uhfman"
-#endif
-
 #define UHFMAN_TAKE_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_TAKE_ERR_LIBUSB_INIT UHFMAN_ERR_LIBUSB_INIT
 #define UHFMAN_TAKE_ERR_DEVICE_NOT_FOUND UHFMAN_ERR_DEVICE_NOT_FOUND
 #define UHFMAN_TAKE_ERR_INTERFACE_CLAIM UHFMAN_ERR_INTERFACE_CLAIM
+#define UHFMAN_TAKE_ERR_BRIDGE_INIT_FAIL UHFMAN_ERR_BRIDGE_INIT_FAIL
 /**
  * @brief Initializes underlying USB library and attempts to find the UHF RFID reader/writer and claim the interface
  */
