@@ -5,7 +5,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
-#include <asm-generic/termbits-common.h>
 
 #include "ch340.h"
 
@@ -23,12 +22,19 @@
     #define UHFMAN_CH340_USB_IFACE_IX 0
     #if UHFMAN_CH340_USE_KERNEL_DRIVER == 1
         #include <fcntl.h> 
+
+        #ifndef __USE_MISC
+        #define __USE_MISC
+        #endif // __USE_MISC (this is to make sure cfmakeraw is defined)
+        //#define __GNU_SOURCE
+        #include <asm-generic/termbits-common.h>
         #include <termios.h>
     #endif
 #else
     #error "Unknown UHFMAN_DEVICE_CONNECTION_TYPE"
 #endif
 
+#if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB && UHFMAN_CH340_USE_KERNEL_DRIVER == 0
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_SUCCESS 0
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_NO_DEVICE_WHEN_CHECKING 1
 #define UHFMAN_DETACH_KERNEL_DRIVERS_ERR_NOT_SUPPORTED_WHEN_CHECKING 2
@@ -71,6 +77,7 @@ static int uhfman_detach_kernel_drivers(uhfman_ctx_t* pCtx) {
         
     }
 }
+#endif // UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB AND UHFMAN_CH340_USE_KERNEL_DRIVER == 0
 
 #if (UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB) && (UHFMAN_CH340_USE_KERNEL_DRIVER == 1)
 static int uhfman_usbserial_set_interface_attribs (int fd, int speed, int parity)
@@ -92,6 +99,7 @@ static int uhfman_usbserial_set_interface_attribs (int fd, int speed, int parity
         tty.c_lflag = 0;                // no signaling chars, no echo,
                                         // no canonical processing
         tty.c_oflag = 0;                // no remapping, no delays
+
         tty.c_cc[VMIN]  = 0;            // read doesn't block
         tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
@@ -129,6 +137,22 @@ static void uhfman_usbserial_set_blocking (int fd, int should_block)
                 fprintf (stderr, "error %d setting term attributes", errno);
 }
 #endif // UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB AND UHFMAN_CH340_USE_KERNEL_DRIVER == 1
+
+
+static void uhfman_debug_print_bits(void const * const ptr, size_t const size)
+{
+    unsigned char *b = (unsigned char*) ptr;
+    unsigned char byte;
+    int i, j;
+    
+    for (i = size-1; i >= 0; i--) {
+        for (j = 7; j >= 0; j--) {
+            byte = (b[i] >> j) & 1;
+            printf("%u", byte);
+        }
+    }
+    puts("");
+}
 
 uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
 #if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_UART
@@ -229,13 +253,51 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
             return -1;
         }
 
+        cfmakeraw(&config);
+        /*
+            Calling cfmakeraw should be equivalent to using 
+            t->c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP |
+			INLCR | IGNCR | ICRNL | IXON);
+            t->c_oflag &= ~OPOST;
+            t->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+            t->c_cflag &= ~(CSIZE | PARENB);
+            t->c_cflag |= CS8;
+            t->c_cc[VMIN] = 1;
+            t->c_cc[VTIME] = 0;
+
+            Compare with https://github.com/aligrudi/neatlibc/blob/master/termios.c
+        */
+
         cfsetispeed(&config, B115200);
         cfsetospeed(&config, B115200);
 
-        config.c_lflag &= ~(ICANON | ECHO); // ~ICANON for non-canonical mode, ~ECHO for no echo
-        config.c_cc[VMIN] = 1; // Read at least 1 byte
-        config.c_cc[VTIME] = 0; // No timeout
+        // config.c_iflag = IGNBRK | IGNPAR | IGNCR;
+        // config.c_iflag &= ~(BRKINT | PARMRK | INPCK | ISTRIP | INLCR | ICRNL | IXANY);
+
+        // //config.c_oflag &= ~(OPOST | ONLCR);
+        // config.c_oflag = 0;
+
+        // // TODO: Check for termios config issues; add 0x11 command for ypd-r200
+
+        // config.c_lflag &= ~(ICANON | ECHO); // ~ICANON for non-canonical mode, ~ECHO for no echo
+        // config.c_cc[VMIN] = 1; // Read at least 1 byte
+        // config.c_cc[VTIME] = 0; // No timeout
         config.c_cflag |= CRTSCTS;
+
+        ///<Print all termios attributes in binary for debugging>
+        fprintf(stdout, "Termios attributes (binary):\n");
+        fprintf(stdout, "c_iflag: "); uhfman_debug_print_bits(&config.c_iflag, sizeof(config.c_iflag)); fprintf(stdout, "\n");
+        fprintf(stdout, "c_oflag: "); uhfman_debug_print_bits(&config.c_oflag, sizeof(config.c_oflag)); fprintf(stdout, "\n");
+        fprintf(stdout, "c_cflag: "); uhfman_debug_print_bits(&config.c_cflag, sizeof(config.c_cflag)); fprintf(stdout, "\n");
+        fprintf(stdout, "c_lflag: "); uhfman_debug_print_bits(&config.c_lflag, sizeof(config.c_lflag)); fprintf(stdout, "\n");
+        fprintf(stdout, "c_line: "); uhfman_debug_print_bits(&config.c_line, sizeof(config.c_line)); fprintf(stdout, "\n");
+        fprintf(stdout, "c_cc: ");
+        for (int i = 0; i < NCCS; i++) {
+            fprintf(stdout, "c_cc[%d]: ", i); uhfman_debug_print_bits(&config.c_cc[i], sizeof(config.c_cc[i])); fprintf(stdout, "\n");
+        }
+        fprintf(stdout, "c_ispeed: "); uhfman_debug_print_bits(&config.c_ispeed, sizeof(config.c_ispeed)); fprintf(stdout, "\n");
+        fprintf(stdout, "c_ospeed: "); uhfman_debug_print_bits(&config.c_ospeed, sizeof(config.c_ospeed)); fprintf(stdout, "\n");
+        ///</Print all termios attributes for debugging>
 
         if (tcsetattr(fd, TCSANOW, &config) < 0) {
             fprintf(stderr, "Error setting termios attributes: %s\n", strerror(errno));
@@ -249,6 +311,14 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
 
         pCtx_out->fd = fd;
         //printf("EXITING FOR NOW\n"); exit(EXIT_SUCCESS);
+        // int rv = ypdr200_x11(pCtx_out, YPDR200_X11_PARAM_BAUD_RATE_115200); // Set baud rate to 115200 bps
+        // if (rv != YPDR200_X11_ERR_SUCCESS) {
+        //     fprintf(stderr, "Error setting baud rate: %d\n", rv);
+        //     close(fd);
+        //     return -1; // TODO replace those -1 codes with proper error codes
+        // } else {
+        //     fprintf(stdout, "Baud rate set successfully\n");
+        // }
         return UHFMAN_TAKE_ERR_SUCCESS;
     #else
     #error "Invalid value of UHFMAN_CH340_USE_KERNEL_DRIVER"pCtx_out

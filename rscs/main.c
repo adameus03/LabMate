@@ -47,6 +47,17 @@ int main() {
         fprintf(stdout, "Software version: %s\n", softwareVersion);
     }
 
+    fprintf(stdout, "Calling uhfman_get_manufacturer\n");
+    char* manufacturer = NULL;
+    err = uhfman_get_manufacturer(&uhfmanCtx, &manufacturer);
+    if (err != UHFMAN_GET_MANUFACTURER_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_get_manufacturer returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "Manufacturer: %s\n", manufacturer);
+    }
+
     fprintf(stdout, "Calling uhfman_device_release\n");
     uhfman_device_release(&uhfmanCtx);
     fprintf(stdout, "uhfman_device_release returned\n");
