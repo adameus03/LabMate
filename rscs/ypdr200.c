@@ -379,12 +379,12 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
 
     uint8_t checksum = ypdr200_frame_get_checksum(&frameIn);
     if (checksum != epilogIn.checksum) {
-        fprintf(stderr, "Checksum mismatch: expected=0x%02X, actual=0x%02X\n", checksum, epilogIn.checksum);
+        fprintf(stderr, "Checksum mismatch: expected=0x%02X, actual=0x%02X\n", checksum, epilogIn.checksum); // TODO don't ignore
         /*if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
         return YPDR200_X03_ERR_READ_RESPONSE;*/
-        fprintf(stderr, "Ignoring checksum mismatch!\n");
+        fprintf(stderr, "Ignoring checksum mismatch!\n"); // TODO don't ignore
     } else {
         fprintf(stdout, "Checksum OK\n");
     }

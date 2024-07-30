@@ -151,7 +151,6 @@ static void uhfman_debug_print_bits(void const * const ptr, size_t const size)
             printf("%u", byte);
         }
     }
-    puts("");
 }
 
 uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
