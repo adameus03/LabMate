@@ -25,7 +25,7 @@ typedef enum {
 
     /* NXP G2X specific */
     YPDR200_RESP_ERR_CODE_NXP_G2X_CHANGE_CONFIG_FAIL = 0x1A,
-    YPDR200_RESP_ERR_CODE_NXP_G2X_NXPREAD_PROTECT_FAIL = 0x2A,
+    YPDR200_RESP_ERR_CODE_NXP_G2X_READ_PROTECT_FAIL = 0x2A,
     YPDR200_RESP_ERR_CODE_NXP_G2X_RESET_READ_PROTECT_FAIL = 0x2B,
     YPDR200_RESP_ERR_CODE_NXP_G2X_CHANGE_EAS_FAIL = 0x1B,
     YPDR200_RESP_ERR_CODE_NXP_G2X_EAS_ALARM_FAIL = 0x1D,
@@ -80,18 +80,23 @@ typedef enum {
  */
 int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_req_param_t infoType, char** ppcInfo_out, ypdr200_resp_err_code_t* pRespErrCode);
 
+
+#define YPDR200_X0B_RESP_PARAM_HDR_SIZE 7
 typedef union {
-    union {
-        struct {
-            uint8_t target  : 3;
-            uint8_t action  : 3;
-            uint8_t memBank : 2;
+    struct {
+        union {
+            struct {
+                uint8_t target  : 3;
+                uint8_t action  : 3;
+                uint8_t memBank : 2;
+            };
+            uint8_t selParam;
         };
-        uint8_t selParam;
+        uint8_t ptr[4]; //MSB first
+        uint8_t maskLen;
+        uint8_t truncate;
     };
-    uint8_t ptr[4]; //MSB first
-    uint8_t maskLen;
-    uint8_t truncate;
+    uint8_t raw[YPDR200_X0B_RESP_PARAM_HDR_SIZE];
 } __attribute__((__packed__)) ypdr200_x0b_resp_param_hdr_t;
 
 typedef struct {
@@ -99,9 +104,16 @@ typedef struct {
     uint8_t* pMask; //MSB first
 } ypdr200_x0b_resp_param_t;
 
+void ypdr200_x0b_resp_param_dispose(ypdr200_x0b_resp_param_t* pRespParam);
+
+#define YPDR200_X0B_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X0B_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X0B_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X0B_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
 /**
  * @brief Get Select parameter
+ * @warning You need to call `ypdr200_x0b_resp_param_dispose` to free the memory allocated for `pRespParam_out` after you won't use it anymore
  */
-int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out);
+int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
 #endif // YPDR200_H
