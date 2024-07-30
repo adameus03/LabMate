@@ -49,7 +49,7 @@ static uint16_t ypdr200_frame_prolog_get_param_length(const ypdr200_frame_prolog
     return paramLen;
 }
 
-static uint8_t ypdr200_frame_get_checksum(const ypdr200_frame_t* pFrame) {
+static uint8_t ypdr200_frame_compute_checksum(const ypdr200_frame_t* pFrame) {
     uint32_t sum = 0;
     ypdr200_frame_prolog_t prolog = pFrame->prolog;
     sum += prolog.type;
@@ -119,7 +119,7 @@ static void ypdr200_frame_set_param_data(ypdr200_frame_t* pFrame, uint8_t* pPara
 }
 
 static void ypdr200_frame_set_checksum(ypdr200_frame_t* pFrame) {
-    pFrame->epilog.checksum = ypdr200_frame_get_checksum(pFrame);
+    pFrame->epilog.checksum = ypdr200_frame_compute_checksum(pFrame);
 }
 
 /**
@@ -146,104 +146,11 @@ static ypdr200_frame_t ypdr200_frame_construct(ypdr200_frame_type_t type, ypdr20
     return frame;
 }
 
-int ypdr200_x11(uhfman_ctx_t* pCtx, ypdr200_x11_param_t baudRate) {
-    uint16_t pow = (uint16_t)(((uint32_t)baudRate) / 100);
-    uint8_t powMsb = (uint8_t)(pow >> 8);
-    uint8_t powLsb = (uint8_t)(pow & 0xFF);
-    uint8_t paramData[2] = {powMsb, powLsb};
-    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X11, 2U, paramData);
-    uint8_t* pDataOut = ypdr200_frame_raw(&frameOut);
-    uint32_t dataOutLen = ypdr200_frame_length(&frameOut);
-    fprintf(stdout, "pDataOutLen=%d\n", dataOutLen);
-    assert(dataOutLen == 9U);
-    assert(pDataOut[0] == 0xAA);
-    assert(pDataOut[1] == 0x00);
-    assert(pDataOut[2] == 0x11);
-    assert(pDataOut[3] == 0x00);
-    assert(pDataOut[4] == 0x02);
-    assert(pDataOut[5] == 0x04); // TODO remove (make flexible)
-    assert(pDataOut[6] == 0x80); // TODO remove (make flexible)
-    assert(pDataOut[7] == 0x97); //151U; // TODO remove (make flexible)
-    assert(pDataOut[8] == 0xDD);
-
-    int actual_size_transmitted = 0;
-#if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
-    int rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_OUT, pDataOut, dataOutLen, &actual_size_transmitted, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
-    if (rv != 0) {
-        fprintf(stderr, "Error sending cmd 0x11: %s (%d)\n", libusb_error_name(rv), rv);
-        return YPDR200_X11_ERR_SEND_COMMAND;
-    }
-#elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-    actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
-#else
-    #error "Unsupported device interface"
-#endif
-    if ((uint32_t)actual_size_transmitted != dataOutLen) {
-        fprintf(stderr, "Error sending cmd 0x11: dataOutLen=%d, actual_size_transmitted=%d\n", dataOutLen, actual_size_transmitted);
-        free(pDataOut);
-        return YPDR200_X11_ERR_SEND_COMMAND;
-    }
-    free(pDataOut);
-    // No response expected
-    // Flush the input buffer
-    // uint8_t remainingData[1024];
-    // int actual_size_received = 0;
-    // #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
-    // rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, remainingData, sizeof(remainingData), &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
-    // if (rv != 0) {
-    //     fprintf(stderr, "Error reading remaining data: %s (%d)\n", libusb_error_name(rv), rv);
-    //     return YPDR200_X11_ERR_SEND_COMMAND;
-    // }
-    // #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-    // actual_size_received = read(pCtx->fd, remainingData, sizeof(remainingData));
-    // #endif
-    // if (actual_size_received > 0) {
-    //     fprintf(stdout, "Received %d bytes of remaining data: ", actual_size_received);
-    //     for (int i = 0; i < actual_size_received; i++) {
-    //         fprintf(stdout, "0x%02X ", remainingData[i]);
-    //     }
-    //     fprintf(stdout, "\n");
-    // } else {
-    //     fprintf(stdout, "No remaining data received\n");
-    // }
-    //tcflush(pCtx->fd, TCIFLUSH);
-    return YPDR200_X11_ERR_SUCCESS;
-}
-
-// TODO: Separate response handling to a common static function
-int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo_out) {
-    uint8_t param = (uint8_t)infoType;
-    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X03, 1U, &param);
-    uint8_t* pDataOut = ypdr200_frame_raw(&frameOut);
-    uint32_t dataOutLen = ypdr200_frame_length(&frameOut);
-    assert(dataOutLen == 8U);
-    assert(pDataOut[0] == 0xAA);
-    assert(pDataOut[1] == 0x00);
-    assert(pDataOut[2] == 0x03);
-    assert(pDataOut[3] == 0x00);
-    assert(pDataOut[4] == 0x01);
-    assert(pDataOut[5] == (uint8_t)infoType);
-    assert(pDataOut[6] == 0x04 + (uint8_t)infoType);
-    assert(pDataOut[7] == 0xDD);
-
-    int actual_size_transmitted = 0;
-#if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
-    int rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_OUT, pDataOut, dataOutLen, &actual_size_transmitted, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
-    if (rv != 0) {
-        fprintf(stderr, "Error sending cmd 0x03: %s (%d)\n", libusb_error_name(rv), rv);
-        return YPDR200_X03_ERR_SEND_COMMAND;
-    }
-#elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-    actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
-#else
-    #error "Unsupported device interface"
-#endif
-    if ((uint32_t)actual_size_transmitted != dataOutLen) {
-        fprintf(stderr, "Error sending cmd 0x03: dataOutLen=%d, actual_size_transmitted=%d\n", dataOutLen, actual_size_transmitted);
-        free(pDataOut);
-        return YPDR200_X03_ERR_SEND_COMMAND;
-    }
-    free(pDataOut);
+#define YPDR200_FRAME_RECV_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_FRAME_RECV_ERR_READ UHFMAN_ERR_READ_RESPONSE
+static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx) {
+    if (pFrameRcv == NULL) { assert(0); }
+    if (pCtx == NULL) { assert(0); }
 
     ypdr200_frame_prolog_t prologIn = {};
     int actual_size_received = 0;
@@ -252,7 +159,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
     rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE, &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
     if (rv != 0) {
         fprintf(stderr, "Error reading response prolog: %s (%d)\n", libusb_error_name(rv), rv);
-        return YPDR200_X03_ERR_READ_RESPONSE;
+        return YPDR200_FRAME_RECV_ERR_READ;
     }
     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     actual_size_received = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE);
@@ -264,7 +171,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
             fprintf(stderr, "0x%02X ", prologIn.raw[i]);
         }
         fprintf(stderr, "\n");
-        return YPDR200_X03_ERR_READ_RESPONSE;
+        return YPDR200_FRAME_RECV_ERR_READ;
     }
 
     ///<debug print received prolog>
@@ -280,7 +187,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         pParamIn = (uint8_t*) malloc(paramInLen);
         if (pParamIn == (uint8_t*)0) {
             errno = ENOMEM;
-            return YPDR200_X03_ERR_READ_RESPONSE;
+            return YPDR200_FRAME_RECV_ERR_READ;
         }
         actual_size_received = 0;
         #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
@@ -288,7 +195,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         if (rv != 0) {
             fprintf(stderr, "Error reading response param data: %s (%d)\n", libusb_error_name(rv), rv);
             free(pParamIn);
-            return YPDR200_X03_ERR_READ_RESPONSE;
+            return YPDR200_FRAME_RECV_ERR_READ;
         }
         #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
         actual_size_received = read(pCtx->fd, pParamIn, paramInLen);
@@ -296,7 +203,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         if (actual_size_received != paramInLen) {
             fprintf(stderr, "Error reading response param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
             free(pParamIn);
-            return YPDR200_X03_ERR_READ_RESPONSE;
+            return YPDR200_FRAME_RECV_ERR_READ;
         }
 
         ///<debug print received param data>
@@ -317,7 +224,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
-        return YPDR200_X03_ERR_READ_RESPONSE;
+        return YPDR200_FRAME_RECV_ERR_READ;
     }
     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     actual_size_received = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE);
@@ -327,7 +234,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
-        return YPDR200_X03_ERR_READ_RESPONSE;
+        return YPDR200_FRAME_RECV_ERR_READ;
     }
 
     ///<debug print received epilog>
@@ -361,7 +268,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
     // rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, remainingData, sizeof(remainingData), &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
     // if (rv != 0) {
     //     fprintf(stderr, "Error reading remaining data: %s (%d)\n", libusb_error_name(rv), rv);
-    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    //     return YPDR200_FRAME_RECV_ERR_READ;
     // }
     // #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     // actual_size_received = read(pCtx->fd, remainingData, sizeof(remainingData));
@@ -377,14 +284,14 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
     // }
     /// </Receive any remaining data (for debugging)>
 
-    uint8_t checksum = ypdr200_frame_get_checksum(&frameIn);
+    uint8_t checksum = ypdr200_frame_compute_checksum(&frameIn);
     if (checksum != epilogIn.checksum) {
         fprintf(stderr, "Checksum mismatch: expected=0x%02X, actual=0x%02X\n", checksum, epilogIn.checksum); // TODO don't ignore
-        /*if (pParamIn != (uint8_t*)0) {
+        if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
-        return YPDR200_X03_ERR_READ_RESPONSE;*/
-        fprintf(stderr, "Ignoring checksum mismatch!\n"); // TODO don't ignore
+        return YPDR200_FRAME_RECV_ERR_READ;
+        //fprintf(stderr, "Ignoring checksum mismatch!\n"); // DONE don't ignore
     } else {
         fprintf(stdout, "Checksum OK\n");
     }
@@ -394,7 +301,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
-        return YPDR200_X03_ERR_READ_RESPONSE;
+        return YPDR200_FRAME_RECV_ERR_READ;
     }
 
     if (frameIn.prolog.cmd != YPDR200_FRAME_CMD_X03) {
@@ -402,8 +309,330 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
+        return YPDR200_FRAME_RECV_ERR_READ;
+    }
+
+    *pFrameRcv = frameIn;
+    return YPDR200_FRAME_RECV_ERR_SUCCESS;
+}
+
+#define YPDR200_FRAME_SEND_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_FRAME_SEND_ERR_SEND UHFMAN_ERR_SEND_COMMAND
+static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
+    if (pFrameSnd == NULL) { assert(0); }
+    if (pCtx == NULL) { assert(0); }
+
+    uint8_t* pDataOut = ypdr200_frame_raw(pFrameSnd);
+    uint32_t dataOutLen = ypdr200_frame_length(pFrameSnd);
+
+    ///<debug print raw data for sending>
+    fprintf(stdout, "Sending frame: ");
+    for (uint32_t i = 0; i < dataOutLen; i++) {
+        fprintf(stdout, "0x%02X ", pDataOut[i]);
+    }
+    fprintf(stdout, "\n");
+    ///</debug print raw data for sending>
+
+    int actual_size_transmitted = 0;
+#if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+    int rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_OUT, pDataOut, dataOutLen, &actual_size_transmitted, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+    if (rv != 0) {
+        fprintf(stderr, "Error sending cmd 0x%02X: %s (%d)\n", pFrameSnd->prolog.cmd, libusb_error_name(rv), rv);
+        return YPDR200_FRAME_SEND_ERR_SEND;
+    }
+#elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+    actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
+#else
+    #error "Unsupported device interface"
+#endif
+    if ((uint32_t)actual_size_transmitted != dataOutLen) {
+        fprintf(stderr, "Error sending cmd 0x%02X: dataOutLen=%d, actual_size_transmitted=%d\n", pFrameSnd->prolog.cmd, dataOutLen, actual_size_transmitted);
+        free(pDataOut);
+        return YPDR200_FRAME_SEND_ERR_SEND;
+    }
+    free(pDataOut);
+    return YPDR200_FRAME_SEND_ERR_SUCCESS;
+}
+
+int ypdr200_x11(uhfman_ctx_t* pCtx, ypdr200_x11_param_t baudRate) {
+    uint16_t pow = (uint16_t)(((uint32_t)baudRate) / 100);
+    uint8_t powMsb = (uint8_t)(pow >> 8);
+    uint8_t powLsb = (uint8_t)(pow & 0xFF);
+    uint8_t paramData[2] = {powMsb, powLsb};
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X11, 2U, paramData);
+//     uint8_t* pDataOut = ypdr200_frame_raw(&frameOut);
+//     uint32_t dataOutLen = ypdr200_frame_length(&frameOut);
+//     fprintf(stdout, "pDataOutLen=%d\n", dataOutLen);
+//     assert(dataOutLen == 9U);
+//     assert(pDataOut[0] == 0xAA);
+//     assert(pDataOut[1] == 0x00);
+//     assert(pDataOut[2] == 0x11);
+//     assert(pDataOut[3] == 0x00);
+//     assert(pDataOut[4] == 0x02);
+//     assert(pDataOut[5] == 0x04); // TODO remove (make flexible)
+//     assert(pDataOut[6] == 0x80); // TODO remove (make flexible)
+//     assert(pDataOut[7] == 0x97); //151U; // TODO remove (make flexible)
+//     assert(pDataOut[8] == 0xDD);
+
+//     int actual_size_transmitted = 0;
+// #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+//     int rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_OUT, pDataOut, dataOutLen, &actual_size_transmitted, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+//     if (rv != 0) {
+//         fprintf(stderr, "Error sending cmd 0x11: %s (%d)\n", libusb_error_name(rv), rv);
+//         return YPDR200_X11_ERR_SEND_COMMAND;
+//     }
+// #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+//     actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
+// #else
+//     #error "Unsupported device interface"
+// #endif
+//     if ((uint32_t)actual_size_transmitted != dataOutLen) {
+//         fprintf(stderr, "Error sending cmd 0x11: dataOutLen=%d, actual_size_transmitted=%d\n", dataOutLen, actual_size_transmitted);
+//         free(pDataOut);
+//         return YPDR200_X11_ERR_SEND_COMMAND;
+//     }
+//     free(pDataOut);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X11_ERR_SEND_COMMAND;
+    }
+
+    // No response expected
+    // Flush the input buffer
+    // uint8_t remainingData[1024];
+    // int actual_size_received = 0;
+    // #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+    // rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, remainingData, sizeof(remainingData), &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+    // if (rv != 0) {
+    //     fprintf(stderr, "Error reading remaining data: %s (%d)\n", libusb_error_name(rv), rv);
+    //     return YPDR200_X11_ERR_SEND_COMMAND;
+    // }
+    // #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+    // actual_size_received = read(pCtx->fd, remainingData, sizeof(remainingData));
+    // #endif
+    // if (actual_size_received > 0) {
+    //     fprintf(stdout, "Received %d bytes of remaining data: ", actual_size_received);
+    //     for (int i = 0; i < actual_size_received; i++) {
+    //         fprintf(stdout, "0x%02X ", remainingData[i]);
+    //     }
+    //     fprintf(stdout, "\n");
+    // } else {
+    //     fprintf(stdout, "No remaining data received\n");
+    // }
+    //tcflush(pCtx->fd, TCIFLUSH);
+    return YPDR200_X11_ERR_SUCCESS;
+}
+
+// TODO: Separate response handling to a common static function
+int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo_out) {
+    uint8_t param = (uint8_t)infoType;
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X03, 1U, &param);
+//     uint8_t* pDataOut = ypdr200_frame_raw(&frameOut);
+//     uint32_t dataOutLen = ypdr200_frame_length(&frameOut);
+//     assert(dataOutLen == 8U);
+//     assert(pDataOut[0] == 0xAA);
+//     assert(pDataOut[1] == 0x00);
+//     assert(pDataOut[2] == 0x03);
+//     assert(pDataOut[3] == 0x00);
+//     assert(pDataOut[4] == 0x01);
+//     assert(pDataOut[5] == (uint8_t)infoType);
+//     assert(pDataOut[6] == 0x04 + (uint8_t)infoType);
+//     assert(pDataOut[7] == 0xDD);
+
+//     int actual_size_transmitted = 0;
+// #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+//     int rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_OUT, pDataOut, dataOutLen, &actual_size_transmitted, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+//     if (rv != 0) {
+//         fprintf(stderr, "Error sending cmd 0x03: %s (%d)\n", libusb_error_name(rv), rv);
+//         return YPDR200_X03_ERR_SEND_COMMAND;
+//     }
+// #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+//     actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
+// #else
+//     #error "Unsupported device interface"
+// #endif
+//     if ((uint32_t)actual_size_transmitted != dataOutLen) {
+//         fprintf(stderr, "Error sending cmd 0x03: dataOutLen=%d, actual_size_transmitted=%d\n", dataOutLen, actual_size_transmitted);
+//         free(pDataOut);
+//         return YPDR200_X03_ERR_SEND_COMMAND;
+//     }
+//     free(pDataOut);
+
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X03_ERR_SEND_COMMAND;
+    }
+
+    // ypdr200_frame_prolog_t prologIn = {};
+    // int actual_size_received = 0;
+
+    // #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+    // rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE, &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+    // if (rv != 0) {
+    //     fprintf(stderr, "Error reading response prolog: %s (%d)\n", libusb_error_name(rv), rv);
+    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // }
+    // #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+    // actual_size_received = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE);
+    // #endif
+    // if (actual_size_received != YPDR200_FRAME_PROLOG_SIZE) {
+    //     fprintf(stderr, "Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d\n", YPDR200_FRAME_PROLOG_SIZE, actual_size_received);
+    //     fprintf(stderr, "The received incomplete prolog is: ");
+    //     for (int i = 0; i < actual_size_received; i++) {
+    //         fprintf(stderr, "0x%02X ", prologIn.raw[i]);
+    //     }
+    //     fprintf(stderr, "\n");
+    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // }
+
+    // ///<debug print received prolog>
+    // fprintf(stdout, "Received prolog: ");
+    // for (int i = 0; i < YPDR200_FRAME_PROLOG_SIZE; i++) {
+    //     fprintf(stdout, "0x%02X ", prologIn.raw[i]);
+    // }
+    // fprintf(stdout, "\n");
+
+    // uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&prologIn);
+    // uint8_t* pParamIn = (uint8_t*)0;
+    // if (paramInLen > 0) {
+    //     pParamIn = (uint8_t*) malloc(paramInLen);
+    //     if (pParamIn == (uint8_t*)0) {
+    //         errno = ENOMEM;
+    //         return YPDR200_X03_ERR_READ_RESPONSE;
+    //     }
+    //     actual_size_received = 0;
+    //     #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+    //     rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, pParamIn, paramInLen, &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+    //     if (rv != 0) {
+    //         fprintf(stderr, "Error reading response param data: %s (%d)\n", libusb_error_name(rv), rv);
+    //         free(pParamIn);
+    //         return YPDR200_X03_ERR_READ_RESPONSE;
+    //     }
+    //     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+    //     actual_size_received = read(pCtx->fd, pParamIn, paramInLen);
+    //     #endif
+    //     if (actual_size_received != paramInLen) {
+    //         fprintf(stderr, "Error reading response param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
+    //         free(pParamIn);
+    //         return YPDR200_X03_ERR_READ_RESPONSE;
+    //     }
+
+    //     ///<debug print received param data>
+    //     fprintf(stdout, "Received param data: ");
+    //     for (int i = 0; i < paramInLen; i++) {
+    //         fprintf(stdout, "0x%02X ", pParamIn[i]);
+    //     }
+    //     fprintf(stdout, "\n");
+    //     ///</debug print received param data>
+    // }
+
+    // ypdr200_frame_epilog_t epilogIn = {};
+    // actual_size_received = 0;
+    // #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+    // rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE, &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+    // if (rv != 0) {
+    //     fprintf(stderr, "Error reading response epilog: %s (%d)\n", libusb_error_name(rv), rv);
+    //     if (pParamIn != (uint8_t*)0) {
+    //         free(pParamIn);
+    //     }
+    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // }
+    // #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+    // actual_size_received = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE);
+    // #endif
+    // if (actual_size_received != YPDR200_FRAME_EPILOG_SIZE) {
+    //     fprintf(stderr, "Error reading response epilog: YPD200_FRAME_EPILOG_SIZE=%d, actual_size_received=%d\n", YPDR200_FRAME_EPILOG_SIZE, actual_size_received);
+    //     if (pParamIn != (uint8_t*)0) {
+    //         free(pParamIn);
+    //     }
+    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // }
+
+    // ///<debug print received epilog>
+    // fprintf(stdout, "Received epilog: ");
+    // for (int i = 0; i < YPDR200_FRAME_EPILOG_SIZE; i++) {
+    //     fprintf(stdout, "0x%02X ", epilogIn.raw[i]);
+    // }
+    // fprintf(stdout, "\n");
+    // ///</debug print received epilog>
+
+    // ypdr200_frame_t frameIn = (ypdr200_frame_t) {
+    //     .prolog = prologIn,
+    //     .epilog = epilogIn,
+    //     .pParamData = pParamIn
+    // };
+
+    // /// <Print the received frame for debugging>
+    // fprintf(stdout, "Received frame: ");
+    // uint8_t *pRawIn = ypdr200_frame_raw(&frameIn);
+    // uint32_t frameInLen = ypdr200_frame_length(&frameIn);
+    // for (uint32_t i = 0; i < frameInLen; i++) {
+    //     fprintf(stdout, "0x%02X ", pRawIn[i]);
+    // }
+    // fprintf(stdout, "\n");
+    // free(pRawIn);
+    // /// </Print the received frame for debugging>
+    // /// <Receive any remaining data (for debugging)>
+    // // uint8_t remainingData[1024];
+    // // actual_size_received = 0;
+    // // #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
+    // // rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, remainingData, sizeof(remainingData), &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
+    // // if (rv != 0) {
+    // //     fprintf(stderr, "Error reading remaining data: %s (%d)\n", libusb_error_name(rv), rv);
+    // //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // // }
+    // // #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
+    // // actual_size_received = read(pCtx->fd, remainingData, sizeof(remainingData));
+    // // #endif
+    // // if (actual_size_received > 0) {
+    // //     fprintf(stdout, "Received %d bytes of remaining data: ", actual_size_received);
+    // //     for (int i = 0; i < actual_size_received; i++) {
+    // //         fprintf(stdout, "0x%02X ", remainingData[i]);
+    // //     }
+    // //     fprintf(stdout, "\n");
+    // // } else {
+    // //     fprintf(stdout, "No remaining data received\n");
+    // // }
+    // /// </Receive any remaining data (for debugging)>
+
+    // uint8_t checksum = ypdr200_frame_compute_checksum(&frameIn);
+    // if (checksum != epilogIn.checksum) {
+    //     fprintf(stderr, "Checksum mismatch: expected=0x%02X, actual=0x%02X\n", checksum, epilogIn.checksum); // TODO don't ignore
+    //     /*if (pParamIn != (uint8_t*)0) {
+    //         free(pParamIn);
+    //     }
+    //     return YPDR200_X03_ERR_READ_RESPONSE;*/
+    //     fprintf(stderr, "Ignoring checksum mismatch!\n"); // TODO don't ignore
+    // } else {
+    //     fprintf(stdout, "Checksum OK\n");
+    // }
+
+    // if (frameIn.prolog.type != YPDR200_FRAME_TYPE_RESPONSE) {
+    //     fprintf(stderr, "Unexpected frame type: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_TYPE_RESPONSE, frameIn.prolog.type);
+    //     if (pParamIn != (uint8_t*)0) {
+    //         free(pParamIn);
+    //     }
+    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // }
+
+    // if (frameIn.prolog.cmd != YPDR200_FRAME_CMD_X03) {
+    //     fprintf(stderr, "Unexpected frame cmd: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_CMD_X03, frameIn.prolog.cmd);
+    //     if (pParamIn != (uint8_t*)0) {
+    //         free(pParamIn);
+    //     }
+    //     return YPDR200_X03_ERR_READ_RESPONSE;
+    // }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
         return YPDR200_X03_ERR_READ_RESPONSE;
     }
+
+    ypdr200_frame_prolog_t prologIn = frameIn.prolog;
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&prologIn);
+    uint8_t* pParamIn = frameIn.pParamData;
 
     if (pParamIn) {
         if (paramInLen < 1) {
