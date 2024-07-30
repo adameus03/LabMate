@@ -347,7 +347,8 @@ void uhfman_device_release(uhfman_ctx_t *pCtx) {
 
 uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_HARDWARE_VERSION, ppcVersion_out);
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_HARDWARE_VERSION, ppcVersion_out, &rerr);
     switch (rv) {
         case YPDR200_X03_ERR_SUCCESS:
             return UHFMAN_GET_HARDWARE_VERSION_ERR_SUCCESS;
@@ -355,6 +356,9 @@ uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
             return UHFMAN_GET_HARDWARE_VERSION_ERR_SEND_COMMAND;
         case YPDR200_X03_ERR_READ_RESPONSE:
             return UHFMAN_GET_HARDWARE_VERSION_ERR_READ_RESPONSE;
+        case YPDR200_X03_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_HARDWARE_VERSION_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
             return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
@@ -366,7 +370,8 @@ uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
 
 uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_SOFTWARE_VERSION, ppcVersion_out);
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_SOFTWARE_VERSION, ppcVersion_out, &rerr);
     switch (rv) {
         case YPDR200_X03_ERR_SUCCESS:
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_SUCCESS;
@@ -374,6 +379,9 @@ uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_SEND_COMMAND;
         case YPDR200_X03_ERR_READ_RESPONSE:
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_READ_RESPONSE;
+        case YPDR200_X03_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_SOFTWARE_VERSION_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
@@ -385,7 +393,8 @@ uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
 
 uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_out) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_MANUFACTURER, ppcManufacturer_out);
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_MANUFACTURER, ppcManufacturer_out, &rerr);
     switch (rv) {
         case YPDR200_X03_ERR_SUCCESS:
             return UHFMAN_GET_MANUFACTURER_ERR_SUCCESS;
@@ -393,6 +402,9 @@ uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_
             return UHFMAN_GET_MANUFACTURER_ERR_SEND_COMMAND;
         case YPDR200_X03_ERR_READ_RESPONSE:
             return UHFMAN_GET_MANUFACTURER_ERR_READ_RESPONSE;
+        case YPDR200_X03_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_MANUFACTURER_VERSION_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
             return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN_DEVICE_MODEL;

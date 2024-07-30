@@ -26,7 +26,7 @@ typedef union _ypdr200_frame_prolog {
         uint8_t paramLengthLsb;
     };
     uint8_t raw[YPDR200_FRAME_PROLOG_SIZE];
-} ypdr200_frame_prolog_t;
+} __attribute__((__packed__)) ypdr200_frame_prolog_t;
 
 #define YPDR200_FRAME_EPILOG_SIZE 2
 typedef union _ypdr200_frame_epilog {
@@ -35,7 +35,7 @@ typedef union _ypdr200_frame_epilog {
         uint8_t end;
     };
     uint8_t raw[YPDR200_FRAME_EPILOG_SIZE];
-} ypdr200_frame_epilog_t;
+} __attribute__((__packed__)) ypdr200_frame_epilog_t;
 
 typedef struct _ypdr200_frame {
     ypdr200_frame_prolog_t prolog;
@@ -108,7 +108,8 @@ typedef enum ypdr200_frame_type {
 
 typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X03 = 0x03,
-    YPDR200_FRAME_CMD_X11 = 0x11
+    YPDR200_FRAME_CMD_X11 = 0x11,
+    YPDR200_FRAME_CMD_XFF = 0xff
 } ypdr200_frame_cmd_t;
 
 /**
@@ -148,7 +149,8 @@ static ypdr200_frame_t ypdr200_frame_construct(ypdr200_frame_type_t type, ypdr20
 
 #define YPDR200_FRAME_RECV_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define YPDR200_FRAME_RECV_ERR_READ UHFMAN_ERR_READ_RESPONSE
-static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx) {
+#define YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME UHFMAN_ERR_ERROR_RESPONSE
+static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRcvErr) {
     if (pFrameRcv == NULL) { assert(0); }
     if (pCtx == NULL) { assert(0); }
 
@@ -283,6 +285,27 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx) {
     }
 
     if (frameIn.prolog.cmd != YPDR200_FRAME_CMD_X03) {
+        if (frameIn.prolog.cmd == (uint8_t)YPDR200_FRAME_CMD_XFF) {
+            uint16_t respParamLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+            if (respParamLen != 1) {
+                if (pParamIn != (uint8_t*)0) {
+                    free(pParamIn);
+                }
+                fprintf(stderr, "Received error response frame, but resp param had unexpected length %u\n", respParamLen);
+                return YPDR200_FRAME_RECV_ERR_READ;
+            }
+            if (pParamIn == NULL) {
+                fprintf(stderr, "Received error response frame, but resp param is NULL (unlikely)\n");
+                return YPDR200_FRAME_RECV_ERR_READ;
+            }
+            fprintf(stderr, "Received error response frame with error code 0x%02X\n", pParamIn[0]);
+            *pRcvErr = (ypdr200_resp_err_code_t)(pParamIn[0]);
+            if (pParamIn != (uint8_t*)0) {
+                free(pParamIn);
+            }
+
+            return YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME;
+        }
         fprintf(stderr, "Unexpected frame cmd: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_CMD_X03, frameIn.prolog.cmd);
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
@@ -351,7 +374,7 @@ int ypdr200_x11(uhfman_ctx_t* pCtx, ypdr200_x11_param_t baudRate) {
 }
 
 // Example frame raw data: AA 00 03 00 01 infoType 04+infoType DD
-int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo_out) {
+int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_req_param_t infoType, char** ppcInfo_out, ypdr200_resp_err_code_t* pRespErrCode) {
     uint8_t param = (uint8_t)infoType;
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X03, 1U, &param);
 
@@ -361,8 +384,11 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
     }
 
     ypdr200_frame_t frameIn = {};
-    err = ypdr200_frame_recv(&frameIn, pCtx);
+    err = ypdr200_frame_recv(&frameIn, pCtx, pRespErrCode);
     if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X03_ERR_ERROR_RESPONSE;
+        }
         return YPDR200_X03_ERR_READ_RESPONSE;
     }
 
@@ -403,4 +429,9 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_param_t infoType, char** ppcInfo
     }
 
     return YPDR200_X03_ERR_SUCCESS;
+}
+
+int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out) {
+    fprintf(stderr, "NOT IMPLEMENTED\n");
+    exit(EXIT_FAILURE);
 }
