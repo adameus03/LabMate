@@ -164,7 +164,7 @@ static ypdr200_frame_t ypdr200_frame_construct(ypdr200_frame_type_t type, ypdr20
 /**
  * @note You need to call `ypdr200_frame_dispose` on `pFrameRcv` after it is no longer used 
  */
-static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRcvErr) {
+static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, ypdr200_frame_cmd_t expectedCmd, ypdr200_resp_err_code_t* pRcvErr) {
     if (pFrameRcv == NULL) { assert(0); }
     if (pCtx == NULL) { assert(0); }
 
@@ -298,7 +298,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         return YPDR200_FRAME_RECV_ERR_READ;
     }
 
-    if (frameIn.prolog.cmd != YPDR200_FRAME_CMD_X03) {
+    if (frameIn.prolog.cmd != (uint8_t)expectedCmd) {
         if (frameIn.prolog.cmd == (uint8_t)YPDR200_FRAME_CMD_XFF) {
             uint16_t respParamLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
             if (respParamLen != 1) {
@@ -320,7 +320,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
 
             return YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME;
         }
-        fprintf(stderr, "Unexpected frame cmd: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_CMD_X03, frameIn.prolog.cmd);
+        fprintf(stderr, "Unexpected frame cmd: expected=0x%02X, actual=0x%02X\n", (uint8_t)expectedCmd, frameIn.prolog.cmd);
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
@@ -399,7 +399,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_req_param_t infoType, char** ppc
     }
 
     ypdr200_frame_t frameIn = {};
-    err = ypdr200_frame_recv(&frameIn, pCtx, pRespErrCode);
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X03, pRespErrCode);
     if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
         if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
             return YPDR200_X03_ERR_ERROR_RESPONSE;
@@ -495,7 +495,7 @@ int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out, yp
     }
 
     ypdr200_frame_t frameIn = {};
-    err = ypdr200_frame_recv(&frameIn, pCtx, pRespErrCode);
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X0B, pRespErrCode);
     if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
         if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
             return YPDR200_X0B_ERR_ERROR_RESPONSE;

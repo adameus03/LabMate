@@ -86,9 +86,17 @@ typedef union {
     struct {
         union {
             struct {
+                #if defined(TARGET_LITTLE_ENDIAN)
+                uint8_t memBank : 2;
+                uint8_t action  : 3;
+                uint8_t target  : 3;
+                #elif defined(TARGET_BIG_ENDIAN)
                 uint8_t target  : 3;
                 uint8_t action  : 3;
                 uint8_t memBank : 2;
+                #else
+                #error "Neither TARGET_LITTLE_ENDIAN nor TARGET_BIG_ENDIAN is defined"
+                #endif
             };
             uint8_t selParam;
         };
