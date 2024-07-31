@@ -119,6 +119,7 @@ typedef enum ypdr200_frame_type {
 typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X03 = 0x03,
     YPDR200_FRAME_CMD_X0B = 0x0b,
+    YPDR200_FRAME_CMD_X0D = 0x0d,
     YPDR200_FRAME_CMD_X11 = 0x11,
     YPDR200_FRAME_CMD_XFF = 0xff
 } ypdr200_frame_cmd_t;
@@ -529,4 +530,37 @@ int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out, yp
     
     *pRespParam_out = respParam;
     return YPDR200_X0B_ERR_SUCCESS;
+}
+
+int ypdr200_x0d(uhfman_ctx_t* pCtx, ypdr200_x0d_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode) {
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0D, 0U, NULL);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X0D_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X0D, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X0D_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_X0D_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != 2) {
+        fprintf(stderr, "Unexpected param data length: expected=2, actual=%d\n", paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X0D_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_x0d_resp_param_t respParam = {
+        .raw = ((uint16_t)(frameIn.pParamData[0]) << 8) | (uint16_t)(frameIn.pParamData[1])
+    };
+
+    ypdr200_frame_dispose(&frameIn);
+
+    *pRespParam_out = respParam;
+    return YPDR200_X0D_ERR_SUCCESS;
 }

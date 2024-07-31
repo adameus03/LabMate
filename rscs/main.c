@@ -68,6 +68,16 @@ int main() {
         fprintf(stdout, "uhfman_get_select_param returned successfully\n");
     }
 
+    fprintf(stdout, "Calling uhfman_dbg_get_query_params\n");
+    err = uhfman_dbg_get_query_params(&uhfmanCtx);
+    if (err != UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_get_query_params returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_dbg_get_query_params returned successfully\n");
+    }
+
     fprintf(stdout, "Calling uhfman_device_release\n");
     uhfman_device_release(&uhfmanCtx);
     fprintf(stdout, "uhfman_device_release returned\n");

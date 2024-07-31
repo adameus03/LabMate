@@ -124,4 +124,42 @@ void ypdr200_x0b_resp_param_dispose(ypdr200_x0b_resp_param_t* pRespParam);
  */
 int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
+//#define YPDR200_X0D_RESP_PARAM_SIZE 2
+typedef union {
+    struct {
+        #if defined(TARGET_LITTLE_ENDIAN)
+        uint8_t reserved : 3;
+        uint8_t q : 4;
+        uint8_t target : 1;
+        uint8_t session : 2;
+        uint8_t sel : 2;
+        uint8_t trext : 1;
+        uint8_t m : 2;
+        uint8_t dr : 1;
+        #elif defined(TARGET_BIG_ENDIAN)
+        uint8_t dr : 1;
+        uint8_t m : 2;
+        uint8_t trext : 1;
+        uint8_t sel : 2;
+        uint8_t session : 2;
+        uint8_t target : 1;
+        uint8_t q : 4;
+        uint8_t reserved : 3;
+        #else
+        #error "Neither TARGET_LITTLE_ENDIAN nor TARGET_BIG_ENDIAN is defined"
+        #endif
+    };
+    //uint8_t raw[YPDR200_X0D_RESP_PARAM_SIZE];
+    uint16_t raw;
+} __attribute__((__packed__)) ypdr200_x0d_resp_param_t;
+
+#define YPDR200_X0D_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X0D_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X0D_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X0D_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Get Query Parameters
+ */
+int ypdr200_x0d(uhfman_ctx_t* pCtx, ypdr200_x0d_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
+
 #endif // YPDR200_H

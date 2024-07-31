@@ -443,3 +443,28 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
     return UHFMAN_GET_SELECT_PARAM_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
+
+uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    ypdr200_x0d_resp_param_t respParam;
+    int rv = ypdr200_x0d(pCtx, &respParam, &rerr);
+    switch (rv) {
+        case YPDR200_X0D_ERR_SUCCESS:
+            fprintf(stdout, "Query parameters: dr=0x%02X, m=0x%02X, trext=0x%02X, sel=0x%02X, session=0x%02X, target=0x%02X q=0x%02X\n", respParam.dr, respParam.m, respParam.trext, respParam.sel, respParam.session, respParam.target, respParam.q);
+            return UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS;
+        case YPDR200_X0D_ERR_SEND_COMMAND:
+            return UHFMAN_GET_QUERY_PARAMS_ERR_SEND_COMMAND;
+        case YPDR200_X0D_ERR_READ_RESPONSE:
+            return UHFMAN_GET_QUERY_PARAMS_ERR_READ_RESPONSE;
+        case YPDR200_X0D_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_QUERY_PARAMS_ERR_ERROR_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x0d: %d\n", rv);
+            return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
