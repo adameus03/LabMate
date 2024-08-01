@@ -78,6 +78,46 @@ int main() {
         fprintf(stdout, "uhfman_dbg_get_query_params returned successfully\n");
     }
 
+    fprintf(stdout, "Calling uhfman_dbg_get_working_channel\n");
+    err = uhfman_dbg_get_working_channel(&uhfmanCtx);
+    if (err != UHFMAN_GET_WORKING_CHANNEL_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_get_working_channel returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_dbg_get_working_channel returned successfully\n");
+    }
+
+    fprintf(stdout, "Calling uhfman_get_work_area\n");
+    err = uhfman_dbg_get_work_area(&uhfmanCtx);
+    if (err != UHFMAN_GET_WORK_AREA_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_get_work_area returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_get_work_area returned successfully\n");
+    }
+
+    fprintf(stdout, "Calling uhfman_dbg_get_transmit_power\n");
+    err = uhfman_dbg_get_transmit_power(&uhfmanCtx);
+    if (err != UHFMAN_GET_TRANSMIT_POWER_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_get_transmit_power returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_dbg_get_transmit_power returned successfully\n");
+    }
+
+    fprintf(stdout, "Calling uhfman_get_demod_params\n");
+    err = uhfman_dbg_get_demod_params(&uhfmanCtx);
+    if (err != UHFMAN_GET_DEMOD_PARAMS_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_get_demod_params returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_get_demod_params returned successfully\n");
+    }
+
     fprintf(stdout, "Calling uhfman_device_release\n");
     uhfman_device_release(&uhfmanCtx);
     fprintf(stdout, "uhfman_device_release returned\n");

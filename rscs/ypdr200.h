@@ -162,4 +162,90 @@ typedef union {
  */
 int ypdr200_x0d(uhfman_ctx_t* pCtx, ypdr200_x0d_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
+#define YPDR200_XAA_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_XAA_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_XAA_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_XAA_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Get working channel
+ */
+int ypdr200_xaa(uhfman_ctx_t* pCtx, uint8_t* pChIndex_out, ypdr200_resp_err_code_t* pRespErrCode);
+
+typedef enum {
+    YPDR200_REGION_CHINA_9 = 0x01,
+    YPDR200_REGION_CHINA_8 = 0x04,
+    YPDR200_REGION_US = 0x08,
+    YPDR200_REGION_EU = 0x03,
+    YPDR200_REGION_KOREA = 0x06
+} ypdr200_x08_region_t;
+
+#define YPDR200_X08_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X08_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X08_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X08_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Get work area
+ */
+int ypdr200_x08(uhfman_ctx_t* pCtx, ypdr200_x08_region_t* pRegion_out, ypdr200_resp_err_code_t* pRespErrCode);
+
+#define YPDR200_XB7_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_XB7_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_XB7_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_XB7_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Acquire transmit power
+   @note Example provided by YPD-R200 technical reference: 2000 coresponds to 20dBm
+ */
+int ypdr200_xb7(uhfman_ctx_t* pCtx, uint16_t* pTxPower_out, ypdr200_resp_err_code_t* pRespErrCode);
+
+typedef enum {
+    YPDR200_XF1_RX_DEMOD_MIXER_G_0DB = 0x00,
+    YPDR200_XF1_RX_DEMOD_MIXER_G_3DB = 0x01,
+    YPDR200_XF1_RX_DEMOD_MIXER_G_6DB = 0x02,
+    YPDR200_XF1_RX_DEMOD_MIXER_G_9DB = 0x03,
+    YPDR200_XF1_RX_DEMOD_MIXER_G_12DB = 0x04,
+    YPDR200_XF1_RX_DEMOD_MIXER_G_15DB = 0x05,
+   YPDR200_XF1_RX_DEMOD_MIXER_G_16DB = 0x06 
+} ypdr200_xf1_rx_demod_mixer_g_t;
+
+typedef enum {
+    YPDR200_XF1_RX_DEMOD_IF_G_12DB = 0x00,
+    YPDR200_XF1_RX_DEMOD_IF_G_18DB = 0x01,
+    YPDR200_XF1_RX_DEMOD_IF_G_21DB = 0x02,
+    YPDR200_XF1_RX_DEMOD_IF_G_24DB = 0x03,
+    YPDR200_XF1_RX_DEMOD_IF_G_27DB = 0x04,
+    YPDR200_XF1_RX_DEMOD_IF_G_30DB = 0x05,
+    YPDR200_XF1_RX_DEMOD_IF_G_36DB = 0x06,
+    YPDR200_XF1_RX_DEMOD_IF_G_40DB = 0x07
+} ypdr200_xf1_rx_demod_if_g_t;
+
+//#define YPDR200_XF1_DEMOD_PARAMS_SIZE 4
+typedef union {
+    struct {
+#if defined(TARGET_LITTLE_ENDIAN)
+        uint8_t thrdLsb;
+        uint8_t thrdMsb;
+        ypdr200_xf1_rx_demod_if_g_t if_G : 8;
+        ypdr200_xf1_rx_demod_mixer_g_t mixer_G : 8;
+#elif defined(TARGET_BIG_ENDIAN)
+        ypdr200_xf1_rx_demod_mixer_g_t mixer_G : 8;
+        ypdr200_xf1_rx_demod_if_g_t if_G : 8;
+        uint8_t thrdMsb;
+        uint8_t thrdLsb;
+#else
+#error "Neither TARGET_LITTLE_ENDIAN nor TARGET_BIG_ENDIAN is defined"
+#endif
+    };
+    uint32_t raw;
+} __attribute__((__packed__)) ypdr200_xf1_rx_demod_params_t;
+
+#define YPDR200_XF1_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_XF1_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_XF1_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_XF1_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Get the parameters of receiver demodulator
+ */
+int ypdr200_xf1(uhfman_ctx_t* pCtx, ypdr200_xf1_rx_demod_params_t* pParams_out, ypdr200_resp_err_code_t* pRespErrCode);
+
 #endif // YPDR200_H

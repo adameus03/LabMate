@@ -465,6 +465,107 @@ uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
     }
     #else
-    return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+    return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL; // TODO Change to #error or remove, because generating the error once is enough (applies to other functions here as well)
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_dbg_get_working_channel(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    uint8_t chIndex = 0;
+    int rv = ypdr200_xaa(pCtx, &chIndex, &rerr);
+    switch (rv) {
+        case YPDR200_XAA_ERR_SUCCESS:
+            fprintf(stdout, "Working channel: 0x%02X\n", chIndex);
+            return UHFMAN_GET_WORKING_CHANNEL_ERR_SUCCESS;
+        case YPDR200_XAA_ERR_SEND_COMMAND:
+            return UHFMAN_GET_WORKING_CHANNEL_ERR_SEND_COMMAND;
+        case YPDR200_XAA_ERR_READ_RESPONSE:
+            return UHFMAN_GET_WORKING_CHANNEL_ERR_READ_RESPONSE;
+        case YPDR200_XAA_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_WORKING_CHANNEL_ERR_ERROR_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_xaa: %d\n", rv);
+            return UHFMAN_GET_WORKING_CHANNEL_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_WORKING_CHANNEL_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_dbg_get_work_area(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    ypdr200_x08_region_t region;
+    int rv = ypdr200_x08(pCtx, &region, &rerr);
+    switch (rv) {
+        case YPDR200_X08_ERR_SUCCESS:
+            fprintf(stdout, "Work area/Region: 0x%02X\n", region);
+            return UHFMAN_GET_WORK_AREA_ERR_SUCCESS;
+        case YPDR200_X08_ERR_SEND_COMMAND:
+            return UHFMAN_GET_WORK_AREA_ERR_SEND_COMMAND;
+        case YPDR200_X08_ERR_READ_RESPONSE:
+            return UHFMAN_GET_WORK_AREA_ERR_READ_RESPONSE;
+        case YPDR200_X08_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_WORK_AREA_ERR_ERROR_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x08: %d\n", rv);
+            return UHFMAN_GET_WORK_AREA_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_WORK_AREA_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    uint16_t powerLevel = 0;
+    int rv = ypdr200_xb7(pCtx, &powerLevel, &rerr);
+    switch (rv) {
+        case YPDR200_XB7_ERR_SUCCESS:
+            fprintf(stdout, "Transmit power level: 0x%02X\n", powerLevel);
+            return UHFMAN_GET_TRANSMIT_POWER_ERR_SUCCESS;
+        case YPDR200_XB7_ERR_SEND_COMMAND:
+            return UHFMAN_GET_TRANSMIT_POWER_ERR_SEND_COMMAND;
+        case YPDR200_XB7_ERR_READ_RESPONSE:
+            return UHFMAN_GET_TRANSMIT_POWER_ERR_READ_RESPONSE;
+        case YPDR200_XB7_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_TRANSMIT_POWER_ERR_ERROR_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_xb7: %d\n", rv);
+            return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    ypdr200_xf1_rx_demod_params_t respParam;
+    int rv = ypdr200_xf1(pCtx, &respParam, &rerr);
+    switch (rv) {
+        case YPDR200_XF1_ERR_SUCCESS:
+            uint16_t thrd = ((uint16_t)(respParam.thrdMsb) << 8) | (uint16_t)(respParam.thrdLsb);
+            fprintf(stdout, "Demodulator parameters: mixer_G: 0x%02X, if_G: 0x%02X, thrdMsb: 0x%02X, thrdLsb: 0x%02X (thrd: 0x%04X)\n", respParam.mixer_G, respParam.if_G, respParam.thrdMsb, respParam.thrdLsb, thrd);
+            return UHFMAN_GET_DEMOD_PARAMS_ERR_SUCCESS;
+        case YPDR200_XF1_ERR_SEND_COMMAND:
+            return UHFMAN_GET_DEMOD_PARAMS_ERR_SEND_COMMAND;
+        case YPDR200_XF1_ERR_READ_RESPONSE:
+            return UHFMAN_GET_DEMOD_PARAMS_ERR_READ_RESPONSE;
+        case YPDR200_XF1_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_GET_DEMOD_PARAMS_ERR_ERROR_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_xf1: %d\n", rv);
+            return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
