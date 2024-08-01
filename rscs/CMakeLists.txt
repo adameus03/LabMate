@@ -28,6 +28,7 @@ add_executable(${CMAKE_PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/uhfman.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ypdr200.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ch340.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils.c
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys usb-1.0)

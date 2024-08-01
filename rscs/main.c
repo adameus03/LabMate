@@ -118,14 +118,24 @@ int main() {
         fprintf(stdout, "uhfman_get_demod_params returned successfully\n");
     }
 
-    fprintf(stdout, "Calling uhfman_dbg_single_polling\n");
-    err = uhfman_dbg_single_polling(&uhfmanCtx);
-    if (err != UHFMAN_SINGLE_POLLING_ERR_SUCCESS) {
-        P_ERROR("USB related error"); // TODO improve those error messages, theses are not really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
-        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_single_polling returned %d\n", err);
+    // fprintf(stdout, "Calling uhfman_dbg_single_polling\n");
+    // err = uhfman_dbg_single_polling(&uhfmanCtx);
+    // if (err != UHFMAN_SINGLE_POLLING_ERR_SUCCESS) {
+    //     P_ERROR("USB related error"); // TODO improve those error messages, theses are not really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
+    //     fprintf(stderr, "ERROR (ignoring): uhfman_dbg_single_polling returned %d\n", err);
+    //     //return 1;
+    // } else {
+    //     fprintf(stdout, "uhfman_dbg_single_polling returned successfully\n");
+    // }
+
+    fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
+    err = uhfman_dbg_multiple_polling(&uhfmanCtx);
+    if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);
         //return 1;
     } else {
-        fprintf(stdout, "uhfman_dbg_single_polling returned successfully\n");
+        fprintf(stdout, "uhfman_dbg_multiple_polling returned successfully\n");
     }
 
     fprintf(stdout, "Calling uhfman_device_release\n");

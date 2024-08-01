@@ -5,7 +5,9 @@
         "qrspec.h": "c",
         "ypdr200.h": "c",
         "uhfman_common.h": "c",
-        "termbits-common.h": "c"
+        "termbits-common.h": "c",
+        "compare": "c",
+        "utils.h": "c"
     },
     "cmake.sourceDirectory": "/home/mundus/base/sem7/LabMate/qps"
 }

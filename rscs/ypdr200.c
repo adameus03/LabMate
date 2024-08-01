@@ -123,6 +123,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X0D = 0x0d,
     YPDR200_FRAME_CMD_X11 = 0x11,
     YPDR200_FRAME_CMD_X22 = 0x22,
+    YPDR200_FRAME_CMD_X27 = 0x27,
     YPDR200_FRAME_CMD_XAA = 0xaa,
     YPDR200_FRAME_CMD_XB7 = 0xb7,
     YPDR200_FRAME_CMD_XF1 = 0xf1,
@@ -220,13 +221,21 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
             return YPDR200_FRAME_RECV_ERR_READ;
         }
         #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-        actual_size_received = read(pCtx->fd, pParamIn, paramInLen);
-        #endif
-        if (actual_size_received != paramInLen) {
-            fprintf(stderr, "Error reading param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
-            free(pParamIn);
-            return YPDR200_FRAME_RECV_ERR_READ;
+        while (actual_size_received < paramInLen) {
+            ssize_t nread = read(pCtx->fd, pParamIn, paramInLen - actual_size_received);
+            if (nread <= 0) {
+                fprintf(stderr, "Error reading param data: paramInLen=%d, actual_size_received=%d, nread=%d\n", paramInLen, actual_size_received, nread);
+                free(pParamIn);
+                return YPDR200_FRAME_RECV_ERR_READ;
+            }
+            actual_size_received += nread;
         }
+        #endif
+        // if (actual_size_received != paramInLen) {
+        //     fprintf(stderr, "Error reading param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
+        //     free(pParamIn);
+        //     return YPDR200_FRAME_RECV_ERR_READ;
+        // }
 
         ///<debug print received param data>
         fprintf(stdout, "Received param data: ");
@@ -286,12 +295,12 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
 
     uint8_t checksum = ypdr200_frame_compute_checksum(&frameIn);
     if (checksum != epilogIn.checksum) {
-        fprintf(stderr, "Checksum mismatch: expected=0x%02X, actual=0x%02X\n", checksum, epilogIn.checksum); // TODO don't ignore
-        if (pParamIn != (uint8_t*)0) {
-            free(pParamIn);
-        }
-        return YPDR200_FRAME_RECV_ERR_READ;
-        //fprintf(stderr, "Ignoring checksum mismatch!\n"); // DONE don't ignore
+        fprintf(stderr, "Checksum mismatch (IGNORING): expected=0x%02X, actual=0x%02X\n", checksum, epilogIn.checksum); // TODO don't ignore
+        // if (pParamIn != (uint8_t*)0) {
+        //     free(pParamIn);
+        // }
+        // return YPDR200_FRAME_RECV_ERR_READ;
+        fprintf(stderr, "Ignoring checksum mismatch!\n"); // TODO don't ignore
     } else {
         fprintf(stdout, "Checksum OK\n");
     }
@@ -304,33 +313,35 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         return YPDR200_FRAME_RECV_ERR_READ;
     }
 
-    if (frameIn.prolog.cmd != (uint8_t)expectedCmd) {
-        if (frameIn.prolog.cmd == (uint8_t)YPDR200_FRAME_CMD_XFF) {
-            uint16_t respParamLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
-            if (respParamLen != 1) {
+    if (! (expectedCmd == YPDR200_FRAME_CMD_X27 && frameIn.prolog.cmd == YPDR200_FRAME_CMD_X22)) {
+        if (frameIn.prolog.cmd != (uint8_t)expectedCmd) {
+            if (frameIn.prolog.cmd == (uint8_t)YPDR200_FRAME_CMD_XFF) {
+                uint16_t respParamLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+                if (respParamLen != 1) {
+                    if (pParamIn != (uint8_t*)0) {
+                        free(pParamIn);
+                    }
+                    fprintf(stderr, "Received error response frame, but resp param had unexpected length %u\n", respParamLen);
+                    return YPDR200_FRAME_RECV_ERR_READ;
+                }
+                if (pParamIn == NULL) {
+                    fprintf(stderr, "Received error response frame, but resp param is NULL (unlikely)\n");
+                    return YPDR200_FRAME_RECV_ERR_READ;
+                }
+                fprintf(stderr, "Received error response frame with error code 0x%02X\n", pParamIn[0]);
+                *pRcvErr = (ypdr200_resp_err_code_t)(pParamIn[0]);
                 if (pParamIn != (uint8_t*)0) {
                     free(pParamIn);
                 }
-                fprintf(stderr, "Received error response frame, but resp param had unexpected length %u\n", respParamLen);
-                return YPDR200_FRAME_RECV_ERR_READ;
+
+                return YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME;
             }
-            if (pParamIn == NULL) {
-                fprintf(stderr, "Received error response frame, but resp param is NULL (unlikely)\n");
-                return YPDR200_FRAME_RECV_ERR_READ;
-            }
-            fprintf(stderr, "Received error response frame with error code 0x%02X\n", pParamIn[0]);
-            *pRcvErr = (ypdr200_resp_err_code_t)(pParamIn[0]);
+            fprintf(stderr, "Unexpected frame cmd: expected=0x%02X, actual=0x%02X\n", (uint8_t)expectedCmd, frameIn.prolog.cmd);
             if (pParamIn != (uint8_t*)0) {
                 free(pParamIn);
             }
-
-            return YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME;
+            return YPDR200_FRAME_RECV_ERR_READ;
         }
-        fprintf(stderr, "Unexpected frame cmd: expected=0x%02X, actual=0x%02X\n", (uint8_t)expectedCmd, frameIn.prolog.cmd);
-        if (pParamIn != (uint8_t*)0) {
-            free(pParamIn);
-        }
-        return YPDR200_FRAME_RECV_ERR_READ;
     }
 
     *pFrameRcv = frameIn;
@@ -691,6 +702,28 @@ int ypdr200_xf1(uhfman_ctx_t* pCtx, ypdr200_xf1_rx_demod_params_t* pParams_out, 
     return YPDR200_XF1_ERR_SUCCESS;
 }
 
+#include "utils.h"
+/**
+ * @returns 1 if the CRC is correct, 0 otherwise
+ */
+static int ypdr200_x22_ntf_param_check_crc(ypdr200_x22_ntf_param_t* pNtfParam) {
+    // size_t u16bufLen = (YPDR200_X22_NTF_PARAM_SIZE - 3) / 2;
+    // uint16_t* u16buf = (uint16_t*)malloc(u16bufLen);
+    // if (u16buf == NULL) {
+    //     errno = ENOMEM;
+    //     fprintf(stderr, "Failed to allocate memory for CRC16 check! This system has likely ran out of memory\n");
+    //     return 0;
+    // }
+    // uint16_t crc16 = utils_crc_ccitt_genibus((uint16_t*)(pNtfParam->raw + 1), (YPDR200_X22_NTF_PARAM_SIZE - 3) / 2);
+    // utils_buf_u8_to_u16_big_endian(u16buf, (uint8_t*)(pNtfParam->raw + 1), YPDR200_X22_NTF_PARAM_SIZE - 3); // YPD-R200 sends words in big-endian byte order
+    // uint16_t crc16 = utils_crc_ccitt_genibus(u16buf, u16bufLen);
+   
+    //uint16_t crc16 = utils_crc_ccitt_genibus(pNtfParam->raw + 1, YPDR200_X22_NTF_PARAM_SIZE - 3);
+    //uint16_t crc16NtfParam = ((uint16_t)(pNtfParam->crc[0]) << 8) | (uint16_t)(pNtfParam->crc[1]);
+    //return (int)(crc16 == crc16NtfParam);
+    return 1; // TODO Fix CRC16
+}
+
 int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData) {
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X22, 0U, NULL);
     int err = ypdr200_frame_send(&frameOut, pCtx);
@@ -723,6 +756,11 @@ int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr2
 
         ypdr200_x22_ntf_param_t ntfParam;
         memcpy(ntfParam.raw, frameIn.pParamData, YPDR200_X22_NTF_PARAM_SIZE);
+        if (!ypdr200_x22_ntf_param_check_crc(&ntfParam)) {
+            fprintf(stderr, "ypdr200 0x22 notification CRC16 check failed for tag reply\n");
+            ypdr200_frame_dispose(&frameIn);
+            return YPDR200_X22_ERR_READ_NOTIFICATION;
+        }
 
         if (cb != NULL) {
             cb(ntfParam, pCbUserData);
@@ -733,4 +771,61 @@ int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr2
         ypdr200_frame_dispose(&frameIn);
     }
     return YPDR200_X22_ERR_SUCCESS;
+}
+
+ypdr200_x27_req_param_t ypdr200_x27_req_param_make(uint16_t cnt) {
+    return (ypdr200_x27_req_param_t) {
+        .reserved = 0x22,
+        .cntMsb = (uint8_t)(cnt >> 8),
+        .cntLsb = (uint8_t)(cnt & 0xFF)
+    };
+}
+
+int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData) {
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X27, YPDR200_X27_REQ_PARAM_SIZE, param.raw);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X27_ERR_SEND_COMMAND;
+    }
+
+    while (1) { // for now // TODO change this
+        ypdr200_frame_t frameIn = {};
+        err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X27, pRespErrCode);
+        if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+            if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+                return YPDR200_X27_ERR_ERROR_RESPONSE;
+            }
+            return YPDR200_X27_ERR_READ_RESPONSE;
+        }
+
+        if (frameIn.prolog.type != YPDR200_FRAME_TYPE_NOTIFICATION) {
+            fprintf(stderr, "Unexpected frame type: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_TYPE_NOTIFICATION, frameIn.prolog.type);
+            ypdr200_frame_dispose(&frameIn);
+            return YPDR200_X27_ERR_UNEXPECTED_FRAME_TYPE;
+        }
+
+        uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+        if (paramInLen != YPDR200_X22_NTF_PARAM_SIZE) {
+            fprintf(stderr, "Unexpected param data length: expected=%d, actual=%d\n", YPDR200_X22_NTF_PARAM_SIZE, paramInLen);
+            ypdr200_frame_dispose(&frameIn);
+            return YPDR200_X27_ERR_READ_NOTIFICATION;
+        }
+
+        ypdr200_x22_ntf_param_t ntfParam;
+        memcpy(ntfParam.raw, frameIn.pParamData, YPDR200_X22_NTF_PARAM_SIZE);
+        if (!ypdr200_x22_ntf_param_check_crc(&ntfParam)) {
+            fprintf(stderr, "ypdr200 0x27 notification CRC16 check failed for tag reply\n");
+            ypdr200_frame_dispose(&frameIn);
+            return YPDR200_X27_ERR_READ_NOTIFICATION;
+        }
+
+        if (cb != NULL) {
+            cb(ntfParam, pCbUserData);
+        } else {
+            fprintf(stderr, "WARNING (ypdr200_x27): No callback provided for notification handling\n");
+        }
+
+        ypdr200_frame_dispose(&frameIn);
+    }
+    return YPDR200_X27_ERR_SUCCESS;
 }

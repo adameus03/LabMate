@@ -361,7 +361,7 @@ uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
             return UHFMAN_GET_HARDWARE_VERSION_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
-            return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
@@ -384,7 +384,7 @@ uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
-            return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN_DEVICE_MODEL;
@@ -407,7 +407,7 @@ uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_
             return UHFMAN_GET_MANUFACTURER_VERSION_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
-            return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN_DEVICE_MODEL;
@@ -437,7 +437,7 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_SELECT_PARAM_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x0b: %d\n", rv);
-            return UHFMAN_GET_SELECT_PARAM_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_SELECT_PARAM_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_SELECT_PARAM_ERR_UNKNOWN_DEVICE_MODEL;
@@ -462,7 +462,7 @@ uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_QUERY_PARAMS_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x0d: %d\n", rv);
-            return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL; // TODO Change to #error or remove, because generating the error once is enough (applies to other functions here as well)
@@ -487,7 +487,7 @@ uhfman_err_t uhfman_dbg_get_working_channel(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_WORKING_CHANNEL_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_xaa: %d\n", rv);
-            return UHFMAN_GET_WORKING_CHANNEL_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_WORKING_CHANNEL_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_WORKING_CHANNEL_ERR_UNKNOWN_DEVICE_MODEL;
@@ -512,7 +512,7 @@ uhfman_err_t uhfman_dbg_get_work_area(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_WORK_AREA_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x08: %d\n", rv);
-            return UHFMAN_GET_WORK_AREA_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_WORK_AREA_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_WORK_AREA_ERR_UNKNOWN_DEVICE_MODEL;
@@ -537,7 +537,7 @@ uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_TRANSMIT_POWER_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_xb7: %d\n", rv);
-            return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN_DEVICE_MODEL;
@@ -563,7 +563,7 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
             return UHFMAN_GET_DEMOD_PARAMS_ERR_ERROR_RESPONSE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_xf1: %d\n", rv);
-            return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
@@ -571,7 +571,7 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
 }
 
 static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData) {
-    fprintf(stdout, "Single polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
+    fprintf(stdout, "Polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
     for (int i = 0; i < YPDR200_X22_NTF_PARAM_EPC_LENGTH; i++) { //TODO variabilize (related to #ae3759b4)
         fprintf(stdout, "%02X ", ntfParam.epc[i]);
     }
@@ -592,9 +592,41 @@ uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
         case YPDR200_X22_ERR_ERROR_RESPONSE:
             fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
             return UHFMAN_SINGLE_POLLING_ERR_ERROR_RESPONSE;
+        case YPDR200_X22_ERR_READ_NOTIFICATION:
+            return UHFMAN_SINGLE_POLLING_ERR_READ_NOTIFICATION;
+        case YPDR200_X22_ERR_UNEXPECTED_FRAME_TYPE:
+            return UHFMAN_SINGLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE;
         default:
             fprintf(stderr, "Unknown error from ypdr200_x22: %d\n", rv);
-            return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+            return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN;
+    }
+    #else
+    return UHFMAN_DBG_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_x27_req_param_t param = ypdr200_x27_req_param_make(0xffff);
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x27(pCtx, param, &rerr, uhfman_dbg_single_polling_notification_handler, NULL);
+    switch (rv) {
+        case YPDR200_X27_ERR_SUCCESS:
+            return UHFMAN_SINGLE_POLLING_ERR_SUCCESS;
+        case YPDR200_X27_ERR_SEND_COMMAND:
+            return UHFMAN_SINGLE_POLLING_ERR_SEND_COMMAND;
+        case YPDR200_X27_ERR_READ_RESPONSE:
+            return UHFMAN_SINGLE_POLLING_ERR_READ_RESPONSE;
+        case YPDR200_X27_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_SINGLE_POLLING_ERR_ERROR_RESPONSE;
+        case YPDR200_X27_ERR_READ_NOTIFICATION:
+            return UHFMAN_SINGLE_POLLING_ERR_READ_NOTIFICATION;
+        case YPDR200_X27_ERR_UNEXPECTED_FRAME_TYPE:
+            return UHFMAN_SINGLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x27: %d\n", rv);
+            return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN;
     }
     #else
     return UHFMAN_DBG_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;

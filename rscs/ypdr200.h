@@ -271,6 +271,29 @@ typedef void (*ypdr200_x22_callback)(ypdr200_x22_ntf_param_t ntfParam, const voi
 /**
  * @brief Single polling instruction
  */
-int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData);
+int ypdr200_x22(uhfman_ctx_t* pCtx,  ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData);
+
+#define YPDR200_X27_REQ_PARAM_SIZE 3
+typedef union {
+    struct {
+        uint8_t reserved;
+        uint8_t cntMsb;
+        uint8_t cntLsb;
+    };
+    uint8_t raw[YPDR200_X27_REQ_PARAM_SIZE];
+} __attribute__((__packed__)) ypdr200_x27_req_param_t;
+
+ypdr200_x27_req_param_t ypdr200_x27_req_param_make(uint16_t cnt);
+
+#define YPDR200_X27_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X27_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X27_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X27_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define YPDR200_X27_ERR_READ_NOTIFICATION UHFMAN_ERR_READ_NOTIFICATION
+#define YPDR200_X27_ERR_UNEXPECTED_FRAME_TYPE UHFMAN_ERR_UNEXPECTED_FRAME_TYPE
+/**
+ * @brief Multiple polling instruction
+ */
+int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData);
 
 #endif // YPDR200_H
