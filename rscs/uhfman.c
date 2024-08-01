@@ -569,3 +569,34 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
     return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
+
+static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData) {
+    fprintf(stdout, "Single polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
+    for (int i = 0; i < YPDR200_X22_NTF_PARAM_EPC_LENGTH; i++) { //TODO variabilize (related to #ae3759b4)
+        fprintf(stdout, "%02X ", ntfParam.epc[i]);
+    }
+    fprintf(stdout, "], crc=0x%04X\n", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
+}
+
+uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x22(pCtx, &rerr, uhfman_dbg_single_polling_notification_handler, NULL);
+    switch (rv) {
+        case YPDR200_X22_ERR_SUCCESS:
+            return UHFMAN_SINGLE_POLLING_ERR_SUCCESS;
+        case YPDR200_X22_ERR_SEND_COMMAND:
+            return UHFMAN_SINGLE_POLLING_ERR_SEND_COMMAND;
+        case YPDR200_X22_ERR_READ_RESPONSE:
+            return UHFMAN_SINGLE_POLLING_ERR_READ_RESPONSE;
+        case YPDR200_X22_ERR_ERROR_RESPONSE:
+            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            return UHFMAN_SINGLE_POLLING_ERR_ERROR_RESPONSE;
+        default:
+            fprintf(stderr, "Unknown error from ypdr200_x22: %d\n", rv);
+            return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+    }
+    #else
+    return UHFMAN_DBG_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}

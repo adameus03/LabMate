@@ -122,6 +122,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X0B = 0x0b,
     YPDR200_FRAME_CMD_X0D = 0x0d,
     YPDR200_FRAME_CMD_X11 = 0x11,
+    YPDR200_FRAME_CMD_X22 = 0x22,
     YPDR200_FRAME_CMD_XAA = 0xaa,
     YPDR200_FRAME_CMD_XB7 = 0xb7,
     YPDR200_FRAME_CMD_XF1 = 0xf1,
@@ -214,7 +215,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
         rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, pParamIn, paramInLen, &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
         if (rv != 0) {
-            fprintf(stderr, "Error reading response param data: %s (%d)\n", libusb_error_name(rv), rv);
+            fprintf(stderr, "Error reading param data: %s (%d)\n", libusb_error_name(rv), rv);
             free(pParamIn);
             return YPDR200_FRAME_RECV_ERR_READ;
         }
@@ -222,7 +223,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         actual_size_received = read(pCtx->fd, pParamIn, paramInLen);
         #endif
         if (actual_size_received != paramInLen) {
-            fprintf(stderr, "Error reading response param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
+            fprintf(stderr, "Error reading param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
             free(pParamIn);
             return YPDR200_FRAME_RECV_ERR_READ;
         }
@@ -241,7 +242,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
     #if YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_LIBUSB
     rv = libusb_bulk_transfer(pCtx->handle, YPDR200_BULK_ENDPOINT_ADDR_IN, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE, &actual_size_received, YPDR200_BULK_TRANSFER_TIMEOUT_MS);
     if (rv != 0) {
-        fprintf(stderr, "Error reading response epilog: %s (%d)\n", libusb_error_name(rv), rv);
+        fprintf(stderr, "Error reading epilog: %s (%d)\n", libusb_error_name(rv), rv);
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
@@ -251,7 +252,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
     actual_size_received = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE);
     #endif
     if (actual_size_received != YPDR200_FRAME_EPILOG_SIZE) {
-        fprintf(stderr, "Error reading response epilog: YPD200_FRAME_EPILOG_SIZE=%d, actual_size_received=%d\n", YPDR200_FRAME_EPILOG_SIZE, actual_size_received);
+        fprintf(stderr, "Error reading epilog: YPD200_FRAME_EPILOG_SIZE=%d, actual_size_received=%d\n", YPDR200_FRAME_EPILOG_SIZE, actual_size_received);
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
@@ -295,8 +296,8 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         fprintf(stdout, "Checksum OK\n");
     }
 
-    if (frameIn.prolog.type != YPDR200_FRAME_TYPE_RESPONSE) {
-        fprintf(stderr, "Unexpected frame type: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_TYPE_RESPONSE, frameIn.prolog.type);
+    if (frameIn.prolog.type != YPDR200_FRAME_TYPE_RESPONSE && frameIn.prolog.type != YPDR200_FRAME_TYPE_NOTIFICATION) {
+        fprintf(stderr, "Unexpected frame type: expected=0x%02X or 0x%02X, actual=0x%02X\n", YPDR200_FRAME_TYPE_RESPONSE, YPDR200_FRAME_TYPE_NOTIFICATION, frameIn.prolog.type);
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
@@ -688,4 +689,48 @@ int ypdr200_xf1(uhfman_ctx_t* pCtx, ypdr200_xf1_rx_demod_params_t* pParams_out, 
 
     *pParams_out = params;
     return YPDR200_XF1_ERR_SUCCESS;
+}
+
+int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData) {
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X22, 0U, NULL);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X22_ERR_SEND_COMMAND;
+    }
+
+    while (1) { // for now // TODO change this
+        ypdr200_frame_t frameIn = {};
+        err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X22, pRespErrCode);
+        if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+            if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+                return YPDR200_X22_ERR_ERROR_RESPONSE;
+            }
+            return YPDR200_X22_ERR_READ_RESPONSE;
+        }
+
+        if (frameIn.prolog.type != YPDR200_FRAME_TYPE_NOTIFICATION) {
+            fprintf(stderr, "Unexpected frame type: expected=0x%02X, actual=0x%02X\n", YPDR200_FRAME_TYPE_NOTIFICATION, frameIn.prolog.type);
+            ypdr200_frame_dispose(&frameIn);
+            return YPDR200_X22_ERR_UNEXPECTED_FRAME_TYPE;
+        }
+
+        uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+        if (paramInLen != YPDR200_X22_NTF_PARAM_SIZE) {
+            fprintf(stderr, "Unexpected param data length: expected=%d, actual=%d\n", YPDR200_X22_NTF_PARAM_SIZE, paramInLen);
+            ypdr200_frame_dispose(&frameIn);
+            return YPDR200_X22_ERR_READ_NOTIFICATION;
+        }
+
+        ypdr200_x22_ntf_param_t ntfParam;
+        memcpy(ntfParam.raw, frameIn.pParamData, YPDR200_X22_NTF_PARAM_SIZE);
+
+        if (cb != NULL) {
+            cb(ntfParam, pCbUserData);
+        } else {
+            fprintf(stderr, "WARNING (ypdr200_x22): No callback provided for notification handling\n");
+        }
+
+        ypdr200_frame_dispose(&frameIn);
+    }
+    return YPDR200_X22_ERR_SUCCESS;
 }

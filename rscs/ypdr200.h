@@ -248,4 +248,29 @@ typedef union {
  */
 int ypdr200_xf1(uhfman_ctx_t* pCtx, ypdr200_xf1_rx_demod_params_t* pParams_out, ypdr200_resp_err_code_t* pRespErrCode);
 
+#define YPDR200_X22_NTF_PARAM_SIZE 17
+#define YPDR200_X22_NTF_PARAM_EPC_LENGTH 12
+typedef union {
+    struct {
+        uint8_t rssi;
+        uint8_t pc[2];
+        uint8_t epc[YPDR200_X22_NTF_PARAM_EPC_LENGTH]; // TODO #ae3759b4 variabilize using tag memory read and write commands provided by YPD-R200's M100 chip
+        uint8_t crc[2];
+    };
+    uint8_t raw[YPDR200_X22_NTF_PARAM_SIZE];
+} __attribute__((__packed__)) ypdr200_x22_ntf_param_t;
+
+typedef void (*ypdr200_x22_callback)(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData);
+
+#define YPDR200_X22_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X22_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X22_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X22_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define YPDR200_X22_ERR_READ_NOTIFICATION UHFMAN_ERR_READ_NOTIFICATION
+#define YPDR200_X22_ERR_UNEXPECTED_FRAME_TYPE UHFMAN_ERR_UNEXPECTED_FRAME_TYPE
+/**
+ * @brief Single polling instruction
+ */
+int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData);
+
 #endif // YPDR200_H
