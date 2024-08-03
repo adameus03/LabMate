@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <assert.h>
 
+#include "log.h"
 #include "ch340.h"
 
 // TODO Unify some implementations related to USB with printer.c? Could be as a small shared library for QPS and RSCS
@@ -59,7 +60,7 @@ static int uhfman_detach_kernel_drivers(uhfman_ctx_t* pCtx) {
             rv = libusb_detach_kernel_driver(pCtx->handle, UHFMAN_CH340_USB_IFACE_IX);
             switch (rv) {
                 case 0:
-                    fprintf(stdout, "Kernel driver detached successfully\n");
+                    LOG_I("Kernel driver detached successfully");
                     return UHFMAN_DETACH_KERNEL_DRIVERS_ERR_SUCCESS;
                 case LIBUSB_ERROR_INVALID_PARAM:
                     return UHFMAN_DETACH_KERNEL_DRIVERS_ERR_INVALID_PARAM;
@@ -68,11 +69,11 @@ static int uhfman_detach_kernel_drivers(uhfman_ctx_t* pCtx) {
                 case LIBUSB_ERROR_NOT_SUPPORTED:
                     return UHFMAN_DETACH_KERNEL_DRIVERS_ERR_NOT_SUPPORTED_WHEN_DETACHING;
                 default:
-                    fprintf(stderr, "Unknown error when detaching kernel driver: %d\n", rv);
+                    LOG_E("Unknown error when detaching kernel driver: %d", rv);
                     return UHFMAN_DETACH_KERNEL_DRIVERS_ERR_OTHER_WHEN_DETACHING;
             }
         default:
-            fprintf(stderr, "Unknown error when checking kernel driver status: %d\n", rv);
+            LOG_E("Unknown error when checking kernel driver status: %d", rv);
             return UHFMAN_DETACH_KERNEL_DRIVERS_ERR_OTHER_WHEN_CHECKING;
         
     }
@@ -85,7 +86,7 @@ static int uhfman_usbserial_set_interface_attribs (int fd, int speed, int parity
         struct termios tty;
         if (tcgetattr (fd, &tty) != 0)
         {
-                fprintf (stderr, "error %d from tcgetattr", errno);
+                LOG_E("error %d from tcgetattr", errno);
                 return -1;
         }
 
@@ -114,7 +115,7 @@ static int uhfman_usbserial_set_interface_attribs (int fd, int speed, int parity
 
         if (tcsetattr (fd, TCSANOW, &tty) != 0)
         {
-                fprintf (stderr, "error %d from tcsetattr", errno);
+                LOG_E("error %d from tcsetattr", errno);
                 return -1;
         }
         return 0;
@@ -126,7 +127,7 @@ static void uhfman_usbserial_set_blocking (int fd, int should_block)
         memset (&tty, 0, sizeof tty);
         if (tcgetattr (fd, &tty) != 0)
         {
-                fprintf (stderr, "error %d from tggetattr", errno);
+                LOG_E("error %d from tggetattr", errno);
                 return;
         }
 
@@ -134,7 +135,7 @@ static void uhfman_usbserial_set_blocking (int fd, int should_block)
         tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
         if (tcsetattr (fd, TCSANOW, &tty) != 0)
-                fprintf (stderr, "error %d setting term attributes", errno);
+                LOG_E("error %d setting term attributes", errno);
 }
 #endif // UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB AND UHFMAN_CH340_USE_KERNEL_DRIVER == 1
 
@@ -148,7 +149,7 @@ static void uhfman_debug_print_bits(void const * const ptr, size_t const size)
     for (i = size-1; i >= 0; i--) {
         for (j = 7; j >= 0; j--) {
             byte = (b[i] >> j) & 1;
-            printf("%u", byte);
+            LOG_D_CTBC("%u", byte);
         }
     }
 }
@@ -165,7 +166,7 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
     // Initialize libusb
     r = libusb_init(&context);
     if (r < 0) {
-        fprintf(stderr, "Error initializing libusb: %s\n", libusb_error_name(r));
+        LOG_E("Error initializing libusb: %s", libusb_error_name(r));
         return UHFMAN_TAKE_ERR_LIBUSB_INIT;
     }
 
@@ -175,10 +176,10 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
 
     if (handle == NULL) {
         if (errno == 0) {
-            fprintf(stderr, "Device found, but handle is NULL. Is it a driver issue?\n"); // TODO Return something different than UHFMAN_TAKE_ERR_DEVICE_NOT_FOUND
+            LOG_E("Device found, but handle is NULL. Is it a driver issue?"); // TODO Return something different than UHFMAN_TAKE_ERR_DEVICE_NOT_FOUND
         }
         else {
-            fprintf(stderr, "Error finding USB device\n");
+            LOG_E("Error finding USB device\n");
         }
         #if UHFMAN_USE_DEBUG_EXTENSIONS == 1
         uhfman_debug_errno();
@@ -192,10 +193,10 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
     pCtx_out->context = context;
 
     // Detach kernel drivers if needed
-    fprintf(stdout, "Detaching kernel drivers if needed...\n");
+    LOG_D("Detaching kernel drivers if needed...");
     r = uhfman_detach_kernel_drivers(pCtx_out);
     if (r != UHFMAN_DETACH_KERNEL_DRIVERS_ERR_SUCCESS) {
-        fprintf(stderr, "Error detaching kernel drivers: %d\n", r);
+        LOG_E("Error detaching kernel drivers: %d", r);
         libusb_close(handle);
         libusb_exit(context);
         return UHFMAN_TAKE_ERR_INTERFACE_CLAIM;
@@ -204,7 +205,7 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
     // Claim the interface (assuming interface UHFMAN_USB_IFACE_IX)
     r = libusb_claim_interface(handle, UHFMAN_CH340_USB_IFACE_IX);
     if (r < 0) {
-        fprintf(stderr, "Error claiming interface: %s\n", libusb_error_name(r));
+        LOG_E("Error claiming interface: %s", libusb_error_name(r));
         #if UHFMAN_USE_DEBUG_EXTENSIONS == 1
         uhfman_debug_errno();
         #endif
@@ -216,7 +217,7 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
     // Initialize ch340
     r = ch340_init(handle);
     if (r < 0) {
-        fprintf(stderr, "Error initializing ch340: %d\n", r);
+        LOG_E("Error initializing ch340: %d", r);
         libusb_release_interface(handle, UHFMAN_CH340_USB_IFACE_IX);
         libusb_close(handle);
         libusb_exit(context);
@@ -230,7 +231,7 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         #endif
         int fd = open(UHFMAN_CH340_PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC | O_EXCL);
         if (fd < 0) {
-            fprintf(stderr, "Error %d opening %s: %s", errno, UHFMAN_CH340_PORT_NAME, strerror (errno));
+            LOG_E("Error %d opening %s: %s", errno, UHFMAN_CH340_PORT_NAME, strerror (errno));
             return -1;
         }
 
@@ -238,16 +239,16 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         //uhfman_usbserial_set_blocking(fd, 0); // set no blocking
 
         if (!isatty(fd)) {
-            fprintf(stderr, "%s is not a tty\n", UHFMAN_CH340_PORT_NAME);
+            LOG_E("%s is not a tty", UHFMAN_CH340_PORT_NAME);
             close(fd);
             return -1;
         } else {
-            fprintf(stdout, "%s is a tty\n", UHFMAN_CH340_PORT_NAME);
+            LOG_D("%s is a tty", UHFMAN_CH340_PORT_NAME);
         }
 
         struct termios config;
         if (tcgetattr(fd, &config) < 0) {
-            fprintf(stderr, "Error getting termios attributes: %s\n", strerror(errno));
+            LOG_E("Error getting termios attributes: %s", strerror(errno));
             close(fd);
             return -1;
         }
@@ -284,29 +285,29 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         config.c_cflag |= CRTSCTS;
 
         ///<Print all termios attributes in binary for debugging>
-        fprintf(stdout, "Termios attributes (binary):\n");
-        fprintf(stdout, "c_iflag: "); uhfman_debug_print_bits(&config.c_iflag, sizeof(config.c_iflag)); fprintf(stdout, "\n");
-        fprintf(stdout, "c_oflag: "); uhfman_debug_print_bits(&config.c_oflag, sizeof(config.c_oflag)); fprintf(stdout, "\n");
-        fprintf(stdout, "c_cflag: "); uhfman_debug_print_bits(&config.c_cflag, sizeof(config.c_cflag)); fprintf(stdout, "\n");
-        fprintf(stdout, "c_lflag: "); uhfman_debug_print_bits(&config.c_lflag, sizeof(config.c_lflag)); fprintf(stdout, "\n");
-        fprintf(stdout, "c_line: "); uhfman_debug_print_bits(&config.c_line, sizeof(config.c_line)); fprintf(stdout, "\n");
-        fprintf(stdout, "c_cc: ");
+        LOG_V("Termios attributes (binary): ");
+        LOG_V_TBC("c_iflag: "); uhfman_debug_print_bits(&config.c_iflag, sizeof(config.c_iflag)); LOG_V_CFIN("");
+        LOG_V_TBC("c_oflag: "); uhfman_debug_print_bits(&config.c_oflag, sizeof(config.c_oflag)); LOG_V_CFIN("");
+        LOG_V_TBC("c_cflag: "); uhfman_debug_print_bits(&config.c_cflag, sizeof(config.c_cflag)); LOG_V_CFIN("");
+        LOG_V_TBC("c_lflag: "); uhfman_debug_print_bits(&config.c_lflag, sizeof(config.c_lflag)); LOG_V_CFIN("");
+        LOG_V_TBC("c_line: "); uhfman_debug_print_bits(&config.c_line, sizeof(config.c_line)); LOG_V_CFIN("");
+        LOG_V("c_cc: ");
         for (int i = 0; i < NCCS; i++) {
-            fprintf(stdout, "c_cc[%d]: ", i); uhfman_debug_print_bits(&config.c_cc[i], sizeof(config.c_cc[i])); fprintf(stdout, "\n");
+            LOG_V_TBC("c_cc[%d]: ", i); uhfman_debug_print_bits(&config.c_cc[i], sizeof(config.c_cc[i])); LOG_V_CFIN("");
         }
-        fprintf(stdout, "c_ispeed: "); uhfman_debug_print_bits(&config.c_ispeed, sizeof(config.c_ispeed)); fprintf(stdout, "\n");
-        fprintf(stdout, "c_ospeed: "); uhfman_debug_print_bits(&config.c_ospeed, sizeof(config.c_ospeed)); fprintf(stdout, "\n");
+        LOG_V_TBC("c_ispeed: "); uhfman_debug_print_bits(&config.c_ispeed, sizeof(config.c_ispeed)); LOG_V_CFIN("");
+        LOG_V_TBC("c_ospeed: "); uhfman_debug_print_bits(&config.c_ospeed, sizeof(config.c_ospeed)); LOG_V_CFIN("");
         ///</Print all termios attributes for debugging>
 
         if (tcsetattr(fd, TCSANOW, &config) < 0) {
-            fprintf(stderr, "Error setting termios attributes: %s\n", strerror(errno));
+            LOG_E("Error setting termios attributes: %s", strerror(errno));
             close(fd);
             return -1;
         } else {
-            fprintf(stdout, "Termios attributes set successfully\n");
+            LOG_D("Termios attributes set successfully");
         }
 
-        tcflush(fd, TCIOFLUSH); // Flush just in case there is any garbage in the buffer
+        tcflush(fd, TCIOFLUSH); // Flush just in case there is any garbage in the buffers
 
         pCtx_out->fd = fd;
         //printf("EXITING FOR NOW\n"); exit(EXIT_SUCCESS);
@@ -333,7 +334,7 @@ void uhfman_device_release(uhfman_ctx_t *pCtx) {
 #elif UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB
     #if UHFMAN_CH340_USE_KERNEL_DRIVER == 0
     if (0 != libusb_release_interface(pCtx->handle, 0)) {
-        fprintf(stderr, "Error releasing interface\n");
+        LOG_E("Error releasing interface");
     }
     libusb_close(pCtx->handle);
     libusb_exit(pCtx->context);
@@ -357,10 +358,10 @@ uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
         case YPDR200_X03_ERR_READ_RESPONSE:
             return UHFMAN_GET_HARDWARE_VERSION_ERR_READ_RESPONSE;
         case YPDR200_X03_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_HARDWARE_VERSION_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x03: %d", rv);
             return UHFMAN_GET_HARDWARE_VERSION_ERR_UNKNOWN;
     }
     #else
@@ -380,10 +381,10 @@ uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
         case YPDR200_X03_ERR_READ_RESPONSE:
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_READ_RESPONSE;
         case YPDR200_X03_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x03: %d", rv);
             return UHFMAN_GET_SOFTWARE_VERSION_ERR_UNKNOWN;
     }
     #else
@@ -403,10 +404,10 @@ uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_
         case YPDR200_X03_ERR_READ_RESPONSE:
             return UHFMAN_GET_MANUFACTURER_ERR_READ_RESPONSE;
         case YPDR200_X03_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_MANUFACTURER_VERSION_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x03: %d\n", rv);
+            fprintf(stderr, "Unknown error from ypdr200_x03: %d", rv);
             return UHFMAN_GET_MANUFACTURER_ERR_UNKNOWN;
     }
     #else
@@ -421,11 +422,11 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_x0b(pCtx, &respParam, &rerr);
     switch (rv) {
         case YPDR200_X0B_ERR_SUCCESS:
-            fprintf(stdout, "Select parameter: target=0x%02X, action=0x%02X, memBank=0x%02X, ptr=0x%02X%02X%02X%02X, maskLen=%d, truncate=%d Mask=[", respParam.hdr.target, respParam.hdr.action, respParam.hdr.memBank, respParam.hdr.ptr[0], respParam.hdr.ptr[1], respParam.hdr.ptr[2], respParam.hdr.ptr[3], respParam.hdr.maskLen, respParam.hdr.truncate);
+            LOG_I_TBC("Select parameter: target=0x%02X, action=0x%02X, memBank=0x%02X, ptr=0x%02X%02X%02X%02X, maskLen=%d, truncate=%d Mask=[", respParam.hdr.target, respParam.hdr.action, respParam.hdr.memBank, respParam.hdr.ptr[0], respParam.hdr.ptr[1], respParam.hdr.ptr[2], respParam.hdr.ptr[3], respParam.hdr.maskLen, respParam.hdr.truncate);
             for (int i = 0; i < respParam.hdr.maskLen; i++) {
-                fprintf(stdout, "%02X", respParam.pMask[i]);
+                LOG_I_CTBC("%02X", respParam.pMask[i]);
             }
-            fprintf(stdout, "]\n");
+            LOG_I_CFIN("]");
             ypdr200_x0b_resp_param_dispose(&respParam);
             return UHFMAN_GET_SELECT_PARAM_ERR_SUCCESS;
         case YPDR200_X0B_ERR_SEND_COMMAND:
@@ -433,10 +434,10 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
         case YPDR200_X0B_ERR_READ_RESPONSE:
             return UHFMAN_GET_SELECT_PARAM_ERR_READ_RESPONSE;
         case YPDR200_X0B_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_SELECT_PARAM_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x0b: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x0b: %d", rv);
             return UHFMAN_GET_SELECT_PARAM_ERR_UNKNOWN;
     }
     #else
@@ -451,17 +452,17 @@ uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_x0d(pCtx, &respParam, &rerr);
     switch (rv) {
         case YPDR200_X0D_ERR_SUCCESS:
-            fprintf(stdout, "Query parameters: dr=0x%02X, m=0x%02X, trext=0x%02X, sel=0x%02X, session=0x%02X, target=0x%02X q=0x%02X\n", respParam.dr, respParam.m, respParam.trext, respParam.sel, respParam.session, respParam.target, respParam.q);
+            LOG_I("Query parameters: dr=0x%02X, m=0x%02X, trext=0x%02X, sel=0x%02X, session=0x%02X, target=0x%02X q=0x%02X", respParam.dr, respParam.m, respParam.trext, respParam.sel, respParam.session, respParam.target, respParam.q);
             return UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS;
         case YPDR200_X0D_ERR_SEND_COMMAND:
             return UHFMAN_GET_QUERY_PARAMS_ERR_SEND_COMMAND;
         case YPDR200_X0D_ERR_READ_RESPONSE:
             return UHFMAN_GET_QUERY_PARAMS_ERR_READ_RESPONSE;
         case YPDR200_X0D_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_QUERY_PARAMS_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x0d: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x0d: %d", rv);
             return UHFMAN_GET_QUERY_PARAMS_ERR_UNKNOWN;
     }
     #else
@@ -476,17 +477,17 @@ uhfman_err_t uhfman_dbg_get_working_channel(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_xaa(pCtx, &chIndex, &rerr);
     switch (rv) {
         case YPDR200_XAA_ERR_SUCCESS:
-            fprintf(stdout, "Working channel: 0x%02X\n", chIndex);
+            LOG_I("Working channel: 0x%02X", chIndex);
             return UHFMAN_GET_WORKING_CHANNEL_ERR_SUCCESS;
         case YPDR200_XAA_ERR_SEND_COMMAND:
             return UHFMAN_GET_WORKING_CHANNEL_ERR_SEND_COMMAND;
         case YPDR200_XAA_ERR_READ_RESPONSE:
             return UHFMAN_GET_WORKING_CHANNEL_ERR_READ_RESPONSE;
         case YPDR200_XAA_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_WORKING_CHANNEL_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_xaa: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_xaa: %d", rv);
             return UHFMAN_GET_WORKING_CHANNEL_ERR_UNKNOWN;
     }
     #else
@@ -501,17 +502,17 @@ uhfman_err_t uhfman_dbg_get_work_area(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_x08(pCtx, &region, &rerr);
     switch (rv) {
         case YPDR200_X08_ERR_SUCCESS:
-            fprintf(stdout, "Work area/Region: 0x%02X\n", region);
+            LOG_I("Work area/Region: 0x%02X", region);
             return UHFMAN_GET_WORK_AREA_ERR_SUCCESS;
         case YPDR200_X08_ERR_SEND_COMMAND:
             return UHFMAN_GET_WORK_AREA_ERR_SEND_COMMAND;
         case YPDR200_X08_ERR_READ_RESPONSE:
             return UHFMAN_GET_WORK_AREA_ERR_READ_RESPONSE;
         case YPDR200_X08_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_WORK_AREA_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x08: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x08: %d", rv);
             return UHFMAN_GET_WORK_AREA_ERR_UNKNOWN;
     }
     #else
@@ -526,17 +527,17 @@ uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_xb7(pCtx, &powerLevel, &rerr);
     switch (rv) {
         case YPDR200_XB7_ERR_SUCCESS:
-            fprintf(stdout, "Transmit power level: 0x%02X\n", powerLevel);
+            LOG_I("Transmit power level: 0x%02X", powerLevel);
             return UHFMAN_GET_TRANSMIT_POWER_ERR_SUCCESS;
         case YPDR200_XB7_ERR_SEND_COMMAND:
             return UHFMAN_GET_TRANSMIT_POWER_ERR_SEND_COMMAND;
         case YPDR200_XB7_ERR_READ_RESPONSE:
             return UHFMAN_GET_TRANSMIT_POWER_ERR_READ_RESPONSE;
         case YPDR200_XB7_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_TRANSMIT_POWER_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_xb7: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_xb7: %d", rv);
             return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN;
     }
     #else
@@ -552,17 +553,17 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
     switch (rv) {
         case YPDR200_XF1_ERR_SUCCESS:
             uint16_t thrd = ((uint16_t)(respParam.thrdMsb) << 8) | (uint16_t)(respParam.thrdLsb);
-            fprintf(stdout, "Demodulator parameters: mixer_G: 0x%02X, if_G: 0x%02X, thrdMsb: 0x%02X, thrdLsb: 0x%02X (thrd: 0x%04X)\n", respParam.mixer_G, respParam.if_G, respParam.thrdMsb, respParam.thrdLsb, thrd);
+            LOG_I("Demodulator parameters: mixer_G: 0x%02X, if_G: 0x%02X, thrdMsb: 0x%02X, thrdLsb: 0x%02X (thrd: 0x%04X)", respParam.mixer_G, respParam.if_G, respParam.thrdMsb, respParam.thrdLsb, thrd);
             return UHFMAN_GET_DEMOD_PARAMS_ERR_SUCCESS;
         case YPDR200_XF1_ERR_SEND_COMMAND:
             return UHFMAN_GET_DEMOD_PARAMS_ERR_SEND_COMMAND;
         case YPDR200_XF1_ERR_READ_RESPONSE:
             return UHFMAN_GET_DEMOD_PARAMS_ERR_READ_RESPONSE;
         case YPDR200_XF1_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_GET_DEMOD_PARAMS_ERR_ERROR_RESPONSE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_xf1: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_xf1: %d", rv);
             return UHFMAN_GET_DEMOD_PARAMS_ERR_UNKNOWN;
     }
     #else
@@ -576,11 +577,11 @@ static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param
         || (ntfParam.crc[0] == 0xDC && ntfParam.crc[1] == 0x20)) {
         return; // Ignore those tags
     }
-    fprintf(stdout, "Polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
+    LOG_I_TBC("Polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
     for (int i = 0; i < YPDR200_X22_NTF_PARAM_EPC_LENGTH; i++) { //TODO variabilize (related to #ae3759b4)
-        fprintf(stdout, "%02X ", ntfParam.epc[i]);
+        LOG_I_CTBC("%02X ", ntfParam.epc[i]);
     }
-    fprintf(stdout, "], crc=0x%04X\n", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
+    LOG_I_CFIN("], crc=0x%04X", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
 }
 #else
 #error "Unknown UHFMAN_DEVICE_MODEL"
@@ -598,14 +599,14 @@ uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
         case YPDR200_X22_ERR_READ_RESPONSE:
             return UHFMAN_SINGLE_POLLING_ERR_READ_RESPONSE;
         case YPDR200_X22_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_SINGLE_POLLING_ERR_ERROR_RESPONSE;
         case YPDR200_X22_ERR_READ_NOTIFICATION:
             return UHFMAN_SINGLE_POLLING_ERR_READ_NOTIFICATION;
         case YPDR200_X22_ERR_UNEXPECTED_FRAME_TYPE:
             return UHFMAN_SINGLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x22: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x22: %d", rv);
             return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN;
     }
     #else
@@ -626,14 +627,14 @@ uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx) {
         case YPDR200_X27_ERR_READ_RESPONSE:
             return UHFMAN_SINGLE_POLLING_ERR_READ_RESPONSE;
         case YPDR200_X27_ERR_ERROR_RESPONSE:
-            fprintf(stderr, "** Response frame was an error frame containing error code 0x%02X **\n", (uint8_t)rerr);
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
             return UHFMAN_SINGLE_POLLING_ERR_ERROR_RESPONSE;
         case YPDR200_X27_ERR_READ_NOTIFICATION:
             return UHFMAN_SINGLE_POLLING_ERR_READ_NOTIFICATION;
         case YPDR200_X27_ERR_UNEXPECTED_FRAME_TYPE:
             return UHFMAN_SINGLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE;
         default:
-            fprintf(stderr, "Unknown error from ypdr200_x27: %d\n", rv);
+            LOG_W("Unknown error from ypdr200_x27: %d", rv);
             return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN;
     }
     #else
