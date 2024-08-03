@@ -257,7 +257,7 @@ typedef union {
         uint8_t epc[YPDR200_X22_NTF_PARAM_EPC_LENGTH]; // TODO #ae3759b4 variabilize using tag memory read and write commands provided by YPD-R200's M100 chip
         uint8_t crc[2];
     };
-    uint8_t raw[YPDR200_X22_NTF_PARAM_SIZE];
+    uint8_t raw[YPDR200_X22_NTF_PARAM_SIZE]; // TODO support longer EPC?
 } __attribute__((__packed__)) ypdr200_x22_ntf_param_t;
 
 typedef void (*ypdr200_x22_callback)(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData);

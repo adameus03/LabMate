@@ -3,6 +3,9 @@
  * @brief UHF RFID reader/writer manager
  */
 
+#ifndef UHFMAN_H
+#define UHFMAN_H
+
 #include "uhfman_common.h"
 
 #define UHFMAN_TAKE_ERR_SUCCESS UHFMAN_ERR_SUCCESS
@@ -131,6 +134,8 @@ uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx);
  */
 uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx);
 
+//typedef void (*uhfman_inventory_callback_t)(void* pUserData, const uint8_t* pEPC, size_t epcLen);
+
 #define UHFMAN_SINGLE_POLLING_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_SINGLE_POLLING_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
 #define UHFMAN_SINGLE_POLLING_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
@@ -154,3 +159,38 @@ uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx);
 uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx);
 
 //TODO add & implement more functions
+
+//TODO adjust UHFMAN_TAG_PERIOD_NREADS
+#define UHFMAN_TAG_PERIOD_NREADS 40
+// TODO Make UHFMAN_MAX_NUM_TAGS dynamic in the future (replace with dynamic mem allocation)
+#define UHFMAN_MAX_NUM_TAGS 500 
+typedef struct {
+    uint16_t handle;
+    uint8_t epc[YPDR200_X22_NTF_PARAM_EPC_LENGTH];
+    uint32_t num_reads;
+    unsigned long read_times[UHFMAN_TAG_PERIOD_NREADS];
+    uint8_t rssi[UHFMAN_TAG_PERIOD_NREADS];
+} uhfman_tag_t;
+
+typedef struct {
+    float rssi_avg_per_period;
+    uint32_t read_time_interval_avg_per_period;
+} uhfman_tag_stats_t;
+
+void uhfman_list_tags(uhfman_tag_t** ppTags, uint32_t* pnTags_out);
+
+typedef void (*uhfman_tag_handler_t)(uhfman_tag_t tag);
+typedef void (*uhfman_poll_handler_t)(void);
+void uhfman_set_new_tag_event_handler(uhfman_tag_handler_t handler);
+
+void uhfman_unset_new_tag_event_handler();
+
+void ufhman_set_poll_handler(uhfman_poll_handler_t handler);
+
+void ufhman_unset_poll_handler();
+
+uhfman_tag_t uhfman_tag_get(uint16_t handle); // TODO threading, locking
+
+uhfman_tag_stats_t uhfman_tag_get_stats(uint16_t handle);
+
+#endif // UHFMAN_H

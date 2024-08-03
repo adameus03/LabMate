@@ -7,6 +7,34 @@
 #include <ptypes.h>
 #include "uhfman.h"
 
+void main_uhfman_poll_handler() {
+    uhfman_tag_t* pTags = NULL;
+    uint32_t nTags = 0;
+    uhfman_list_tags(&pTags, &nTags);
+    uhfman_tag_stats_t* pStats = (uhfman_tag_stats_t*)malloc(nTags * sizeof(uhfman_tag_stats_t));
+
+    for (uint32_t i = 0; i < nTags; i++) {
+        uhfman_tag_t tag = pTags[i];
+        // fprintf(stdout, "Tag %d: ", i);
+        // for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
+        //     fprintf(stdout, "%02X", tag.epc[j]);
+        // }
+        // fprintf(stdout, "\n");
+        pStats[i] = uhfman_tag_get_stats(tag.handle);
+    }
+
+    for (uint32_t i = 0; i < nTags; i++) {
+        // fprintf(stdout, "Handle %u: , ", pTags[i].handle);
+        // fprintf(stdout, "EPC: ");
+        // for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
+        //     fprintf(stdout, "%02X", pTags[i].epc[j]);
+        // }
+        // fprintf(stdout, ", ");
+        fprintf(stdout, "%4.2f %lu   ", pStats[i].rssi_avg_per_period, pStats[i].read_time_interval_avg_per_period);
+    }
+    fprintf(stdout, "\n");
+}
+
 int main() {
     fprintf(stdout, "-------- RSCS --------\n");
     uhfman_ctx_t uhfmanCtx = {};
@@ -127,6 +155,9 @@ int main() {
     // } else {
     //     fprintf(stdout, "uhfman_dbg_single_polling returned successfully\n");
     // }
+
+    fprintf(stdout, "Calling uhfman_set_poll_handler\n");
+    ufhman_set_poll_handler(main_uhfman_poll_handler);
 
     fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
     err = uhfman_dbg_multiple_polling(&uhfmanCtx);

@@ -57,8 +57,8 @@ static inline void log_level_str(int level, FILE* stream) {
                                     log_level_str(level, stream); \
                                     log_timestamp(stream); \
                                     fprintf(stream," (%s:%d): ", __FILE__, __LINE__); \
-                                    fprintf(stream, __VA_ARGS__); \
                                 } \
+                                fprintf(stream, __VA_ARGS__); \
                                 if (should_break_line) { \
                                     fprintf(stream, "\n"); \
                                 } \

@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <math.h>
 
 #include "log.h"
 #include "ch340.h"
@@ -571,21 +572,147 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+static uhfman_tag_t __uhfman_tags[UHFMAN_MAX_NUM_TAGS];
+static uint32_t __num_tags = 0U;
+static uhfman_tag_handler_t __uhfman_new_tag_handler = NULL;
+static uhfman_poll_handler_t __uhfman_poll_handler = NULL;
+
+#define UHFMAN_TAG_HANDLE_INVALID 0xFFFFU
+
+static uint16_t __uhfman_tag_find(uint8_t* epc) { // TODO Optimize this search
+    for (uint32_t i = 0; i < __num_tags; i++) {
+        if (memcmp(__uhfman_tags[i].epc, epc, YPDR200_X22_NTF_PARAM_EPC_LENGTH) == 0) {
+            //fprintf(stdout, "handle=%u\n", (uint16_t)i);
+            return (uint16_t)i;
+        }
+    }
+    return (uint16_t)UHFMAN_TAG_HANDLE_INVALID;
+}
+
+static void __uhfman_tag_add_read(uint8_t* epc, uint8_t rssi) { // TODO think about splitting into threads if performance is an issue?
+    if (epc == NULL) {
+        assert(0);
+        return;
+    }
+
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    unsigned long time_ms = 1000 * tv.tv_sec + (tv.tv_usec / 1000);
+    
+    uint16_t tagHandle = __uhfman_tag_find(epc);
+    if (tagHandle != UHFMAN_TAG_HANDLE_INVALID) {
+        uint32_t readMod = __uhfman_tags[tagHandle].num_reads % UHFMAN_TAG_PERIOD_NREADS; // write in a circular buffer fashion
+        __uhfman_tags[tagHandle].read_times[readMod] = time_ms;
+        //printf("readMod: %d, read_times[readMod]: %lu\n", readMod, __uhfman_tags[tagHandle].read_times[readMod]);
+        __uhfman_tags[tagHandle].rssi[readMod] = rssi;
+        __uhfman_tags[tagHandle].num_reads++;
+        if (__uhfman_poll_handler != NULL) {
+            __uhfman_poll_handler();
+        }
+        return;
+    }
+
+    if (__num_tags >= UHFMAN_MAX_NUM_TAGS) {
+        assert(0);
+        return;
+    } else {
+        memcpy(__uhfman_tags[__num_tags].epc, epc, YPDR200_X22_NTF_PARAM_EPC_LENGTH);
+        __uhfman_tags[__num_tags].rssi[0] = rssi;
+        __uhfman_tags[__num_tags].read_times[0] = time_ms;
+        __uhfman_tags[__num_tags].num_reads = 1;
+        __uhfman_tags[__num_tags].handle = __num_tags;
+        __num_tags++;
+        if (__uhfman_new_tag_handler != NULL) {
+            __uhfman_new_tag_handler(__uhfman_tags[__num_tags - 1]);
+        }
+        if (__uhfman_poll_handler != NULL) {
+            __uhfman_poll_handler();
+        }
+    }
+}
+
 #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData) {
-    if ((ntfParam.crc[0] == 0x07 && ntfParam.crc[1] == 0x75)
-        || (ntfParam.crc[0] == 0xDC && ntfParam.crc[1] == 0x20)) {
-        return; // Ignore those tags
-    }
-    LOG_I_TBC("Polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
+    // if ((ntfParam.crc[0] == 0x07 && ntfParam.crc[1] == 0x75)
+    //     || (ntfParam.crc[0] == 0xDC && ntfParam.crc[1] == 0x20)) {
+    //     return; // Ignore those tags
+    // }
+    LOG_D_TBC("Polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
     for (int i = 0; i < YPDR200_X22_NTF_PARAM_EPC_LENGTH; i++) { //TODO variabilize (related to #ae3759b4)
-        LOG_I_CTBC("%02X ", ntfParam.epc[i]);
+        LOG_D_CTBC("%02X ", ntfParam.epc[i]);
     }
-    LOG_I_CFIN("], crc=0x%04X", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
+    LOG_D_CFIN("], crc=0x%04X", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
+    __uhfman_tag_add_read(ntfParam.epc, ntfParam.rssi);
 }
 #else
 #error "Unknown UHFMAN_DEVICE_MODEL"
 #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+
+void uhfman_list_tags(uhfman_tag_t** ppTags, uint32_t* pnTags_out) {
+    *ppTags = (uhfman_tag_t*) malloc(__num_tags * sizeof(uhfman_tag_t));
+    if (*ppTags == NULL) {
+        errno = ENOMEM;
+        return;
+    }
+    memcpy(*ppTags, __uhfman_tags, __num_tags * sizeof(uhfman_tag_t));
+    *pnTags_out = __num_tags;
+}
+
+void uhfman_set_new_tag_event_handler(uhfman_tag_handler_t handler) {
+    __uhfman_new_tag_handler = handler;
+}
+
+void uhfman_unset_new_tag_event_handler() {
+    __uhfman_new_tag_handler = NULL;
+}
+
+void ufhman_set_poll_handler(uhfman_poll_handler_t handler) {
+    __uhfman_poll_handler = handler;
+}
+
+void ufhman_unset_poll_handler() {
+    __uhfman_poll_handler = NULL;
+}
+
+uhfman_tag_t uhfman_tag_get(uint16_t handle) {
+    return __uhfman_tags[handle];
+}
+
+uhfman_tag_stats_t uhfman_tag_get_stats(uint16_t handle) {
+    uhfman_tag_t tag = __uhfman_tags[handle];
+
+    uint32_t rssi_sum = 0U;
+    uint32_t iMax = tag.num_reads < UHFMAN_TAG_PERIOD_NREADS ? tag.num_reads : UHFMAN_TAG_PERIOD_NREADS;
+    if (iMax < 2) {
+        return (uhfman_tag_stats_t) {
+            .rssi_avg_per_period = NAN,
+            .read_time_interval_avg_per_period = -1U
+        };
+    }
+    for (uint32_t i = 0; i < iMax; i++) {
+        rssi_sum += tag.rssi[i];
+    }
+
+    uint32_t read_interval_sum = 0U; //TODO support less than 32-bit systems
+    int difference = (int)(tag.read_times[0]) - (int)(tag.read_times[iMax - 1]);
+    if (difference > 0) {
+        read_interval_sum += difference;
+    }
+    for (uint32_t i = 0; i < iMax; i++) {
+        difference = (int)(tag.read_times[i + 1]) - (int)(tag.read_times[i]);
+        if (difference > 0) { // TODO optimize using modulo instead of this condition in loop
+            read_interval_sum += difference;
+        }
+    }
+    
+
+    //printf("rssi_sum: %d, iMax: %d, read_interval_sum: %lu\n", rssi_sum, iMax, read_interval_sum);
+
+    return (uhfman_tag_stats_t) {
+        .rssi_avg_per_period = ((float)rssi_sum) / (float)(iMax),
+        .read_time_interval_avg_per_period = read_interval_sum / (iMax - 1)
+    };
+}
 
 uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
