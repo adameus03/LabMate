@@ -2,6 +2,7 @@
 #define UHFMAN_COMMON_H
 
 #include "libusb.h"
+#include "log.h"
 
 #define UHFMAN_USE_DEBUG_EXTENSIONS 1
 
@@ -42,9 +43,9 @@ typedef struct {
 #include <string.h>
 static inline void uhfman_debug_errno() {
     int err = errno;
-    printf("errno: %d\n", err);
+    LOG_E("errno: %d\n", err);
     char* errStr = strerror(err);
-    printf("strerror(errno): %s\n", errStr);
+    LOG_E("strerror(errno): %s\n", errStr);
 }
 #endif
 

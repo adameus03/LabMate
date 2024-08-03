@@ -7,7 +7,8 @@
         "uhfman_common.h": "c",
         "termbits-common.h": "c",
         "compare": "c",
-        "utils.h": "c"
+        "utils.h": "c",
+        "termios.h": "c"
     },
     "cmake.sourceDirectory": "/home/mundus/base/sem7/LabMate/qps"
 }
