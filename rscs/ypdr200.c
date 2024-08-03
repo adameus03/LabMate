@@ -793,9 +793,13 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
         err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X27, pRespErrCode);
         if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
             if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
-                return YPDR200_X27_ERR_ERROR_RESPONSE;
+                //return YPDR200_X27_ERR_ERROR_RESPONSE;
+                // TODO add handler callback for error response?
+                fprintf(stderr, "Received error response frame for 0x27 command, error code: 0x%02X (ignoring)\n", (uint8_t)(*pRespErrCode));
+                continue;
+            } else {
+                return YPDR200_X27_ERR_READ_RESPONSE;
             }
-            return YPDR200_X27_ERR_READ_RESPONSE;
         }
 
         if (frameIn.prolog.type != YPDR200_FRAME_TYPE_NOTIFICATION) {
