@@ -570,13 +570,21 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+#if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData) {
+    if ((ntfParam.crc[0] == 0x07 && ntfParam.crc[1] == 0x75)
+        || (ntfParam.crc[0] == 0xDC && ntfParam.crc[1] == 0x20)) {
+        return; // Ignore those tags
+    }
     fprintf(stdout, "Polling notification: rssi=0x%02X, pc=0x%04X, epc=[ ", ntfParam.rssi, ((uint16_t)(ntfParam.pc[0]) << 8) | (uint16_t)(ntfParam.pc[1]));
     for (int i = 0; i < YPDR200_X22_NTF_PARAM_EPC_LENGTH; i++) { //TODO variabilize (related to #ae3759b4)
         fprintf(stdout, "%02X ", ntfParam.epc[i]);
     }
     fprintf(stdout, "], crc=0x%04X\n", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
 }
+#else
+#error "Unknown UHFMAN_DEVICE_MODEL"
+#endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 
 uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200

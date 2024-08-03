@@ -298,7 +298,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
 
     uint8_t checksum = ypdr200_frame_compute_checksum(&frameIn);
     if (checksum != epilogIn.checksum) {
-        LOG_W("Checksum mismatch: expected=0x%02X, actual=0x%02X", checksum, epilogIn.checksum); // TODO don't ignore
+        LOG_D("Checksum mismatch: expected=0x%02X, actual=0x%02X", checksum, epilogIn.checksum); // TODO don't ignore
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
@@ -797,7 +797,7 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
         err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X27, pRespErrCode);
         if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
             if (err == YPDR200_FRAME_RECV_ERR_CKSUM_MISMATCH) {
-                LOG_W("Checksum mismatch (ignoring)");
+                LOG_D("Checksum mismatch (ignoring)"); // TODO Can we fix those??
                 //Flush the input buffer
                 //tcflush(pCtx->fd, TCIFLUSH);
                 continue;
