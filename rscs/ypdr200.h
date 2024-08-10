@@ -296,4 +296,32 @@ ypdr200_x27_req_param_t ypdr200_x27_req_param_make(uint16_t cnt);
  */
 int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData);
 
+#define YPDR200_X28_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X28_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X28_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X28_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Stop multiple polling instructions
+*/
+int ypdr200_x28(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode);
+
+#define YPDR200_X12_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X12_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X12_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X12_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Set send select instruction mode
+ */
+int ypdr200_x12(uhfman_ctx_t* pCtx, uint8_t mode, ypdr200_resp_err_code_t* pRespErrCode);
+
+int ypdr200_x0c(uhfman_ctx_t* pCtx);
+
+int ypdr200_x0e(uhfman_ctx_t* pCtx);
+
+int ypdr200_xf3();
+
+int ypdr200_xf2();
+
+//int read write
+
 #endif // YPDR200_H
