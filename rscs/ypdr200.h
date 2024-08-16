@@ -361,19 +361,22 @@ typedef union {
 #endif
     }; //TODO: prevent code editors from confusingly falling back to the #error directive and red-underlining those lines
     uint16_t raw;
-} __attribute__((__packed__)) ypdr200_xf3_resp_param_hdr_t;
+} __attribute__((__packed__)) ypdr200_jmdr_hdr_t;
 
-typedef struct {
-    ypdr200_xf3_resp_param_hdr_t hdr;
+typedef struct { // Jamming detection result
+    ypdr200_jmdr_hdr_t hdr;
     uint8_t* pJmr; // Contains respective RSSI values for each channel (the tech ref says it's MSB first - it probably means the first byte is the RSSI value for the channel with the highest index - TODO verify this)
-} ypdr200_xf3_resp_param_t;
+} ypdr200_jmdr_t;
 
-void ypdr200_xf3_resp_param_dispose(ypdr200_xf3_resp_param_t* pRespParam);
+void ypdr200_jmdr_dispose(ypdr200_jmdr_t* pJmdr);
+
+typedef ypdr200_jmdr_hdr_t ypdr200_xf3_resp_param_hdr_t;
+typedef ypdr200_jmdr_t ypdr200_xf3_resp_param_t;
 
 /**
  * @brief Get the length of the JMR array (number of channels)
  */
-uint16_t ypdr200_xf3_resp_param_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam);
+uint16_t ypdr200_jmdr_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam);
 
 #define YPDR200_XF3_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define YPDR200_XF3_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
@@ -381,10 +384,21 @@ uint16_t ypdr200_xf3_resp_param_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam
 #define YPDR200_XF3_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
 /**
  * @brief Test channel RSSI
+ * @note You need to call `ypdr200_jmdr_dispose` to free the memory allocated for `pRespParam_out` after you won't use it anymore
  */
 int ypdr200_xf3(uhfman_ctx_t* pCtx, ypdr200_xf3_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
-int ypdr200_xf2();
+typedef ypdr200_jmdr_hdr_t ypdr200_xf2_resp_param_hdr_t;
+typedef ypdr200_jmdr_t ypdr200_xf2_resp_param_t;
+
+#define YPDR200_XF2_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_XF2_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_XF2_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_XF2_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Test RF input blocking signal (channelwise jamming detection as far as I understand)
+ */
+int ypdr200_xf2(uhfman_ctx_t* pCtx, ypdr200_xf2_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
 //int read write
 

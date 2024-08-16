@@ -132,6 +132,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_XAA = 0xaa,
     YPDR200_FRAME_CMD_XB7 = 0xb7,
     YPDR200_FRAME_CMD_XF1 = 0xf1,
+    YPDR200_FRAME_CMD_XF2 = 0xf2,
     YPDR200_FRAME_CMD_XF3 = 0xf3,
     YPDR200_FRAME_CMD_XFF = 0xff
 } ypdr200_frame_cmd_t;
@@ -961,13 +962,13 @@ int ypdr200_x0e(uhfman_ctx_t* pCtx, ypdr200_x0e_req_param_t param, ypdr200_resp_
     return YPDR200_X0E_ERR_SUCCESS;
 }
 
-void ypdr200_xf3_resp_param_dispose(ypdr200_xf3_resp_param_t* pRespParam) {
+void ypdr200_jmdr_dispose(ypdr200_xf3_resp_param_t* pRespParam) {
     if (pRespParam->pJmr != (uint8_t*)0) {
         free(pRespParam->pJmr);
     }
 }
 
-uint16_t ypdr200_xf3_resp_param_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam) {
+uint16_t ypdr200_jmdr_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam) {
     if (pRespParam->pJmr == (uint8_t*)0) {
         return 0;
     } else if (pRespParam->hdr.ch_l > pRespParam->hdr.ch_h) {
@@ -979,7 +980,7 @@ uint16_t ypdr200_xf3_resp_param_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam
 /**
  * @warning Need to check outside of this function if the pointer to be used is valid
  */
-static void ypdr200_xf3_resp_param_set_hdr_from_raw(uint8_t* pRawParamData, ypdr200_xf3_resp_param_t* pRespParam) {
+static void ypdr200_jmdr_set_hdr_from_raw(uint8_t* pRawParamData, ypdr200_xf3_resp_param_t* pRespParam) {
     if (pRespParam != NULL) {
         pRespParam->hdr.raw = (((uint16_t)pRawParamData[0]) << 8) | (uint16_t)pRawParamData[1];
     }
@@ -989,8 +990,8 @@ static void ypdr200_xf3_resp_param_set_hdr_from_raw(uint8_t* pRawParamData, ypdr
  * @warning Need to check outside of this function if the pointer to be used is valid
  * @returns 0 on success, -1 on error (check errno)
  */
-static int ypdr200_xf3_resp_param_set_jmr(uint8_t* pJmr, ypdr200_xf3_resp_param_t* pRespParam) {
-    uint16_t jmrLen = ypdr200_xf3_resp_param_get_jmr_len(pRespParam);
+static int ypdr200_jmdr_set_jmr(uint8_t* pJmr, ypdr200_xf3_resp_param_t* pRespParam) {
+    uint16_t jmrLen = ypdr200_jmdr_get_jmr_len(pRespParam);
     pRespParam->pJmr = malloc((size_t)jmrLen);
     if (pRespParam->pJmr == (uint8_t*)0) {
         errno = ENOMEM;
@@ -1018,21 +1019,21 @@ int ypdr200_xf3(uhfman_ctx_t* pCtx, ypdr200_xf3_resp_param_t* pRespParam_out, yp
 
     uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
     if (paramInLen < 1) {
-        LOG_W("Unexpected param data length: expected>0, actual=%d", paramInLen);
+        LOG_W("Unexpected param data length: expected>0, actual=%u", paramInLen);
         ypdr200_frame_dispose(&frameIn);
         return YPDR200_XF3_ERR_READ_RESPONSE;
     }
 
     ypdr200_xf3_resp_param_t respParam = {};
-    ypdr200_xf3_resp_param_set_hdr_from_raw(frameIn.pParamData, &respParam);
-    uint16_t expectedParamInLen = sizeof(respParam.hdr.raw) + ypdr200_xf3_resp_param_get_jmr_len(&respParam);
+    ypdr200_jmdr_set_hdr_from_raw(frameIn.pParamData, &respParam);
+    uint16_t expectedParamInLen = sizeof(respParam.hdr.raw) + ypdr200_jmdr_get_jmr_len(&respParam);
     if (paramInLen != expectedParamInLen) {
         LOG_W("Unexpected JMR length: expected=%u, actual=%u", expectedParamInLen, paramInLen);
         ypdr200_frame_dispose(&frameIn);
         return YPDR200_XF3_ERR_READ_RESPONSE;
     }
 
-    if (-1 == ypdr200_xf3_resp_param_set_jmr(frameIn.pParamData + sizeof(respParam.hdr.raw), &respParam)) {
+    if (-1 == ypdr200_jmdr_set_jmr(frameIn.pParamData + sizeof(respParam.hdr.raw), &respParam)) {
         uhfman_debug_errno(); // print errno
         ypdr200_frame_dispose(&frameIn);
         return YPDR200_XF3_ERR_READ_RESPONSE;
@@ -1044,3 +1045,47 @@ int ypdr200_xf3(uhfman_ctx_t* pCtx, ypdr200_xf3_resp_param_t* pRespParam_out, yp
     return YPDR200_XF3_ERR_SUCCESS;
 }
 
+// TODO DRY (compare with ypdr200_xf3)
+int ypdr200_xf2(uhfman_ctx_t* pCtx, ypdr200_xf2_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode) {
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_XF2, 0U, NULL);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_XF2_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_XF2, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_XF2_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_XF2_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen < 1) {
+        LOG_W("Unexpected param data length: expected>0, actual=%u", paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_XF2_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_xf2_resp_param_t respParam = {};
+    ypdr200_jmdr_set_hdr_from_raw(frameIn.pParamData, &respParam);
+    uint16_t expectedParamInLen = sizeof(respParam.hdr.raw) + ypdr200_jmdr_get_jmr_len(&respParam);
+    if (paramInLen != expectedParamInLen) {
+        LOG_W("Unexpected JMR length: expected=%u, actual=%u", expectedParamInLen, paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_XF2_ERR_READ_RESPONSE;
+    }
+
+    if (-1 == ypdr200_jmdr_set_jmr(frameIn.pParamData + sizeof(respParam.hdr.raw), &respParam)) {
+        uhfman_debug_errno(); // print errno
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_XF2_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+
+    *pRespParam_out = respParam;
+    return YPDR200_XF2_ERR_SUCCESS;
+}
