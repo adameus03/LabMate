@@ -156,7 +156,9 @@ typedef union {
     };
     //uint8_t raw[YPDR200_X0D_RESP_PARAM_SIZE];
     uint16_t raw;
-} __attribute__((__packed__)) ypdr200_x0d_resp_param_t;
+} __attribute__((__packed__)) ypdr200_query_param_t;
+
+typedef ypdr200_query_param_t ypdr200_x0d_resp_param_t;
 
 #define YPDR200_X0D_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define YPDR200_X0D_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
@@ -335,7 +337,16 @@ void ypdr200_x0c_req_param_dispose(ypdr200_x0c_req_param_t* pReqParam);
  */
 int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_resp_err_code_t* pRespErrCode);
 
-int ypdr200_x0e(uhfman_ctx_t* pCtx);
+typedef ypdr200_query_param_t ypdr200_x0e_req_param_t;
+
+#define YPDR200_X0E_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X0E_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X0E_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X0E_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Set Query parameters
+ */
+int ypdr200_x0e(uhfman_ctx_t* pCtx, ypdr200_x0e_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode);
 
 int ypdr200_xf3();
 

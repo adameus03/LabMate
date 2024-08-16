@@ -124,6 +124,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X0B = 0x0b,
     YPDR200_FRAME_CMD_X0C = 0x0c,
     YPDR200_FRAME_CMD_X0D = 0x0d,
+    YPDR200_FRAME_CMD_X0E = 0x0e,
     YPDR200_FRAME_CMD_X11 = 0x11,
     YPDR200_FRAME_CMD_X12 = 0x12,
     YPDR200_FRAME_CMD_X22 = 0x22,
@@ -922,4 +923,39 @@ int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_
 
     ypdr200_frame_dispose(&frameIn);
     return YPDR200_X0C_ERR_SUCCESS;
+}
+
+int ypdr200_x0e(uhfman_ctx_t* pCtx, ypdr200_x0e_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode) {
+    // param.raw is uint16_t so we need to handle that appropriately
+    uint8_t paramData[2] = {param.raw >> 8, param.raw & 0xFF};
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0E, 2, paramData);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X0E_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X0E, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X0E_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_X0E_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != 1) {
+        LOG_W("Unexpected param data length: expected=1, actual=%d", paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X0E_ERR_READ_RESPONSE;
+    }
+
+    if (frameIn.pParamData[0] != 0U) {
+        LOG_W("Unexpected 0x0E command response data: %02x. We were expecting 0x00 for success.");
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X0E_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+    return YPDR200_X0E_ERR_SUCCESS;
 }
