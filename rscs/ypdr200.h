@@ -348,7 +348,41 @@ typedef ypdr200_query_param_t ypdr200_x0e_req_param_t;
  */
 int ypdr200_x0e(uhfman_ctx_t* pCtx, ypdr200_x0e_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode);
 
-int ypdr200_xf3();
+typedef union {
+    struct {
+#if defined(TARGET_LITTLE_ENDIAN)
+        uint8_t ch_h;
+        uint8_t ch_l;
+#elif defined(TARGET_BIG_ENDIAN)
+        uint8_t ch_l;
+        uint8_t ch_h;
+#else
+#error "Neither TARGET_LITTLE_ENDIAN nor TARGET_BIG_ENDIAN is defined"
+#endif
+    }; //TODO: prevent code editors from confusingly falling back to the #error directive and red-underlining those lines
+    uint16_t raw;
+} __attribute__((__packed__)) ypdr200_xf3_resp_param_hdr_t;
+
+typedef struct {
+    ypdr200_xf3_resp_param_hdr_t hdr;
+    uint8_t* pJmr; // Contains respective RSSI values for each channel (the tech ref says it's MSB first - it probably means the first byte is the RSSI value for the channel with the highest index - TODO verify this)
+} ypdr200_xf3_resp_param_t;
+
+void ypdr200_xf3_resp_param_dispose(ypdr200_xf3_resp_param_t* pRespParam);
+
+/**
+ * @brief Get the length of the JMR array (number of channels)
+ */
+uint16_t ypdr200_xf3_resp_param_get_jmr_len(ypdr200_xf3_resp_param_t* pRespParam);
+
+#define YPDR200_XF3_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_XF3_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_XF3_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_XF3_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Test channel RSSI
+ */
+int ypdr200_xf3(uhfman_ctx_t* pCtx, ypdr200_xf3_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
 int ypdr200_xf2();
 
