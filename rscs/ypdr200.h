@@ -82,6 +82,7 @@ int ypdr200_x03(uhfman_ctx_t* pCtx, ypdr200_x03_req_param_t infoType, char** ppc
 
 
 #define YPDR200_X0B_RESP_PARAM_HDR_SIZE 7
+#define YPDR200_X0C_REQ_PARAM_HDR_SIZE YPDR200_X0B_RESP_PARAM_HDR_SIZE
 typedef union {
     struct {
         union {
@@ -105,12 +106,16 @@ typedef union {
         uint8_t truncate;
     };
     uint8_t raw[YPDR200_X0B_RESP_PARAM_HDR_SIZE];
-} __attribute__((__packed__)) ypdr200_x0b_resp_param_hdr_t;
+} __attribute__((__packed__)) ypdr200_select_param_hdr_t;
+
+typedef ypdr200_select_param_hdr_t ypdr200_x0b_resp_param_hdr_t;
 
 typedef struct {
     ypdr200_x0b_resp_param_hdr_t hdr;
     uint8_t* pMask; //MSB first
-} ypdr200_x0b_resp_param_t;
+} ypdr200_select_param_t;
+
+typedef ypdr200_select_param_t ypdr200_x0b_resp_param_t;
 
 void ypdr200_x0b_resp_param_dispose(ypdr200_x0b_resp_param_t* pRespParam);
 
@@ -314,7 +319,21 @@ int ypdr200_x28(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode);
  */
 int ypdr200_x12(uhfman_ctx_t* pCtx, uint8_t mode, ypdr200_resp_err_code_t* pRespErrCode);
 
-int ypdr200_x0c(uhfman_ctx_t* pCtx);
+typedef ypdr200_select_param_hdr_t ypdr200_x0c_req_param_hdr_t;
+typedef ypdr200_select_param_t ypdr200_x0c_req_param_t;
+
+ypdr200_x0c_req_param_t ypdr200_x0c_req_param_make(ypdr200_x0c_req_param_hdr_t hdr, uint8_t* pMask);
+
+void ypdr200_x0c_req_param_dispose(ypdr200_x0c_req_param_t* pReqParam);
+
+#define YPDR200_X0C_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X0C_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X0C_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X0C_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Set select parameter instruction
+ */
+int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_resp_err_code_t* pRespErrCode);
 
 int ypdr200_x0e(uhfman_ctx_t* pCtx);
 
