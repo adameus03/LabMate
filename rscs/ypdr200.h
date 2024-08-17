@@ -400,6 +400,94 @@ typedef ypdr200_jmdr_t ypdr200_xf2_resp_param_t;
  */
 int ypdr200_xf2(uhfman_ctx_t* pCtx, ypdr200_xf2_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
-//int read write
+// TODO define data structures for the following commands
+// TODO buy 50pcs small tags together with the missing ones
+
+#define YPDR200_X39_REQ_PARAM_SIZE 9
+typedef union {
+    struct {
+        uint8_t ap[4];
+        uint8_t memBank;
+        uint8_t sa[2];
+        uint8_t dl[2];
+    };
+    uint8_t raw[YPDR200_X39_REQ_PARAM_SIZE];
+} __attribute__((__packed__)) ypdr200_x39_req_param_t;
+
+#define YPDR200_X39_RESP_PARAM_HDR_SIZE 15
+typedef union {
+    struct {
+        uint8_t ul;
+        uint8_t pc[2];
+        uint8_t epc[12];
+    };
+    uint8_t raw[YPDR200_X39_RESP_PARAM_HDR_SIZE]; // TODO support longer EPC by conforming to the `ul` value?
+} __attribute__((__packed__)) ypdr200_x39_resp_param_hdr_t;
+
+typedef struct {
+    uint16_t dataLen;
+    uint8_t* pData;
+} ypdr200_x39_resp_param_body_t;
+
+typedef struct {
+    ypdr200_x39_resp_param_hdr_t hdr;
+    ypdr200_x39_resp_param_body_t body;
+} ypdr200_x39_resp_param_t;
+
+void ypdr200_x39_resp_param_dispose(ypdr200_x39_resp_param_t* pRespParam);
+
+#define YPDR200_X39_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X39_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X39_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X39_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Read label data storage area
+ */
+int ypdr200_x39(uhfman_ctx_t* pCtx, ypdr200_x39_req_param_t param, ypdr200_x39_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
+
+#define YPDR200_X49_REQ_PARAM_HDR_SIZE 9
+typedef union {
+    struct {
+        uint8_t ap[4];
+        uint8_t memBank;
+        uint8_t sa[2];
+        uint8_t dl[2];
+    };
+    uint8_t raw[YPDR200_X49_REQ_PARAM_HDR_SIZE];
+} __attribute__((__packed__)) ypdr200_x49_req_param_hdr_t;
+
+typedef struct {
+    ypdr200_x49_req_param_hdr_t hdr;
+    uint8_t* pDt;
+} ypdr200_x49_req_param_t;
+
+/**
+ * @note ap needs to be supplied MSB first
+ */
+ypdr200_x49_req_param_hdr_t ypdr200_x49_req_param_hdr_make(uint16_t sa, uint16_t dl, uint8_t memBank, uint8_t ap[4]);
+
+ypdr200_x49_req_param_t ypdr200_x49_req_param_make(ypdr200_x49_req_param_hdr_t hdr, uint8_t* pDt);
+
+void ypdr200_x49_req_param_dispose(ypdr200_x49_req_param_t* pReqParam);
+
+#define YPDR200_X49_RESP_PARAM_SIZE 16
+typedef union {
+    struct {
+        uint8_t ul;
+        uint8_t pc[2];
+        uint8_t epc[12];
+        uint8_t parameter;
+    };
+    uint8_t raw[YPDR200_X49_RESP_PARAM_SIZE]; // TODO support longer EPC by conforming to the `ul` value?
+} __attribute__((__packed__)) ypdr200_x49_resp_param_t;
+
+#define YPDR200_X49_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X49_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X49_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X49_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Write label data storage area
+ */
+int ypdr200_x49(uhfman_ctx_t* pCtx, ypdr200_x49_req_param_t param, ypdr200_x49_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
 #endif // YPDR200_H

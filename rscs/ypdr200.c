@@ -129,6 +129,8 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X12 = 0x12,
     YPDR200_FRAME_CMD_X22 = 0x22,
     YPDR200_FRAME_CMD_X27 = 0x27,
+    YPDR200_FRAME_CMD_X39 = 0x39,
+    YPDR200_FRAME_CMD_X49 = 0x49,
     YPDR200_FRAME_CMD_XAA = 0xaa,
     YPDR200_FRAME_CMD_XB7 = 0xb7,
     YPDR200_FRAME_CMD_XF1 = 0xf1,
@@ -894,8 +896,31 @@ void ypdr200_x0c_req_param_dispose(ypdr200_x0c_req_param_t* pReqParam) {
     }
 }
 
+/**
+ * @param ppRaw_out Address of the allocated memory block will be stored here
+ * @returns 0 on success, -1 on error (check errno)
+ * @note The caller is responsible for freeing the allocated memory block at *ppRaw_out
+ */
+static int ypdr200_x0c_req_param_raw(ypdr200_x0c_req_param_t* pReqParam, uint8_t** ppRaw_out) {
+    *ppRaw_out = (uint8_t*) malloc(pReqParam->hdr.maskLen + YPDR200_X0C_REQ_PARAM_HDR_SIZE);
+    if (*ppRaw_out == (uint8_t*)0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    memcpy(*ppRaw_out, pReqParam->hdr.raw, YPDR200_X0C_REQ_PARAM_HDR_SIZE);
+    memcpy((*ppRaw_out) + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pReqParam->pMask, pReqParam->hdr.maskLen);
+    return 0;
+}
+
 int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_resp_err_code_t* pRespErrCode) {
-    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0C, pReqParam->hdr.maskLen + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pReqParam->hdr.raw);
+    uint8_t *pRawFrameOut = (uint8_t*)0; //TODO: Avoid copying header data?
+    if (-1 == ypdr200_x0c_req_param_raw(pReqParam, &pRawFrameOut)) {
+        if (errno == ENOMEM) {
+            LOG_W("Ran out of memory while preparing 0x0C command frame!");
+        }
+        return YPDR200_X0C_ERR_SEND_COMMAND;
+    }
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0C, pReqParam->hdr.maskLen + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pRawFrameOut);
     int err = ypdr200_frame_send(&frameOut, pCtx);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X0C_ERR_SEND_COMMAND;
@@ -1088,4 +1113,171 @@ int ypdr200_xf2(uhfman_ctx_t* pCtx, ypdr200_xf2_resp_param_t* pRespParam_out, yp
 
     *pRespParam_out = respParam;
     return YPDR200_XF2_ERR_SUCCESS;
+}
+
+void ypdr200_x39_resp_param_dispose(ypdr200_x39_resp_param_t* pRespParam) {
+    if (pRespParam->body.pData != (uint8_t*)0) {
+        free(pRespParam->body.pData);
+    }
+}
+
+static void ypdr200_x39_resp_param_set_hdr_from_raw(uint8_t* pRawParamData, ypdr200_x39_resp_param_t* pRespParam) {
+    if (pRespParam != NULL) {
+        memcpy(pRespParam->hdr.raw, pRawParamData, YPDR200_X39_RESP_PARAM_HDR_SIZE);
+    }
+}
+
+static int ypdr200_x39_resp_param_set_data(uint8_t* pData, uint16_t dataLen, ypdr200_x39_resp_param_t* pRespParam) {
+    pRespParam->body.dataLen = dataLen;
+    pRespParam->body.pData = malloc((size_t)dataLen);
+    if (pRespParam->body.pData == (uint8_t*)0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    memcpy(pRespParam->body.pData, pData, dataLen);
+    return 0;
+}
+
+int ypdr200_x39(uhfman_ctx_t* pCtx, ypdr200_x39_req_param_t param, ypdr200_x39_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode) {
+    uint16_t requestedDataReadLength = (((uint16_t)param.dl[0]) << 8) | (uint16_t)param.dl[1];
+    
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X39, YPDR200_X39_REQ_PARAM_SIZE, param.raw);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X39_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X39, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X39_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_X39_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen < YPDR200_X39_RESP_PARAM_HDR_SIZE) {
+        LOG_W("Unexpected param data length: expected>=%d,  actual=%u", YPDR200_X39_RESP_PARAM_HDR_SIZE, paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X39_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_x39_resp_param_t respParam = {};
+    ypdr200_x39_resp_param_set_hdr_from_raw(frameIn.pParamData, &respParam);
+    
+    if (respParam.hdr.ul + 1 != YPDR200_X39_RESP_PARAM_HDR_SIZE) {// TODO check if can be made flexible depending on ul
+        LOG_W("Unexpected ul: expected=%d, actual=%d", YPDR200_X39_RESP_PARAM_HDR_SIZE, respParam.hdr.ul);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X39_ERR_READ_RESPONSE;
+    }
+
+    uint16_t dataLen = paramInLen - YPDR200_X39_RESP_PARAM_HDR_SIZE;
+
+    if (requestedDataReadLength != dataLen) {
+        LOG_W("Unexpected data length: expected=%d, actual=%d", requestedDataReadLength, dataLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X39_ERR_READ_RESPONSE;
+    }
+
+    if (-1 == ypdr200_x39_resp_param_set_data(frameIn.pParamData + respParam.hdr.ul, dataLen, &respParam)) {
+        uhfman_debug_errno(); // print errno
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X39_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+
+    *pRespParam_out = respParam;
+    return YPDR200_X39_ERR_SUCCESS;
+}
+
+ypdr200_x49_req_param_hdr_t ypdr200_x49_req_param_hdr_make(uint16_t sa, uint16_t dl, uint8_t memBank, uint8_t ap[4]) {
+    return (ypdr200_x49_req_param_hdr_t) {
+        .sa = sa,
+        .dl = dl,
+        .memBank = memBank,
+        .ap = {ap[0], ap[1], ap[2], ap[3]} // @note we are assuming ap is MSB-first as noted in the header file
+    };
+}
+
+ypdr200_x49_req_param_t ypdr200_x49_req_param_make(ypdr200_x49_req_param_hdr_t hdr, uint8_t* pDt) {
+    return (ypdr200_x49_req_param_t) {
+        .hdr = hdr,
+        .pDt = pDt
+    };
+}
+
+void ypdr200_x49_req_param_dispose(ypdr200_x49_req_param_t* pReqParam) {
+    if (pReqParam->pDt != (uint8_t*)0) {
+        free(pReqParam->pDt);
+    }
+}
+
+static uint16_t ypdr200_x49_req_param_get_dl(ypdr200_x49_req_param_t* pReqParam) {
+    return (((uint16_t)pReqParam->hdr.dl[0]) << 8) | (uint16_t)pReqParam->hdr.dl[1];
+}
+
+/**
+ * @param ppRaw_out Address of the allocated memory block will be stored here
+ * @returns 0 on success, -1 on error (check errno)
+ * @note The caller is responsible for freeing the allocated memory block at *ppRaw_out
+ */
+static int ypdr200_x49_req_param_raw(ypdr200_x49_req_param_t* pReqParam, uint8_t** ppRaw_out) {
+    uint16_t dl = ypdr200_x49_req_param_get_dl(pReqParam);
+    *ppRaw_out = (uint8_t*) malloc(dl + YPDR200_X49_REQ_PARAM_HDR_SIZE);
+    if (*ppRaw_out == (uint8_t*)0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    memcpy(*ppRaw_out, pReqParam->hdr.raw, YPDR200_X49_REQ_PARAM_HDR_SIZE);
+    memcpy((*ppRaw_out) + YPDR200_X49_REQ_PARAM_HDR_SIZE, pReqParam->pDt, dl);
+    return 0;
+}
+
+int ypdr200_x49(uhfman_ctx_t* pCtx, ypdr200_x49_req_param_t param, ypdr200_x49_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode) {
+    // TODO generalize the procedure so that variable-length params can be used more easily and without repeating code
+    uint8_t* pRawFrameOut = (uint8_t*)0; //TODO: Avoid copying header data?
+    if (-1 == ypdr200_x49_req_param_raw(&param, &pRawFrameOut)) {
+        if (errno == ENOMEM) {
+            LOG_W("Ran out of memory while preparing 0x49 command frame!");
+        }
+        return YPDR200_X49_ERR_SEND_COMMAND;
+    }
+    uint16_t reqDl = ypdr200_x49_req_param_get_dl(&param);
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X49, YPDR200_X49_REQ_PARAM_HDR_SIZE + reqDl, pRawFrameOut);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X49_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X49, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) { // TODO try not to repeat these lines of code
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X49_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_X49_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != YPDR200_X49_RESP_PARAM_SIZE) {
+        LOG_W("Unexpected param data length: expected=%d, actual=%d", YPDR200_X49_RESP_PARAM_SIZE, paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X49_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_x49_resp_param_t respParam = {};
+    memcpy(respParam.raw, frameIn.pParamData, YPDR200_X49_RESP_PARAM_SIZE);
+
+    if (respParam.parameter != 0U) { // TODO check for consistency with other functions using the same pattern for success check?
+        LOG_W("Unexpected 0x49 command response data: %02x. We were expecting 0x00 for success.", respParam.parameter);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X49_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+
+    *pRespParam_out = respParam;
+    return YPDR200_X49_ERR_SUCCESS;
 }
