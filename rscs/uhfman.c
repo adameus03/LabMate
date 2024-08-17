@@ -597,7 +597,7 @@ static void __uhfman_tag_add_read(uint8_t* epc, uint8_t rssi) { // TODO think ab
 
     struct timeval tv;
     gettimeofday(&tv,NULL);
-    unsigned long time_ms = 1000 * tv.tv_sec + (tv.tv_usec / 1000);
+    uint32_t time_ms = 1000 * tv.tv_sec + (tv.tv_usec / 1000);
     
     uint16_t tagHandle = __uhfman_tag_find(epc);
     if (tagHandle != UHFMAN_TAG_HANDLE_INVALID) {
@@ -607,7 +607,7 @@ static void __uhfman_tag_add_read(uint8_t* epc, uint8_t rssi) { // TODO think ab
         __uhfman_tags[tagHandle].rssi[readMod] = rssi;
         __uhfman_tags[tagHandle].num_reads++;
         if (__uhfman_poll_handler != NULL) {
-            __uhfman_poll_handler();
+            __uhfman_poll_handler(tagHandle);
         }
         return;
     }
@@ -626,7 +626,7 @@ static void __uhfman_tag_add_read(uint8_t* epc, uint8_t rssi) { // TODO think ab
             __uhfman_new_tag_handler(__uhfman_tags[__num_tags - 1]);
         }
         if (__uhfman_poll_handler != NULL) {
-            __uhfman_poll_handler();
+            __uhfman_poll_handler(__num_tags - 1); // TODO change when refactoring to using multiple threads?
         }
     }
 }
@@ -693,17 +693,21 @@ uhfman_tag_stats_t uhfman_tag_get_stats(uint16_t handle) {
         rssi_sum += tag.rssi[i];
     }
 
+    //printf("( "); //dbg
     uint32_t read_interval_sum = 0U; //TODO support less than 32-bit systems
-    int difference = (int)(tag.read_times[0]) - (int)(tag.read_times[iMax - 1]);
+    int difference = ((int)(tag.read_times[0])) - ((int)(tag.read_times[iMax - 1]));
     if (difference > 0) {
         read_interval_sum += difference;
+        //printf("%u-%u=%d ", tag.read_times[0], tag.read_times[iMax - 1], difference); //dbg
     }
-    for (uint32_t i = 0; i < iMax; i++) {
-        difference = (int)(tag.read_times[i + 1]) - (int)(tag.read_times[i]);
+    for (uint32_t i = 0; i < iMax - 1; i++) {
+        difference = ((int)(tag.read_times[i + 1])) - ((int)(tag.read_times[i]));
         if (difference > 0) { // TODO optimize using modulo instead of this condition in loop
             read_interval_sum += difference;
+            //printf("%u-%u=%d ", tag.read_times[i + 1], tag.read_times[i], difference); //dbg
         }
     }
+    //printf(")\n");
     
 
     //printf("rssi_sum: %d, iMax: %d, read_interval_sum: %lu\n", rssi_sum, iMax, read_interval_sum);

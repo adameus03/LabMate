@@ -7,7 +7,16 @@
 #include <ptypes.h>
 #include "uhfman.h"
 
-void main_uhfman_poll_handler() {
+void main_uhfman_poll_handler(uint16_t handle) {
+    uhfman_tag_t tag = uhfman_tag_get(handle);
+    fprintf(stdout, "Tag %u, EPC: ", tag.handle);
+    for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
+        fprintf(stdout, "%02X ", tag.epc[j]);
+    }
+    fprintf(stdout, "\n");
+    return;
+
+
     uhfman_tag_t* pTags = NULL;
     uint32_t nTags = 0;
     uhfman_list_tags(&pTags, &nTags);

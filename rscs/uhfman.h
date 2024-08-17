@@ -160,15 +160,17 @@ uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx);
 
 //TODO add & implement more functions
 
+//----------------------------------------------
+
 //TODO adjust UHFMAN_TAG_PERIOD_NREADS
-#define UHFMAN_TAG_PERIOD_NREADS 40
+#define UHFMAN_TAG_PERIOD_NREADS /*40*/ /*5*/ /*10*/ 2
 // TODO Make UHFMAN_MAX_NUM_TAGS dynamic in the future (replace with dynamic mem allocation)
 #define UHFMAN_MAX_NUM_TAGS 500 
 typedef struct {
     uint16_t handle;
     uint8_t epc[YPDR200_X22_NTF_PARAM_EPC_LENGTH];
     uint32_t num_reads;
-    unsigned long read_times[UHFMAN_TAG_PERIOD_NREADS];
+    uint32_t read_times[UHFMAN_TAG_PERIOD_NREADS];
     uint8_t rssi[UHFMAN_TAG_PERIOD_NREADS];
 } uhfman_tag_t;
 
@@ -180,7 +182,7 @@ typedef struct {
 void uhfman_list_tags(uhfman_tag_t** ppTags, uint32_t* pnTags_out);
 
 typedef void (*uhfman_tag_handler_t)(uhfman_tag_t tag);
-typedef void (*uhfman_poll_handler_t)(void);
+typedef void (*uhfman_poll_handler_t)(uint16_t handle);
 void uhfman_set_new_tag_event_handler(uhfman_tag_handler_t handler);
 
 void uhfman_unset_new_tag_event_handler();
