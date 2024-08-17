@@ -921,6 +921,7 @@ int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_
         return YPDR200_X0C_ERR_SEND_COMMAND;
     }
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0C, pReqParam->hdr.maskLen + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pRawFrameOut);
+    free(pRawFrameOut);
     int err = ypdr200_frame_send(&frameOut, pCtx);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X0C_ERR_SEND_COMMAND;
@@ -1246,6 +1247,7 @@ int ypdr200_x49(uhfman_ctx_t* pCtx, ypdr200_x49_req_param_t param, ypdr200_x49_r
     }
     uint16_t reqDl = ypdr200_x49_req_param_get_dl(&param);
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X49, YPDR200_X49_REQ_PARAM_HDR_SIZE + reqDl, pRawFrameOut);
+    free(pRawFrameOut);
     int err = ypdr200_frame_send(&frameOut, pCtx);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X49_ERR_SEND_COMMAND;
