@@ -132,6 +132,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X39 = 0x39,
     YPDR200_FRAME_CMD_X49 = 0x49,
     YPDR200_FRAME_CMD_XAA = 0xaa,
+    YPDR200_FRAME_CMD_XB6 = 0xb6,
     YPDR200_FRAME_CMD_XB7 = 0xb7,
     YPDR200_FRAME_CMD_XF1 = 0xf1,
     YPDR200_FRAME_CMD_XF2 = 0xf2,
@@ -650,6 +651,45 @@ int ypdr200_x08(uhfman_ctx_t* pCtx, ypdr200_x08_region_t* pRegion_out, ypdr200_r
     return YPDR200_X08_ERR_SUCCESS;
 }
 
+int ypdr200_xb6(uhfman_ctx_t* pCtx, uint16_t txPower, ypdr200_resp_err_code_t* pRespErrCode) {
+    uint8_t txPowerMsb = (uint8_t)(txPower >> 8);
+    uint8_t txPowerLsb = (uint8_t)(txPower & 0xFF);
+    uint8_t paramData[2] = {txPowerMsb, txPowerLsb};
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_XB6, 2U, paramData);
+
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    // No need to call ypdr200_frame_dispose, as paramData is allocated statically
+
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_XB6_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_XB6, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_XB6_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_XB6_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != 1) {
+        LOG_W("Unexpected param data length: expected=1, actual=%d", paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_XB6_ERR_READ_RESPONSE;
+    }
+
+    if (frameIn.pParamData[0] != 0U) {
+        LOG_W("Unexpected 0xb6 command response data: %02x. We were expecting 0x00 for success.", frameIn.pParamData[0]);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_XB6_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+    return YPDR200_XB6_ERR_SUCCESS;
+}
+
 int ypdr200_xb7(uhfman_ctx_t* pCtx, uint16_t* pTxPower_out, ypdr200_resp_err_code_t* pRespErrCode) {
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_XB7, 0U, NULL);
     int err = ypdr200_frame_send(&frameOut, pCtx);
@@ -874,7 +914,7 @@ int ypdr200_x12(uhfman_ctx_t* pCtx, uint8_t mode, ypdr200_resp_err_code_t* pResp
     }
 
     if (frameIn.pParamData[0] != 0U) {
-        LOG_W("Unexpected 0x12 command response data: %02x. We were expecting 0x00 for success.");
+        LOG_W("Unexpected 0x12 command response data: %02x. We were expecting 0x00 for success.", frameIn.pParamData[0]);
         ypdr200_frame_dispose(&frameIn);
         return YPDR200_X12_ERR_READ_RESPONSE;
     }

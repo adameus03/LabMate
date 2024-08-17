@@ -135,6 +135,18 @@ int main() {
         fprintf(stdout, "uhfman_get_work_area returned successfully\n");
     }
 
+
+    fprintf(stdout, "!!! Calling uhfman_set_transmit_power !!!\n");
+    err = uhfman_set_transmit_power(&uhfmanCtx, 15.0f);
+    if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_set_transmit_power returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_set_transmit_power returned successfully\n");
+    }
+
+
     fprintf(stdout, "Calling uhfman_dbg_get_transmit_power\n");
     err = uhfman_dbg_get_transmit_power(&uhfmanCtx);
     if (err != UHFMAN_GET_TRANSMIT_POWER_ERR_SUCCESS) {

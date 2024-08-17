@@ -528,7 +528,8 @@ uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_xb7(pCtx, &powerLevel, &rerr);
     switch (rv) {
         case YPDR200_XB7_ERR_SUCCESS:
-            LOG_I("Transmit power level: 0x%02X", powerLevel);
+            float dbm = ((float)powerLevel) / 100.0f;
+            LOG_I("Transmit power level: 0x%02X (%2.2f dBm)", powerLevel, dbm);
             return UHFMAN_GET_TRANSMIT_POWER_ERR_SUCCESS;
         case YPDR200_XB7_ERR_SEND_COMMAND:
             return UHFMAN_GET_TRANSMIT_POWER_ERR_SEND_COMMAND;
@@ -543,6 +544,31 @@ uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
     }
     #else
     return UHFMAN_GET_TRANSMIT_POWER_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_set_transmit_power(uhfman_ctx_t* pCtx, float txPower) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    uint16_t powerLevel = (uint16_t)(txPower * 100.0f);
+    int rv = ypdr200_xb6(pCtx, powerLevel, &rerr);
+    switch (rv) {
+        case YPDR200_XB6_ERR_SUCCESS:
+            LOG_I("Transmit power level set to: 0x%02X (%2.2f dBm)", powerLevel, txPower);
+            return UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS;
+        case YPDR200_XB6_ERR_SEND_COMMAND:
+            return UHFMAN_SET_TRANSMIT_POWER_ERR_SEND_COMMAND;
+        case YPDR200_XB6_ERR_READ_RESPONSE:
+            return UHFMAN_SET_TRANSMIT_POWER_ERR_READ_RESPONSE;
+        case YPDR200_XB6_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            return UHFMAN_SET_TRANSMIT_POWER_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_xb6: %d", rv);
+            return UHFMAN_SET_TRANSMIT_POWER_ERR_UNKNOWN;
+    }
+    #else
+    return UHFMAN_SET_TRANSMIT_POWER_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 

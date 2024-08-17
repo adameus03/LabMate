@@ -205,6 +205,16 @@ int ypdr200_x08(uhfman_ctx_t* pCtx, ypdr200_x08_region_t* pRegion_out, ypdr200_r
  */
 int ypdr200_xb7(uhfman_ctx_t* pCtx, uint16_t* pTxPower_out, ypdr200_resp_err_code_t* pRespErrCode);
 
+#define YPDR200_XB6_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_XB6_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_XB6_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_XB6_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Set transmit power
+ * @note Example provided by YPD-R200 technical reference: 2000 coresponds to 20dBm
+ */
+int ypdr200_xb6(uhfman_ctx_t* pCtx, uint16_t txPower, ypdr200_resp_err_code_t* pRespErrCode);
+
 typedef enum {
     YPDR200_XF1_RX_DEMOD_MIXER_G_0DB = 0x00,
     YPDR200_XF1_RX_DEMOD_MIXER_G_3DB = 0x01,
