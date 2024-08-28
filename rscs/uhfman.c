@@ -516,6 +516,44 @@ uint8_t uhfman_select_action(uint8_t uTagMatching, uint8_t uTagNotMatching) {
 //     uhfman_err_t err = uhfman_set_select_param(pCtx,)
 // }
 
+uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mode) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    uint8_t uMode = 0;
+    switch (mode) {
+        case UHFMAN_SELECT_MODE_ALWAYS:
+            uMode = YPDR200_X12_MODE_ALWAYS;
+            break;
+        case UHFMAN_SELECT_MODE_NEVER:
+            uMode = YPDR200_X12_MODE_NEVER;
+            break;
+        case UHFMAN_SELECT_MODE_RWLK:
+            uMode = YPDR200_X12_MODE_RWLK;
+            break;
+        default:
+            LOG_W("Unsupported select mode: %d", mode);
+            return UHFMAN_SET_SELECT_MODE_ERR_NOT_SUPPORTED;
+    }
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x12(pCtx, uMode, &rerr);
+    switch (rv) {
+        case YPDR200_X0E_ERR_SUCCESS:
+            return UHFMAN_SET_SELECT_MODE_ERR_SUCCESS;
+        case YPDR200_X0E_ERR_SEND_COMMAND:
+            return UHFMAN_SET_SELECT_MODE_ERR_SEND_COMMAND;
+        case YPDR200_X0E_ERR_READ_RESPONSE:
+            return UHFMAN_SET_SELECT_MODE_ERR_READ_RESPONSE;
+        case YPDR200_X0E_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            return UHFMAN_SET_SELECT_MODE_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_x12: %d", rv);
+            return UHFMAN_SET_SELECT_MODE_ERR_UNKNOWN;
+    }
+    #else
+    return UHFMAN_SET_SELECT_MODE_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
 uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;

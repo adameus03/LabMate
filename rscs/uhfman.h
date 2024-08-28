@@ -134,6 +134,28 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
 // 
 // uhfman_err_t uhfman_set_select_param_by_epc_code(uhfman_ctx_t* pCtx, const uint8_t* pEPC, size_t epcLen);
 
+typedef enum {
+    // Before any operation
+    UHFMAN_SELECT_MODE_ALWAYS = 0x00,
+    // Never
+    UHFMAN_SELECT_MODE_NEVER = 0x01,
+    // Before read, write, lock, kill operations
+    UHFMAN_SELECT_MODE_RWLK = 0x02
+} uhfman_select_mode_t;
+
+#define UHFMAN_SET_SELECT_MODE_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_SET_SELECT_MODE_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define UHFMAN_SET_SELECT_MODE_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define UHFMAN_SET_SELECT_MODE_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+#define UHFMAN_SET_SELECT_MODE_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN_DEVICE_MODEL
+#define UHFMAN_SET_SELECT_MODE_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define UHFMAN_SET_SELECT_MODE_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+/**
+ * @brief Set Select mode
+ * @param mode Determines when the Select command will be issued by the interrogator
+ */
+uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mode);
+
 #define UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_GET_QUERY_PARAMS_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
 #define UHFMAN_GET_QUERY_PARAMS_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
