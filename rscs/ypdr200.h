@@ -322,6 +322,13 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
 */
 int ypdr200_x28(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode);
 
+// Send the Select command to select a specific label before all operations on the label
+#define YPDR200_X12_MODE_ALWAYS 0x00
+// The Select command is not sent before the label operation
+#define YPDR200_X12_MODE_NEVER 0x01
+// Send the Select command before the tag operation other than polling inventory, and select specific tags through Select before reading, write, lock, and kill
+#define YPDR200_X12_MODE_RWLK 0x02
+
 #define YPDR200_X12_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define YPDR200_X12_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
 #define YPDR200_X12_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE

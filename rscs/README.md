@@ -17,3 +17,6 @@ The project is currently aimed at handling the YPD-R200 module only.
 
 ### Enable libusb-cmake debug logging
 You can do it by setting option `-DLIBUSB_ENABLE_DEBUG_LOGGING=ON` with cmake
+
+## Generate documentation
+To generate the documentation with Doxygen, run `doxygen` in the RSCS project directory.
