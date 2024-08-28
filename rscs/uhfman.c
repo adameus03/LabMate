@@ -424,8 +424,9 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
     switch (rv) {
         case YPDR200_X0B_ERR_SUCCESS:
             LOG_I_TBC("Select parameter: target=0x%02X, action=0x%02X, memBank=0x%02X, ptr=0x%02X%02X%02X%02X, maskLen=%d, truncate=%d Mask=[", respParam.hdr.target, respParam.hdr.action, respParam.hdr.memBank, respParam.hdr.ptr[0], respParam.hdr.ptr[1], respParam.hdr.ptr[2], respParam.hdr.ptr[3], respParam.hdr.maskLen, respParam.hdr.truncate);
-            for (int i = 0; i < respParam.hdr.maskLen; i++) {
-                LOG_I_CTBC("%02X", respParam.pMask[i]);
+            uint8_t mask_nbytes = (respParam.hdr.maskLen + 7) >> 3;
+            for (int i = 0; i < mask_nbytes; i++) {
+                LOG_I_CTBC("%02X ", respParam.pMask[i]);
             }
             LOG_I_CFIN("]");
             ypdr200_x0b_resp_param_dispose(&respParam);

@@ -542,8 +542,13 @@ int ypdr200_x0b(uhfman_ctx_t* pCtx, ypdr200_x0b_resp_param_t* pRespParam_out, yp
 
     ypdr200_x0b_resp_param_t respParam = {};
     ypdr200_x0b_resp_param_set_hdr_from_raw(frameIn.pParamData, &respParam);
-    if (respParam.hdr.maskLen + YPDR200_X0B_RESP_PARAM_HDR_SIZE != paramInLen) {
-        LOG_W("Unexpected mask length: expected=%d, actual=%d", respParam.hdr.maskLen, paramInLen - YPDR200_X0B_RESP_PARAM_HDR_SIZE);
+    uint8_t mask_nbytes = respParam.hdr.maskLen >> 3;
+    if (respParam.hdr.maskLen & 0x07) {
+        mask_nbytes++;
+        LOG_W("Received mask length is not a multiple of 8: maskLen=%d. Rounding mask_nbytes up to %d", respParam.hdr.maskLen, mask_nbytes);
+    }
+    if (mask_nbytes + YPDR200_X0B_RESP_PARAM_HDR_SIZE != paramInLen) {
+        LOG_W("Unexpected mask length: expected mask_nbytes=%d (respParam.hdr.maskLen=%d), actual=%d", mask_nbytes, respParam.hdr.maskLen, paramInLen - YPDR200_X0B_RESP_PARAM_HDR_SIZE);
         ypdr200_frame_dispose(&frameIn);
         return YPDR200_X03_ERR_READ_RESPONSE;
     }
@@ -942,13 +947,17 @@ void ypdr200_x0c_req_param_dispose(ypdr200_x0c_req_param_t* pReqParam) {
  * @note The caller is responsible for freeing the allocated memory block at *ppRaw_out
  */
 static int ypdr200_x0c_req_param_raw(ypdr200_x0c_req_param_t* pReqParam, uint8_t** ppRaw_out) {
-    *ppRaw_out = (uint8_t*) malloc(pReqParam->hdr.maskLen + YPDR200_X0C_REQ_PARAM_HDR_SIZE);
+    uint8_t mask_nbytes = pReqParam->hdr.maskLen >> 3;
+    if (pReqParam->hdr.maskLen & 0x07) {
+        mask_nbytes++;
+    }
+    *ppRaw_out = (uint8_t*) malloc(mask_nbytes + YPDR200_X0C_REQ_PARAM_HDR_SIZE);
     if (*ppRaw_out == (uint8_t*)0) {
         errno = ENOMEM;
         return -1;
     }
     memcpy(*ppRaw_out, pReqParam->hdr.raw, YPDR200_X0C_REQ_PARAM_HDR_SIZE);
-    memcpy((*ppRaw_out) + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pReqParam->pMask, pReqParam->hdr.maskLen);
+    memcpy((*ppRaw_out) + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pReqParam->pMask, mask_nbytes);
     return 0;
 }
 
@@ -960,8 +969,13 @@ int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_
         }
         return YPDR200_X0C_ERR_SEND_COMMAND;
     }
-    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0C, pReqParam->hdr.maskLen + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pRawFrameOut);
-    free(pRawFrameOut);
+    uint8_t mask_nbytes = pReqParam->hdr.maskLen >> 3;
+    if (pReqParam->hdr.maskLen & 0x07) {
+        mask_nbytes++;
+        LOG_W("Mask length is not a multiple of 8, rounding up mask_nbytes to %d", mask_nbytes);
+    }
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0C, mask_nbytes + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pRawFrameOut);
+    //free(pRawFrameOut);
     int err = ypdr200_frame_send(&frameOut, pCtx);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X0C_ERR_SEND_COMMAND;

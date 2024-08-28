@@ -5,6 +5,7 @@
 #include <plibsysconfig.h>
 #include <pmacros.h>
 #include <ptypes.h>
+#include <assert.h>
 #include "uhfman.h"
 
 void main_uhfman_poll_handler(uint16_t handle) {
@@ -95,6 +96,28 @@ int main() {
         fprintf(stdout, "Manufacturer: %s\n", manufacturer);
     }
 
+    fprintf(stdout, "Calling uhfman_set_select_param\n");
+    uint8_t target = UHFMAN_SELECT_TARGET_SL;
+    uint8_t action = uhfman_select_action(UHFMAN_SEL_SL_ASSERT, UHFMAN_SEL_SL_DEASSERT);
+    assert(action != UHFMAN_SELECT_ACTION_INVALID);
+    printf("Select action = 0x%02X\n", action);
+    uint8_t memBank = UHFMAN_SELECT_MEMBANK_EPC;
+    uint32_t ptr = 0x20;
+    uint8_t maskLen = 0x60;
+    uint8_t truncate = UHFMAN_SELECT_TRUNCATION_DISABLED;
+    const uint8_t mask[12] = {
+        0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
+    };
+
+    err = uhfman_set_select_param(&uhfmanCtx, target, action, memBank, ptr, maskLen, truncate, mask);
+    if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_set_select_param returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_set_select_param returned successfully\n");
+    }
+
     fprintf(stdout, "Calling uhfman_get_select_param\n");
     err = uhfman_dbg_get_select_param(&uhfmanCtx);
     if (err != UHFMAN_GET_SELECT_PARAM_ERR_SUCCESS) {
@@ -104,6 +127,7 @@ int main() {
     } else {
         fprintf(stdout, "uhfman_get_select_param returned successfully\n");
     }
+    //exit(0);
 
     fprintf(stdout, "Calling uhfman_dbg_get_query_params\n");
     err = uhfman_dbg_get_query_params(&uhfmanCtx);
@@ -165,6 +189,16 @@ int main() {
         //return 1;
     } else {
         fprintf(stdout, "uhfman_get_demod_params returned successfully\n");
+    }
+
+    fprintf(stdout, "Calling uhfman_set_select_mode\n");
+    err = uhfman_set_select_mode(&uhfmanCtx, UHFMAN_SELECT_MODE_ALWAYS);
+    if (err != UHFMAN_SET_SELECT_MODE_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_set_select_mode returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_set_select_mode returned successfully\n");
     }
 
     // fprintf(stdout, "Calling uhfman_dbg_single_polling\n");
