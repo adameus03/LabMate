@@ -4,6 +4,7 @@ set(CMAKE_C_STANDARD 11)
 set(BUILD_SHARED_LIBS OFF)
 
 set(CMAKE_BUILD_TYPE Debug) # For debugging
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #option(LITTLE_ENDIAN "Little endian" ON)
 include (TestBigEndian)

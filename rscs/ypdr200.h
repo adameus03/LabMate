@@ -369,7 +369,7 @@ typedef union {
 #else
 #error "Neither TARGET_LITTLE_ENDIAN nor TARGET_BIG_ENDIAN is defined"
 #endif
-    }; //TODO: prevent code editors from confusingly falling back to the #error directive and red-underlining those lines
+    };
     uint16_t raw;
 } __attribute__((__packed__)) ypdr200_jmdr_hdr_t;
 

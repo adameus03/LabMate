@@ -1,3 +1,4 @@
 build/
 build-windows/
 build-rpi/
+.vscode/
