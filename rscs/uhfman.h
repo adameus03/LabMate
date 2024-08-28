@@ -168,6 +168,41 @@ uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mod
  */
 uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx);
 
+typedef enum {
+    UHFMAN_QUERY_SEL_ALL = 0x00,
+    UHFMAN_QUERY_SEL_ALL1 = 0x01,
+    UHFMAN_QUERY_SEL_NOT_SL = 0x02,
+    UHFMAN_QUERY_SEL_SL = 0x03
+} uhfman_query_sel_t;
+
+typedef enum {
+    UHFMAN_QUERY_SESSION_S0 = 0x00,
+    UHFMAN_QUERY_SESSION_S1 = 0x01,
+    UHFMAN_QUERY_SESSION_S2 = 0x02,
+    UHFMAN_QUERY_SESSION_S3 = 0x03
+} uhfman_query_session_t;
+
+typedef enum {
+    UHFMAN_QUERY_TARGET_A = 0x00,
+    UHFMAN_QUERY_TARGET_B = 0x01
+} uhfman_query_target_t;
+
+#define UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_SET_QUERY_PARAMS_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define UHFMAN_SET_QUERY_PARAMS_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define UHFMAN_SET_QUERY_PARAMS_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+#define UHFMAN_SET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN_DEVICE_MODEL
+#define UHFMAN_SET_QUERY_PARAMS_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define UHFMAN_SET_QUERY_PARAMS_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+/**
+ * @brief Set Query Parameters
+ * @param sel Selects which tags are to respond to the Query command
+ * @param session Chooses the session for the inventory round
+ * @param target selects whether Tags whose inventoried flag is A or B participate in the inventory round
+ * @param q sets the number of slots in the round for the slot counter algorithm
+ */
+uhfman_err_t uhfman_set_query_params(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel, uhfman_query_session_t session, uhfman_query_target_t target, uint8_t q);
+
 #define UHFMAN_GET_WORKING_CHANNEL_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_GET_WORKING_CHANNEL_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
 #define UHFMAN_GET_WORKING_CHANNEL_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE

@@ -129,6 +129,16 @@ int main() {
     }
     //exit(0);
 
+    fprintf(stdout, "!!! Calling uhfman_set_query_params !!!\n");
+    err = uhfman_set_query_params(&uhfmanCtx, UHFMAN_QUERY_SEL_SL, UHFMAN_QUERY_SESSION_S0, UHFMAN_QUERY_TARGET_A, 0x04);
+    if (err != UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_set_query_params returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_set_query_params returned successfully\n");
+    }
+
     fprintf(stdout, "Calling uhfman_dbg_get_query_params\n");
     err = uhfman_dbg_get_query_params(&uhfmanCtx);
     if (err != UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS) {

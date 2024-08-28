@@ -580,6 +580,70 @@ uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+uhfman_err_t uhfman_set_query_params(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel, uhfman_query_session_t session, uhfman_query_target_t target, uint8_t q) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_x0e_req_param_t reqParam = {
+        .dr = 0x00, // DR=8
+        .m = 0x00, // M=1
+        .trext = 0x01, // Use pilot tone
+        .q = q,
+        .reserved = 0x00
+    };
+    switch (sel) {
+        case UHFMAN_QUERY_SEL_ALL:
+            reqParam.sel = 0x00;
+            break;
+        case UHFMAN_QUERY_SEL_ALL1:
+            reqParam.sel = 0x01;
+            break;
+        case UHFMAN_QUERY_SEL_NOT_SL:
+            reqParam.sel = 0x02;
+            break;
+        case UHFMAN_QUERY_SEL_SL:
+            reqParam.sel = 0x03;
+            break;
+        default:
+            LOG_W("Unsupported query sel field value: %d", sel);
+            return UHFMAN_SET_QUERY_PARAMS_ERR_NOT_SUPPORTED;
+    }
+    switch (session) {
+        case UHFMAN_QUERY_SESSION_S0:
+            reqParam.session = 0x00;
+            break;
+        case UHFMAN_QUERY_SESSION_S1:
+            reqParam.session = 0x01;
+            break;
+        case UHFMAN_QUERY_SESSION_S2:
+            reqParam.session = 0x02;
+            break;
+        case UHFMAN_QUERY_SESSION_S3:
+            reqParam.session = 0x03;
+            break;
+        default:
+            LOG_W("Unsupported query session field value: %d", session);
+            return UHFMAN_SET_QUERY_PARAMS_ERR_NOT_SUPPORTED;
+    }
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x0e(pCtx, reqParam, &rerr);
+    switch (rv) {
+        case YPDR200_X0E_ERR_SUCCESS:
+            return UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS;
+        case YPDR200_X0E_ERR_SEND_COMMAND:
+            return UHFMAN_SET_QUERY_PARAMS_ERR_SEND_COMMAND;
+        case YPDR200_X0E_ERR_READ_RESPONSE:
+            return UHFMAN_SET_QUERY_PARAMS_ERR_READ_RESPONSE;
+        case YPDR200_X0E_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            return UHFMAN_SET_QUERY_PARAMS_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_x0e: %d", rv);
+            return UHFMAN_SET_QUERY_PARAMS_ERR_UNKNOWN;
+    }
+    #else
+    return UHFMAN_SET_QUERY_PARAMS_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
 uhfman_err_t uhfman_dbg_get_working_channel(uhfman_ctx_t* pCtx) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
