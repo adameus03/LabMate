@@ -446,6 +446,76 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx, 
+                                     uint8_t target, 
+                                     uint8_t action, 
+                                     uint8_t memBank, 
+                                     uint32_t ptr, 
+                                     uint8_t maskLen, 
+                                     uint8_t truncate, 
+                                     const uint8_t* pMask) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_x0c_req_param_t reqParam = {
+        .hdr = {
+            .target = target,
+            .action = action,
+            .memBank = memBank,
+            .ptr = {
+                (ptr >> 24) & 0xFF,
+                (ptr >> 16) & 0xFF,
+                (ptr >> 8) & 0xFF,
+                ptr & 0xFF
+            },
+            .maskLen = maskLen,
+            .truncate = truncate
+        },
+        .pMask = (uint8_t*)pMask
+    };
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x0c(pCtx, &reqParam, &rerr);
+    switch (rv) {
+        case YPDR200_X0C_ERR_SUCCESS:
+            return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
+        case YPDR200_X0C_ERR_SEND_COMMAND:
+            return UHFMAN_SET_SELECT_PARAM_ERR_SEND_COMMAND;
+        case YPDR200_X0C_ERR_READ_RESPONSE:
+            return UHFMAN_SET_SELECT_PARAM_ERR_READ_RESPONSE;
+        case YPDR200_X0C_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            return UHFMAN_SET_SELECT_PARAM_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_x0c: %d", rv);
+            return UHFMAN_SET_SELECT_PARAM_ERR_UNKNOWN;
+    }
+    #else
+    return UHFMAN_SET_SELECT_PARAM_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uint8_t uhfman_select_action(uint8_t uTagMatching, uint8_t uTagNotMatching) {
+    /*
+        a b | r      a b  | r
+        0 1 | 000    0001 | 000
+        0 3 | 001    0011 | 001
+        3 1 | 010    1101 | 010
+        2 3 | 011    1011 | 011
+        1 0 | 100    0100 | 100
+        1 3 | 101    0111 | 101
+        3 0 | 110    1100 | 110
+        3 2 | 111    1110 | 111
+    */
+    static const uint8_t uActionLUT[16] = {
+        0xFF, 0x00, 0xFF, 0x01, 0x04, 0xFF, 0xFF, 0x05,
+        0xFF, 0xFF, 0xFF, 0x03, 0x06, 0x02, 0x07, 0xFF
+    };
+    return uActionLUT[(uTagMatching << 2) | uTagNotMatching];
+}
+
+// uhfman_err_t uhfman_set_select_param_by_epc_code(uhfman_ctx_t* pCtx, const uint8_t* pEPC, size_t epcLen) {
+//     uint8_t target = 
+//     uhfman_err_t err = uhfman_set_select_param(pCtx,)
+// }
+
 uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;

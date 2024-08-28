@@ -74,6 +74,66 @@ uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_
  */
 uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx);
 
+#define UHFMAN_SELECT_TARGET_S0 0x00
+#define UHFMAN_SELECT_TARGET_S1 0x01
+#define UHFMAN_SELECT_TARGET_S2 0x02
+#define UHFMAN_SELECT_TARGET_S3 0x03
+#define UHFMAN_SELECT_TARGET_SL 0x04
+#define UHFMAN_SELECT_TARGET_RFU0 0x05
+#define UHFMAN_SELECT_TARGET_RFU1 0x06
+#define UHFMAN_SELECT_TARGET_RFU2 0x07
+
+#define UHFMAN_SEL_SL_ASSERT 0
+#define UHFMAN_SEL_SL_DEASSERT 1
+#define UHFMAN_SEL_SL_NEGATE 2
+#define UHFMAN_SEL_NOP 3
+#define UHFMAN_SEL_INVEN_A 0
+#define UHFMAN_SEL_INVEN_B 1
+#define UHFMAN_SEL_INVEN_TOGGLE 2
+
+#define UHFMAN_SELECT_ACTION_INVALID 0xFF
+
+uint8_t uhfman_select_action(uint8_t uTagMatching, uint8_t uTagNotMatching);
+
+#define UHFMAN_SELECT_MEMBANK_FILETYPE 0x00
+#define UHFMAN_SELECT_MEMBANK_EPC 0x01
+#define UHFMAN_SELECT_MEMBANK_TID 0x02
+#define UHFMAN_SELECT_MEMBANK_FILE_0 0x03
+
+#define UHFMAN_SELECT_TRUNCATION_DISABLED 0x00
+#define UHFMAN_SELECT_TRUNCATION_ENABLED 0x01
+
+#define UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_SET_SELECT_PARAM_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define UHFMAN_SET_SELECT_PARAM_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define UHFMAN_SET_SELECT_PARAM_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+#define UHFMAN_SET_SELECT_PARAM_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN_DEVICE_MODEL
+#define UHFMAN_SET_SELECT_PARAM_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define UHFMAN_SET_SELECT_PARAM_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+/**
+ * @brief Set Select parameter
+ */
+uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx, 
+                                     uint8_t target, 
+                                     uint8_t action, 
+                                     uint8_t memBank, 
+                                     uint32_t ptr, 
+                                     uint8_t maskLen, 
+                                     uint8_t truncate, 
+                                     const uint8_t* pMask);
+
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+// #define UHFMAN_SET_SELECT_PARAM_BY_EPC_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+// 
+// @brief Set Select parameter (using EPC)
+// 
+// uhfman_err_t uhfman_set_select_param_by_epc_code(uhfman_ctx_t* pCtx, const uint8_t* pEPC, size_t epcLen);
+
 #define UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_GET_QUERY_PARAMS_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
 #define UHFMAN_GET_QUERY_PARAMS_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
