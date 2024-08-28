@@ -465,17 +465,17 @@ int ypdr200_x39(uhfman_ctx_t* pCtx, ypdr200_x39_req_param_t param, ypdr200_x39_r
 #define YPDR200_X49_REQ_PARAM_HDR_SIZE 9
 typedef union {
     struct {
-        uint8_t ap[4];
-        uint8_t memBank;
-        uint8_t sa[2];
-        uint8_t dl[2];
+        uint8_t ap[4]; // access password (MSB first)
+        uint8_t memBank; // 0,1,2 or 3
+        uint8_t sa[2]; // write offset (MSB first)
+        uint8_t dl[2]; // number of 16-bit words to write (MSB first). No more than 32 words.
     };
     uint8_t raw[YPDR200_X49_REQ_PARAM_HDR_SIZE];
 } __attribute__((__packed__)) ypdr200_x49_req_param_hdr_t;
 
 typedef struct {
     ypdr200_x49_req_param_hdr_t hdr;
-    uint8_t* pDt;
+    uint8_t* pDt; // data buffer to be copied to the tag memory (MSB first)
 } ypdr200_x49_req_param_t;
 
 /**

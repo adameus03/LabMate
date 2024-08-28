@@ -975,8 +975,9 @@ int ypdr200_x0c(uhfman_ctx_t* pCtx, ypdr200_x0c_req_param_t* pReqParam, ypdr200_
         LOG_W("Mask length is not a multiple of 8, rounding up mask_nbytes to %d", mask_nbytes);
     }
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X0C, mask_nbytes + YPDR200_X0C_REQ_PARAM_HDR_SIZE, pRawFrameOut);
-    //free(pRawFrameOut);
+    
     int err = ypdr200_frame_send(&frameOut, pCtx);
+    free(pRawFrameOut);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X0C_ERR_SEND_COMMAND;
     }
