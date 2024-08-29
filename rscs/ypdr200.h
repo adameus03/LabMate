@@ -467,7 +467,7 @@ typedef union {
     struct {
         uint8_t ap[4]; // access password (MSB first)
         uint8_t memBank; // 0,1,2 or 3
-        uint8_t sa[2]; // write offset (MSB first)
+        uint8_t sa[2]; // write offset (MSB first). The offset is the number of 16-bit words from the beginning of the memory bank address space
         uint8_t dl[2]; // number of 16-bit words to write (MSB first). No more than 32 words.
     };
     uint8_t raw[YPDR200_X49_REQ_PARAM_HDR_SIZE];
@@ -481,7 +481,7 @@ typedef struct {
 /**
  * @note ap needs to be supplied MSB first
  */
-ypdr200_x49_req_param_hdr_t ypdr200_x49_req_param_hdr_make(uint16_t sa, uint16_t dl, uint8_t memBank, uint8_t ap[4]);
+ypdr200_x49_req_param_hdr_t ypdr200_x49_req_param_hdr_make(uint16_t sa, uint16_t dl, uint8_t memBank, const uint8_t ap[4]);
 
 ypdr200_x49_req_param_t ypdr200_x49_req_param_make(ypdr200_x49_req_param_hdr_t hdr, uint8_t* pDt);
 

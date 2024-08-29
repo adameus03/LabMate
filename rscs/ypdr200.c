@@ -1248,7 +1248,7 @@ int ypdr200_x39(uhfman_ctx_t* pCtx, ypdr200_x39_req_param_t param, ypdr200_x39_r
     return YPDR200_X39_ERR_SUCCESS;
 }
 
-ypdr200_x49_req_param_hdr_t ypdr200_x49_req_param_hdr_make(uint16_t sa, uint16_t dl, uint8_t memBank, uint8_t ap[4]) {
+ypdr200_x49_req_param_hdr_t ypdr200_x49_req_param_hdr_make(uint16_t sa, uint16_t dl, uint8_t memBank, const uint8_t ap[4]) {
     return (ypdr200_x49_req_param_hdr_t) {
         .sa = sa,
         .dl = dl,

@@ -288,6 +288,41 @@ uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx);
 #define UHFMAN_MULTIPLE_POLLING_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
 uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx);
 
+typedef enum {
+    UHFMAN_TAG_MEM_BANK_RESERVED = 0x00,
+    UHFMAN_TAG_MEM_BANK_EPC = 0x01,
+    UHFMAN_TAG_MEM_BANK_TID = 0x02,
+    UHFMAN_TAG_MEM_BANK_USER = 0x03
+} uhfman_tag_mem_bank_t;
+
+#define UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_WRITE_TAG_MEM_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define UHFMAN_WRITE_TAG_MEM_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define UHFMAN_WRITE_TAG_MEM_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+#define UHFMAN_WRITE_TAG_MEM_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN_DEVICE_MODEL
+#define UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define UHFMAN_WRITE_TAG_MEM_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+/**
+ * @brief Write to currently interrogated tag's memory
+ * @param accessPasswd Access password for performing IO on the tag memory
+ * @param memBank Memory bank to write to
+ * @param wordPtr Starting word target address
+ * @param nWords Number of words to write
+ * @param pData Pointer to the data to write
+ * @param pPC_out Pointer to the PC value of the tag which was written to, can be NULL
+ * @param pEPC_out Pointer to the EPC of the tag which was written to, can be NULL
+ * @param pEPC_len_out Pointer to the length of the EPC of the tag which was written to, can be NULL
+ */
+uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx, 
+                                  const uint8_t accessPasswd[4], 
+                                  uhfman_tag_mem_bank_t memBank, 
+                                  uint16_t wordPtr, 
+                                  uint16_t nWords, 
+                                  const uint8_t* pData,
+                                  uint16_t* pPC_out,
+                                  uint8_t* pEPC_out,
+                                  size_t* pEPC_len_out);
+
 //TODO add & implement more functions
 
 //----------------------------------------------

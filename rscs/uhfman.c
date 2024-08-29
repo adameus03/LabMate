@@ -971,3 +971,72 @@ uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx) {
     return UHFMAN_DBG_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
+
+#define __UHFMAN_TAG_PC_LENGTH 2
+// @[N_267abdf1] This may need to be loosened in the future version
+#define __UHFMAN_TAG_EPC_LENGTH 12
+
+uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx, 
+                                  const uint8_t accessPasswd[4], 
+                                  uhfman_tag_mem_bank_t memBank, 
+                                  uint16_t wordPtr, 
+                                  uint16_t nWords, 
+                                  const uint8_t* pData,
+                                  uint16_t* pPC_out,
+                                  uint8_t* pEPC_out,
+                                  size_t* pEPC_len_out) {
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    //use constructing functions to create a ypdr200_x49_req_param_t instance
+    uint8_t uMemBank = 0xFF;
+    switch (memBank) {
+        case UHFMAN_TAG_MEM_BANK_RESERVED:
+            uMemBank = 0x00;
+            break;
+        case UHFMAN_TAG_MEM_BANK_EPC:
+            uMemBank = 0x01;
+            break;
+        case UHFMAN_TAG_MEM_BANK_TID:
+            uMemBank = 0x02;
+            break;
+        case UHFMAN_TAG_MEM_BANK_USER:
+            uMemBank = 0x03;
+            break;
+        default:
+            LOG_W("Unsupported memory bank: %d", memBank);
+            return UHFMAN_WRITE_TAG_MEM_ERR_NOT_SUPPORTED;
+    }
+    assert(uMemBank != 0xFF); //defensive
+    ypdr200_x49_req_param_hdr_t reqParamHdr = ypdr200_x49_req_param_hdr_make(wordPtr, nWords, uMemBank, accessPasswd);
+    ypdr200_x49_req_param_t reqParam = ypdr200_x49_req_param_make(reqParamHdr, (uint8_t*)pData); 
+
+    ypdr200_resp_err_code_t rerr = 0;
+    ypdr200_x49_resp_param_t respParam = {};
+    int rv = ypdr200_x49(pCtx, reqParam, &respParam, &rerr);
+    switch (rv) {
+        case YPDR200_X49_ERR_SUCCESS:
+            assert(respParam.ul == __UHFMAN_TAG_EPC_LENGTH + __UHFMAN_TAG_PC_LENGTH); //defensive + see @[N_267abdf1]
+            if (pPC_out != NULL) {
+                *pPC_out = ((uint16_t)(respParam.pc[0]) << 8) | (uint16_t)(respParam.pc[1]);
+            }
+            if (pEPC_out != NULL) {
+                memcpy(pEPC_out, respParam.epc, __UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+            }
+            if (pEPC_len_out != NULL) {
+                *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
+            }
+            return UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS;
+        case YPDR200_X49_ERR_SEND_COMMAND:
+            return UHFMAN_WRITE_TAG_MEM_ERR_SEND_COMMAND;
+        case YPDR200_X49_ERR_READ_RESPONSE:
+            return UHFMAN_WRITE_TAG_MEM_ERR_READ_RESPONSE;
+        case YPDR200_X49_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            return UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_x49: %d", rv);
+            return UHFMAN_WRITE_TAG_MEM_ERR_UNKNOWN;
+    }    
+    #else
+    return UHFMAN_WRITE_TAG_MEM_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200   
+}
