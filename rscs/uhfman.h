@@ -295,6 +295,22 @@ typedef enum {
     UHFMAN_TAG_MEM_BANK_USER = 0x03
 } uhfman_tag_mem_bank_t;
 
+#define UHFMAN_TAG_EPC_STANDARD_LENGTH 12
+
+#define UHFMAN_TAG_MEM_RESERVED_WORD_PTR_KILL_PASSWD 0x0
+#define UHFMAN_TAG_MEM_RESERVED_WORD_PTR_ACCESS_PASSWD 0x2
+#define UHFMAN_TAG_MEM_EPC_WORD_PTR_STORED_PC 0x1
+#define UHFMAN_TAG_MEM_EPC_WORD_PTR_EPC 0x2
+
+#define UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_KILL_PASSWD 0x2
+#define UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_ACCESS_PASSWD 0x2
+#define UHFMAN_TAG_MEM_EPC_WORD_COUNT_STORED_PC 0x1
+#define UHFMAN_TAG_MEM_EPC_WORD_COUNT_EPC 0x6
+
+#define UHFMAN_TAG_ERR_SUCCESS 0x00
+#define UHFMAN_TAG_ERR_ACCESS_DENIED 0x16
+#define UHFMAN_TAG_ERR_UNKNOWN 0xFF
+
 #define UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_WRITE_TAG_MEM_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
 #define UHFMAN_WRITE_TAG_MEM_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
@@ -310,8 +326,9 @@ typedef enum {
  * @param nWords Number of words to write
  * @param pData Pointer to the data to write
  * @param pPC_out Pointer to the PC value of the tag which was written to, can be NULL
- * @param pEPC_out Pointer to the EPC of the tag which was written to, can be NULL
+ * @param ppEPC_out Pointer to the address where to store the EPC of the tag which was written to, can be NULL. If not NULL, the caller is responsible for freeing the memory allocated for the EPC by this function
  * @param pEPC_len_out Pointer to the length of the EPC of the tag which was written to, can be NULL
+ * @param pRespErrCode_out Address where to store error code read from error response frame, can be NULL
  */
 uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx, 
                                   const uint8_t accessPasswd[4], 
@@ -320,8 +337,9 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
                                   uint16_t nWords, 
                                   const uint8_t* pData,
                                   uint16_t* pPC_out,
-                                  uint8_t* pEPC_out,
-                                  size_t* pEPC_len_out);
+                                  uint8_t** ppEPC_out,
+                                  size_t* pEPC_len_out,
+                                  uint8_t* pRespErrCode_out);
 
 //TODO add & implement more functions
 

@@ -974,7 +974,7 @@ uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx) {
 
 #define __UHFMAN_TAG_PC_LENGTH 2
 // @[N_267abdf1] This may need to be loosened in the future version
-#define __UHFMAN_TAG_EPC_LENGTH 12
+#define __UHFMAN_TAG_EPC_LENGTH UHFMAN_TAG_EPC_STANDARD_LENGTH
 
 uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx, 
                                   const uint8_t accessPasswd[4], 
@@ -983,9 +983,18 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
                                   uint16_t nWords, 
                                   const uint8_t* pData,
                                   uint16_t* pPC_out,
-                                  uint8_t* pEPC_out,
-                                  size_t* pEPC_len_out) {
+                                  uint8_t** ppEPC_out,
+                                  size_t* pEPC_len_out,
+                                  uint8_t* pRespErrCode_out) {
+    if (pRespErrCode_out != NULL) {
+        *pRespErrCode_out = 0U; // assume success frame err code until we receive an error response frame with an error code (we do not won't garbage value in here)
+    }
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    if (accessPasswd[0] == 0 && accessPasswd[1] == 0 && accessPasswd[2] == 0 && accessPasswd[3] == 0) {
+        //LOG_W("Access password is all zeros, which is not allowed");
+        //return UHFMAN_WRITE_TAG_MEM_ERR_NOT_SUPPORTED;
+        LOG_W("Access password is all zeros");
+    }
     //use constructing functions to create a ypdr200_x49_req_param_t instance
     uint8_t uMemBank = 0xFF;
     switch (memBank) {
@@ -1011,6 +1020,11 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
 
     ypdr200_resp_err_code_t rerr = 0;
     ypdr200_x49_resp_param_t respParam = {};
+    LOG_I_TBC("Writing to tag memory: accessPasswd=[ %02X %02X %02X %02X ], memBank=0x%02X, wordPtr=0x%04X, nWords=0x%04X, data=[ ", accessPasswd[0], accessPasswd[1], accessPasswd[2], accessPasswd[3], uMemBank, wordPtr, nWords);
+    for (int i = 0; i < (nWords << 1); i++) {
+        LOG_I_CTBC("%02X ", pData[i]);
+    }
+    LOG_I_CFIN("]");
     int rv = ypdr200_x49(pCtx, reqParam, &respParam, &rerr);
     switch (rv) {
         case YPDR200_X49_ERR_SUCCESS:
@@ -1018,8 +1032,9 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
             if (pPC_out != NULL) {
                 *pPC_out = ((uint16_t)(respParam.pc[0]) << 8) | (uint16_t)(respParam.pc[1]);
             }
-            if (pEPC_out != NULL) {
-                memcpy(pEPC_out, respParam.epc, __UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+            if (ppEPC_out != NULL) {
+                *ppEPC_out = (uint8_t*) malloc(__UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+                memcpy(*ppEPC_out, respParam.epc, __UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
             }
             if (pEPC_len_out != NULL) {
                 *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
@@ -1031,6 +1046,26 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
             return UHFMAN_WRITE_TAG_MEM_ERR_READ_RESPONSE;
         case YPDR200_X49_ERR_ERROR_RESPONSE:
             LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            if (pPC_out != NULL) {
+                *pPC_out = ((uint16_t)(respParam.pc[0]) << 8) | (uint16_t)(respParam.pc[1]);
+            }
+            if (ppEPC_out != NULL) {
+                *ppEPC_out = (uint8_t*) malloc(__UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+                memcpy(*ppEPC_out, respParam.epc, __UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+            }
+            if (pEPC_len_out != NULL) {
+                *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
+            }
+            if (pRespErrCode_out != NULL) {
+                switch (rerr) {
+                    case YPDR200_RESP_ERR_CODE_ACCESS_FAIL:
+                        *pRespErrCode_out = UHFMAN_TAG_ERR_ACCESS_DENIED;
+                        break;
+                    default:
+                        *pRespErrCode_out = UHFMAN_TAG_ERR_UNKNOWN;
+                        break;
+                }
+            }
             return UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE;
         default:
             LOG_W("Unknown error from ypdr200_x49: %d", rv);
