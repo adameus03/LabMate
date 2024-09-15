@@ -1,516 +1,286 @@
+#define FUSE_USE_VERSION 30
+#define _FILE_OFFSET_BITS  64
+
+#include <fuse.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <time.h>
+#include <string.h>
 #include <stdlib.h>
-#include "plibsys.h"
-#include <psocket.h>
-#include <plibsysconfig.h>
-#include <pmacros.h>
-#include <ptypes.h>
+#include <plibsys.h>
+#include <stdlib.h>
+#include <regex.h>
 #include <assert.h>
-#include "uhfman.h"
+#include "log.h"
+#include "uhfd.h"
 
-void main_uhfman_poll_handler(uint16_t handle) {
-    uhfman_tag_t tag = uhfman_tag_get(handle);
-    fprintf(stdout, "Tag %u, EPC: ", tag.handle);
-    for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
-        fprintf(stdout, "%02X ", tag.epc[j]);
-    }
-    fprintf(stdout, "\n");
-    return;
+typedef struct {
+	struct {
+		regex_t _uhfd_result_m_sid_fin; // /uhfd/result/$sid/fin
+		regex_t _m_uhfx_epc; // /uhfX/epc
+		regex_t _m_uhfx_access_passwd; // /uhfX/access_passwd
+		regex_t _m_uhfx_kill_passwd; // /uhfX/kill_passwd
+		regex_t _m_uhfx_flags; // /uhfX/flags
+		regex_t _m_uhfx_rssi; // /uhfX/rssi
+		regex_t _m_uhfx_read_rate; // /uhfX/read_rate
+		//regex_t _m_uhfx_driver_flags; // /uhfX/driver/flags
+		//regex_t _m_uhfx_driver_request; // /uhfX/driver/request
+		regex_t _m_uhfx_driver_delete; // /uhfX/driver/delete
+		regex_t _m_uhfx_driver_embody; // /uhfX/driver/embody
+		regex_t _m_uhfx_driver_measure; // /uhfX/driver/measure
+		struct {
+			regex_t _m_uhfx; // /uhfX
+			regex_t _m_uhfx_driver; // /uhfX/driver
+			regex_t _uhfd_result_m_sid; // /uhfd/result/$sid
+		} d;
+	} rgx;
+	uhfd_t uhfd;
+} main_globals_t;
+main_globals_t __main_globals;
 
-
-    uhfman_tag_t* pTags = NULL;
-    uint32_t nTags = 0;
-    uhfman_list_tags(&pTags, &nTags);
-    uhfman_tag_stats_t* pStats = (uhfman_tag_stats_t*)malloc(nTags * sizeof(uhfman_tag_stats_t));
-
-    for (uint32_t i = 0; i < nTags; i++) {
-        uhfman_tag_t tag = pTags[i];
-        // fprintf(stdout, "Tag %d: ", i);
-        // for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
-        //     fprintf(stdout, "%02X", tag.epc[j]);
-        // }
-        // fprintf(stdout, "\n");
-        pStats[i] = uhfman_tag_get_stats(tag.handle);
-    }
-
-    for (uint32_t i = 0; i < nTags; i++) {
-        // fprintf(stdout, "Handle %u: , ", pTags[i].handle);
-        // fprintf(stdout, "EPC: ");
-        // for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
-        //     fprintf(stdout, "%02X", pTags[i].epc[j]);
-        // }
-        // fprintf(stdout, ", ");
-        fprintf(stdout, "%4.2f %lu   ", pStats[i].rssi_avg_per_period, pStats[i].read_time_interval_avg_per_period);
-    }
-    fprintf(stdout, "\n");
+static int do_getattr( const char *path, struct stat *st, struct fuse_file_info *fi )
+{
+	printf( "[getattr] Called\n" );
+	printf( "\tAttributes of %s requested\n", path );
+	
+	// GNU's definitions of the attributes (http://www.gnu.org/software/libc/manual/html_node/Attribute-Meanings.html):
+	// 		st_uid: 	The user ID of the file’s owner.
+	//		st_gid: 	The group ID of the file.
+	//		st_atime: 	This is the last access time for the file.
+	//		st_mtime: 	This is the time of the last modification to the contents of the file.
+	//		st_mode: 	Specifies the mode of the file. This includes file type information (see Testing File Type) and the file permission bits (see Permission Bits).
+	//		st_nlink: 	The number of hard links to the file. This count keeps track of how many directories have entries for this file. If the count is ever decremented to zero, then the file itself is discarded as soon 
+	//						as no process still holds it open. Symbolic links are not counted in the total.
+	//		st_size:	This specifies the size of a regular file in bytes. For files that are really devices this field isn’t usually meaningful. For symbolic links this specifies the length of the file name the link refers to.
+	
+	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
+	st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
+	st->st_atime = time( NULL ); // The last "a"ccess of the file/directory is right now
+	st->st_mtime = time( NULL ); // The last "m"odification of the file/directory is right now
+	
+	if ((!strcmp( path, "/"))
+	    || (!strcmp( path, "/uhfd"))
+		|| (0 == regexec( &__main_globals.rgx.d._m_uhfx, path, 0, NULL, 0))
+		|| (0 == regexec( &__main_globals.rgx.d._m_uhfx_driver, path, 0, NULL, 0))
+		|| (0 == regexec( &__main_globals.rgx.d._uhfd_result_m_sid, path, 0, NULL, 0)))
+	{
+		st->st_mode = S_IFDIR | 0755;
+		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
+	}
+	else
+	{
+		st->st_mode = S_IFREG | 0644;
+		st->st_nlink = 1;
+		st->st_size = 1024;
+	}
+	
+	return 0;
 }
 
-int main() {
-    fprintf(stdout, "-------- RSCS --------\n");
-    uhfman_ctx_t uhfmanCtx = {};
-    fprintf(stdout, "Calling uhfman_device_take\n");
-    uhfman_err_t err = uhfman_device_take(&uhfmanCtx);
-    if (err != UHFMAN_TAKE_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "uhfman_device_take returned %d\n", err);
-        return 1;
-    }
-    fprintf(stdout, "uhfman_device_take returned successfully\n");
-
-    fprintf(stdout, "Calling uhfman_get_hardware_version\n");
-    char* hardwareVersion = NULL;
-    err = uhfman_get_hardware_version(&uhfmanCtx, &hardwareVersion);
-    if (err != UHFMAN_GET_HARDWARE_VERSION_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_get_hardware_version returned %d\n", err);
-        //return 1;
-    }
-    if (hardwareVersion == NULL) {
-        fprintf(stderr, "Hardware version is NULL\n");
-    } else {
-        fprintf(stdout, "Hardware version: %s\n", hardwareVersion);
-    }
-
-    fprintf(stdout, "Calling uhfman_get_software_version\n");
-    char* softwareVersion = NULL;
-    err = uhfman_get_software_version(&uhfmanCtx, &softwareVersion);
-    if (err != UHFMAN_GET_SOFTWARE_VERSION_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_get_software_version returned %d\n", err);
-        //return 1;
-    }
-    if (softwareVersion == NULL) {
-        fprintf(stderr, "Software version is NULL\n");
-    } else {
-        fprintf(stdout, "Software version: %s\n", softwareVersion);
-    }
-
-    fprintf(stdout, "Calling uhfman_get_manufacturer\n");
-    char* manufacturer = NULL;
-    err = uhfman_get_manufacturer(&uhfmanCtx, &manufacturer);
-    if (err != UHFMAN_GET_MANUFACTURER_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_get_manufacturer returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "Manufacturer: %s\n", manufacturer);
-    }
-
-    fprintf(stdout, "Calling uhfman_set_select_param\n");
-    uint8_t target = UHFMAN_SELECT_TARGET_SL;
-    uint8_t action = uhfman_select_action(UHFMAN_SEL_SL_ASSERT, UHFMAN_SEL_SL_DEASSERT);
-    assert(action != UHFMAN_SELECT_ACTION_INVALID);
-    printf("Select action = 0x%02X\n", action);
-    uint8_t memBank = UHFMAN_SELECT_MEMBANK_EPC;
-    uint32_t ptr = 0x20;
-    uint8_t maskLen = 0x60;
-    uint8_t truncate = UHFMAN_SELECT_TRUNCATION_DISABLED;
-    const uint8_t mask[12] = {
-        //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
-        //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
-        0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
-    };
-
-    err = uhfman_set_select_param(&uhfmanCtx, target, action, memBank, ptr, maskLen, truncate, mask);
-    if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_set_select_param returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_set_select_param returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_get_select_param\n");
-    err = uhfman_dbg_get_select_param(&uhfmanCtx);
-    if (err != UHFMAN_GET_SELECT_PARAM_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_get_select_param returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_get_select_param returned successfully\n");
-    }
-    //exit(0);
-
-    fprintf(stdout, "!!! Calling uhfman_set_query_params !!!\n");
-    err = uhfman_set_query_params(&uhfmanCtx, UHFMAN_QUERY_SEL_SL, UHFMAN_QUERY_SESSION_S0, UHFMAN_QUERY_TARGET_A, 0x04);
-    if (err != UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_set_query_params returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_set_query_params returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_dbg_get_query_params\n");
-    err = uhfman_dbg_get_query_params(&uhfmanCtx);
-    if (err != UHFMAN_GET_QUERY_PARAMS_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_get_query_params returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_dbg_get_query_params returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_dbg_get_working_channel\n");
-    err = uhfman_dbg_get_working_channel(&uhfmanCtx);
-    if (err != UHFMAN_GET_WORKING_CHANNEL_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_get_working_channel returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_dbg_get_working_channel returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_get_work_area\n");
-    err = uhfman_dbg_get_work_area(&uhfmanCtx);
-    if (err != UHFMAN_GET_WORK_AREA_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_get_work_area returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_get_work_area returned successfully\n");
-    }
-
-
-    fprintf(stdout, "!!! Calling uhfman_set_transmit_power !!!\n");
-    err = uhfman_set_transmit_power(&uhfmanCtx, 15.0f);
-    if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_set_transmit_power returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_set_transmit_power returned successfully\n");
-    }
-
-
-    fprintf(stdout, "Calling uhfman_dbg_get_transmit_power\n");
-    err = uhfman_dbg_get_transmit_power(&uhfmanCtx);
-    if (err != UHFMAN_GET_TRANSMIT_POWER_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_get_transmit_power returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_dbg_get_transmit_power returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_get_demod_params\n");
-    err = uhfman_dbg_get_demod_params(&uhfmanCtx);
-    if (err != UHFMAN_GET_DEMOD_PARAMS_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_get_demod_params returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_get_demod_params returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_set_select_mode\n");
-    err = uhfman_set_select_mode(&uhfmanCtx, UHFMAN_SELECT_MODE_ALWAYS);
-    if (err != UHFMAN_SET_SELECT_MODE_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_set_select_mode returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_set_select_mode returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_write_tag_mem\n");
-    const uint8_t access_password[4] = {
-        0x00, 0x00, 0x00, 0x00
-    };
-    uhfman_tag_mem_bank_t mem_bank = UHFMAN_TAG_MEM_BANK_EPC;
-    uint16_t wordPtr = UHFMAN_TAG_MEM_EPC_WORD_PTR_EPC;
-    uint16_t wordCount = UHFMAN_TAG_MEM_EPC_WORD_COUNT_EPC;
-    const uint8_t epc[12] = {
-        //0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
-        //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
-        0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
-    };
-    uint16_t pc = 0xFFFF;
-    uint8_t* pEPC = NULL;
-    size_t epc_len = 0;
-    uint8_t resp_err = 0;
-    err = uhfman_write_tag_mem(&uhfmanCtx, access_password, mem_bank, wordPtr, wordCount, epc, &pc, &pEPC, &epc_len, &resp_err);
-    if (err != UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS) {
-        if (err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE) {
-            if (resp_err == UHFMAN_TAG_ERR_ACCESS_DENIED) {
-                //P_ERROR("Error response obtained from tag");
-                P_ERROR("Access denied error when trying to write tag's memory (most probably the provided access password was invalid)");
-                fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
-                fprintf(stdout, "EPC: ");
-                for (size_t i = 0; i < epc_len; i++) {
-                    fprintf(stdout, "%02X ", pEPC[i]);
-                }
-                fprintf(stdout, "\n");
-                free (pEPC);
-            }
-        } else {
-            P_ERROR("USB related error"); // TODO improve those error messages, theses are not always really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
-        }
-        fprintf(stderr, "ERROR (ignoring): uhfman_write_tag_mem returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
-        fprintf(stdout, "EPC: ");
-        for (size_t i = 0; i < epc_len; i++) {
-            fprintf(stdout, "%02X ", pEPC[i]);
-        }
-        fprintf(stdout, "\n");
-        free (pEPC);
-        fprintf(stdout, "uhfman_write_tag_mem returned successfully\n");
-    }
-    exit(0);
-
-    // fprintf(stdout, "Calling uhfman_dbg_single_polling\n");
-    // err = uhfman_dbg_single_polling(&uhfmanCtx);
-    // if (err != UHFMAN_SINGLE_POLLING_ERR_SUCCESS) {
-    //     P_ERROR("USB related error"); // TODO improve those error messages, theses are not really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
-    //     fprintf(stderr, "ERROR (ignoring): uhfman_dbg_single_polling returned %d\n", err);
-    //     //return 1;
-    // } else {
-    //     fprintf(stdout, "uhfman_dbg_single_polling returned successfully\n");
-    // }
-
-    fprintf(stdout, "Calling uhfman_set_poll_handler\n");
-    ufhman_set_poll_handler(main_uhfman_poll_handler);
-
-    fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
-    err = uhfman_dbg_multiple_polling(&uhfmanCtx);
-    if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_dbg_multiple_polling returned successfully\n");
-    }
-
-    fprintf(stdout, "Calling uhfman_device_release\n");
-    uhfman_device_release(&uhfmanCtx);
-    fprintf(stdout, "uhfman_device_release returned\n");
-
-    return 0;
+static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags )
+{
+	printf( "--> Getting The List of Files of %s\n", path );
+	filler( buffer, ".", NULL, 0, 0 ); // Current Directory
+	filler( buffer, "..", NULL, 0, 0 ); // Parent Directory
+	
+	if (!strcmp( path, "/" )) // If the user is trying to show the files/directories of the root directory show the following
+	{
+		filler( buffer, "uhfd", NULL, 0, 0 );
+		for (unsigned long i = 0; i < __main_globals.uhfd.num_devs; i++) {
+			uhfd_dev_t* pDev = &__main_globals.uhfd.pDevs[i];
+			if (pDev->flags & UHFD_DEV_FLAG_DELETED) {
+				continue;
+			}
+			char str_dev[25];
+			snprintf(str_dev, sizeof(str_dev), "uhf%lu", pDev->devno);
+			filler ( buffer, str_dev, NULL, 0, 0 );
+		}
+	} else if (!strcmp( path, "/uhfd")) {
+		filler( buffer, "sid", NULL, 0, 0 );
+		filler( buffer, "mkdev", NULL, 0, 0 );
+		filler( buffer, "result", NULL, 0, 0 );
+	} else if (0 == regexec( &__main_globals.rgx.d._m_uhfx, path, 0, NULL, 0)) {
+		filler( buffer, "epc", NULL, 0, 0 );
+		filler( buffer, "access_passwd", NULL, 0, 0 );
+		filler( buffer, "kill_passwd", NULL, 0, 0 );
+		filler( buffer, "flags", NULL, 0, 0 );
+		filler( buffer, "rssi", NULL, 0, 0 );
+		filler( buffer, "read_rate", NULL, 0, 0 );
+		filler( buffer, "driver", NULL, 0, 0 );
+	} else if (0 == regexec( &__main_globals.rgx.d._m_uhfx_driver, path, 0, NULL, 0)) {
+		filler( buffer, "delete", NULL, 0, 0 );
+		filler( buffer, "embody", NULL, 0, 0 );
+		filler( buffer, "measure", NULL, 0, 0 );
+	} else if (0 == regexec( &__main_globals.rgx.d._uhfd_result_m_sid, path, 0, NULL, 0)) {
+		filler( buffer, "value", NULL, 0, 0 );
+		filler( buffer, "fin", NULL, 0, 0 );
+	}
+	
+	return 0;
 }
 
+static int do_read( const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
+{
+	printf( "--> Trying to read %s, %u, %u\n", path, offset, size );
+	
+	regmatch_t matches[2];
 
-// #include <errno.h>
-// #include <signal.h>
-// #include <string.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <stdint.h>
-// #include <unistd.h>
-// #include <sys/select.h>
-// #include <termios.h>
+	if (!strcmp ( path, "/uhfd/sid")) {
+		LOG_E("Read /uhfd/sid: not implemented");
+		return -1;
+	} else if (!strcmp ( path, "/uhfd/mkdev")) {
+		LOG_E("Read /uhfd/mkdev: can't read from mkdev");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_fin, path, 2, matches, 0 )) {
+		LOG_I("sid=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Read /uhfd/result/$sid/fin: can't read from fin");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Read /uhfX/epc: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Read /uhfX/access_passwd: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_kill_passwd, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Read /uhfX/kill_passwd: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_flags, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Read /uhfX/flags: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Read /uhfX/rssi: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_read_rate, path, 2, matches, 0)) {
+		LOG_E("Read /uhfX/read_rate: not implemented");
+		return -1;
+	// } else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_flags, path, 2, matches, 0)) {
+	// 	LOG_I("Read /uhfX/driver/flags");
+	// 	return 0;
+	// } else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_request, path, 2
+	// }
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_delete, path, 2, matches, 0)) {
+		LOG_E("Read /uhfX/driver/delete: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_embody, path, 2, matches, 0)) {
+		LOG_E("Read /uhfX/driver/embody: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0)) {
+		LOG_E("Read /uhfX/driver/measure: not implemented");
+		return -1;
+	} else {
+		LOG_E("Read %s: not supported", path);
+		return -1;
+	}
+}
 
-// #include <libusb.h>
+static int do_write( const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
+{
+	printf( "--> Trying to write %s, %u, %u\n", path, offset, size );
+	
+	regmatch_t matches[2];
 
-// #define EP_DATA_IN        (0x2|LIBUSB_ENDPOINT_IN)
-// #define EP_DATA_OUT       (0x2|LIBUSB_ENDPOINT_OUT)
-// #define CTRL_IN           (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_IN)
-// #define CTRL_OUT          (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT)
-// #define DEFAULT_BAUD_RATE 9600
+	if (!strcmp( path, "/uhfd/sid")) {
+		LOG_E("Write /uhfd/sid: can't write to sid");
+		return -1;
+	}
+	else if (!strcmp( path, "/uhfd/mkdev")) {
+		LOG_E("Write /uhfd/mkdev: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_fin, path, 2, matches, 0 )) {
+		LOG_I("sid=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfd/result/$sid/fin: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/epc: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/access_passwd: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_kill_passwd, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/kill_passwd: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_flags, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/flags: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/rssi: can't write to rssi");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_read_rate, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/read_rate: can't write to read_rate");
+		return -1;
+	// } else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_flags, path, 2, matches, 0)) {
+	// 	LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+	// 	LOG_E("Write /uhfX/driver/flags: not implemented");
+	// 	return -1;
+	// } else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_request, path, 2, matches, 0)) {
+	// 	LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+	// 	LOG_E("Write /uhfX/driver/request: not implemented");
+	// 	return -1;
+	// } else {
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_delete, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/driver/delete: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_embody, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/driver/embody: not implemented");
+		return -1;
+	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0)) {
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		LOG_E("Write /uhfX/driver/measure: not implemented");
+		return -1;
+	} else {
+		LOG_E("Write %s: not supported", path);
+		return -1;
+	}
+	
+	return strlen( buffer );
+}
 
-// static struct libusb_device_handle *devh = NULL;
-// static struct libusb_transfer *recv_bulk_transfer = NULL;
-// uint8_t dtr = 0;
-// uint8_t rts = 0;
-// uint8_t do_exit = 0;
-// uint8_t recvbuf[1024];
+static struct fuse_operations operations = {
+    .getattr	= do_getattr,
+    .readdir	= do_readdir,
+    .read		= do_read,
+};
 
-// void writeHandshakeByte(void) {
-//     if (libusb_control_transfer(devh, CTRL_OUT, 0xa4, ~((dtr ? 1 << 5 : 0) | (rts ? 1 << 6 : 0)), 0, NULL, 0, 1000) < 0) {
-//         fprintf(stderr, "Faild to set handshake byte\n");
-//     }
-// }
+void main_init() {
+	assert(0 == regcomp( &__main_globals.rgx._uhfd_result_m_sid_fin, "^/uhfd/result/([^/]+)/fin$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_epc, "^/uhf([0-9]+)/epc$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_access_passwd, "^/uhf([0-9]+)/access_passwd$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_kill_passwd, "^/uhf([0-9]+)/kill_passwd$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_flags, "^/uhf([0-9]+)/flags$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_rssi, "^/uhf([0-9]+)/rssi$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_read_rate, "^/uhf([0-9]+)/read_rate$", REG_EXTENDED ));
+	//assert(0 == regcomp( &__main_globals._m_uhfx_driver_flags, "^/uhf([0-9]+)/driver/flags$", REG_EXTENDED ));
+	//assert(0 == regcomp( &__main_globals._m_uhfx_driver_request, "^/uhf([0-9]+)/driver/request$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_driver_delete, "^/uhf([0-9]+)/driver/delete$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_driver_embody, "^/uhf([0-9]+)/driver/embody$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx._m_uhfx_driver_measure, "^/uhf([0-9]+)/driver/measure$", REG_EXTENDED ));
 
-// int setBaudRate(int baudRate){
-//     static int baud[] = {2400, 0xd901, 0x0038, 4800, 0x6402,
-//             0x001f, 9600, 0xb202, 0x0013, 19200, 0xd902, 0x000d, 38400,
-//             0x6403, 0x000a, 115200, 0xcc03, 0x0008};
+	assert(0 == regcomp( &__main_globals.rgx.d._m_uhfx, "^/uhf([0-9]+)$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx.d._m_uhfx_driver, "^/uhf([0-9]+)/driver$", REG_EXTENDED ));
+	assert(0 == regcomp( &__main_globals.rgx.d._uhfd_result_m_sid, "^/uhfd/result/([^/]+)$", REG_EXTENDED ));
+}
 
-//     for (int i = 0; i < sizeof(baud)/sizeof(int) / 3; i++) {
-//         if (baud[i * 3] == baudRate) {
-//             int r = libusb_control_transfer(devh, CTRL_OUT, 0x9a, 0x1312, baud[i * 3 + 1], NULL, 0, 1000);
-//             if (r < 0) {
-//                 fprintf(stderr, "failed control transfer 0x9a,0x1312\n");
-//                 return r;
-//             }
-//             r = libusb_control_transfer(devh, CTRL_OUT, 0x9a, 0x0f2c, baud[i * 3 + 2], NULL, 0, 1000);
-//             if (r < 0) {
-//                 fprintf(stderr, "failed control transfer 0x9a,0x0f2c\n");
-//                 return r;
-//             }
-
-//             return 0;
-//         }
-//     }
-//     fprintf(stderr, "unsupported baudrate\n");
-//     return -1;
-// }
-
-// int init_ch34x()
-// {
-//     int r;
-
-//     r = libusb_control_transfer(devh, CTRL_OUT, 0xa1, 0, 0, NULL, 0, 1000);
-//     if (r < 0) {
-//         fprintf(stderr, "failed control transfer 0xa1\n");
-//         return r;
-//     }
-//     r = libusb_control_transfer(devh, CTRL_OUT, 0x9a, 0x2518, 0x0050, NULL, 0, 1000);
-//     if (r < 0) {
-//         fprintf(stderr, "failed control transfer 0x9a,0x2518\n");
-//         return r;
-//     }
-//     r = libusb_control_transfer(devh, CTRL_OUT, 0xa1, 0x501f, 0xd90a, NULL, 0, 1000);
-//     if (r < 0) {
-//         fprintf(stderr, "failed control transfer 0xa1,0x501f\n");
-//         return r;
-//     }
-
-//     setBaudRate(DEFAULT_BAUD_RATE);
-//     writeHandshakeByte();
-
-//     return r;
-// }
-
-// static void LIBUSB_CALL cb_img(struct libusb_transfer *transfer)
-// {
-//     if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
-//         fprintf(stderr, "img transfer status %d?\n", transfer->status);
-//         do_exit = 2;
-//         libusb_free_transfer(transfer);
-//         return;
-//     }
-
-//     // printf("Data callback[");
-//     for (int i = 0; i < transfer->actual_length; ++i)
-//     {
-//         putchar(recvbuf[i]);
-//     }
-//     fflush(stdout);
-//     // printf("]\n");
-
-//     if (libusb_submit_transfer(recv_bulk_transfer) < 0)
-//         do_exit = 2;
-// }
-
-// int send_to_uart(void)
-// {
-//     printf("send_to_uart\n");
-//     int r;
-//     unsigned char sendbuf[1024];
-//     if ((r = read(0, sendbuf, sizeof(sendbuf))) < 0) {
-//         return r;
-//     } else {
-//         int transferred, len = r;
-//         r = libusb_bulk_transfer(devh, EP_DATA_OUT, sendbuf, len, &transferred, 200);
-//         // printf("read[%d]transferred[%d]\n", len, transferred);
-//         if(r < 0){
-//             fprintf(stderr, "libusb_bulk_transfer error %d\n", r);
-//             return r;
-//         }
-//     }
-//     return r;
-// }
-
-// int kbhit()
-// {
-//     printf("in kbhit\n");
-//     struct timeval tv = { 0L, 0L };
-//     fd_set fds;
-//     FD_ZERO(&fds);
-//     FD_SET(0, &fds);
-//     return select(1, &fds, NULL, NULL, &tv);
-// }
-
-// int main(int argc, char **argv)
-// {
-//     int r = 1;
-
-//     r = libusb_init(NULL);
-//     if (r < 0) {
-//         fprintf(stderr, "failed to initialise libusb\n");
-//         exit(1);
-//     }
-
-//     devh = libusb_open_device_with_vid_pid(NULL, 0x1a86, 0x7523);
-//     if (devh == NULL) {
-//         fprintf(stderr, "Could not find/open device\n");
-//         goto out;
-//     }
-
-//     r = libusb_detach_kernel_driver(devh, 0);
-//     if (r < 0) {
-//         fprintf(stderr, "libusb_detach_kernel_driver error %d\n", r);
-//         goto out;
-//     }
-
-//     r = libusb_claim_interface(devh, 0);
-//     if (r < 0) {
-//         fprintf(stderr, "libusb_claim_interface error %d\n", r);
-//         goto out;
-//     }
-//     printf("claimed interface\n");
-
-//     r = init_ch34x();
-//     if (r < 0)
-//         goto out_release;
-
-//     if(argc > 1)
-//         setBaudRate(atoi(argv[1]));
-
-//     printf("initialized\n");
-
-//     recv_bulk_transfer = libusb_alloc_transfer(0);
-//     if (!recv_bulk_transfer){
-//         fprintf(stderr, "libusb_alloc_transfer error\n");
-//         goto out_release;
-//     }
-//     printf("allocated transfer\n");
-
-//     libusb_fill_bulk_transfer(recv_bulk_transfer, devh, EP_DATA_IN, recvbuf,
-//         sizeof(recvbuf), cb_img, NULL, 0);
-//     printf("filled transfer\n");
-
-//     r = libusb_submit_transfer(recv_bulk_transfer);
-//     if (r < 0){
-//         fprintf(stderr, "libusb_submit_transfer error\n");
-//         goto out_deinit;
-//     }
-//     printf("submitted transfer\n");
-
-//     // set_conio_terminal_mode();
-
-//     printf("Looping to handle events\n");
-//     while (!do_exit) {
-//         printf("in while\n");
-//         struct timeval tv = { 0L, 0L };
-//         r = libusb_handle_events_timeout(NULL, &tv);
-//         printf("libusb_handle_events_timeout returned %d\n", r);
-//         if (r < 0) {
-//             printf("Going to out_deinit\n");
-//             goto out_deinit;
-//         }
-//         if(kbhit()){
-//             printf("kbhit\n");
-//             r = send_to_uart();
-//             if (r < 0)
-//                 goto out_deinit;
-//         }
-//     }
-
-//     if (recv_bulk_transfer) {
-//         r = libusb_cancel_transfer(recv_bulk_transfer);
-//         if (r < 0)
-//             goto out_deinit;
-//     }
-
-// out_deinit:
-//     libusb_free_transfer(recv_bulk_transfer);
-// out_release:
-//     libusb_release_interface(devh, 0);
-// out:
-//     libusb_close(devh);
-//     libusb_exit(NULL);
-//     return r >= 0 ? r : -r;
-// }
+int main( int argc, char *argv[] )
+{
+	p_libsys_init();
+	main_init();
+	assert(0 == uhfd_init(&__main_globals.uhfd));
+	fuse_main( argc, argv, &operations, NULL );
+	assert(0 == uhfd_deinit(&__main_globals.uhfd));
+	p_libsys_shutdown();
+	return 0;
+}

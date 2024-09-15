@@ -1,6 +1,6 @@
 /**
  * @file uhfman.h
- * @brief UHF RFID reader/writer manager
+ * @brief UHF RFID reader/writer management
  */
 
 #ifndef UHFMAN_H

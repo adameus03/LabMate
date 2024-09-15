@@ -1,5 +1,6 @@
 #include "utils.h"
 #include <stdio.h> //for debug
+//#include <mtwister.h>
 
 /*
     CRC-16-CCITT from the Linux kernel
@@ -93,3 +94,9 @@ void utils_buf_u8_to_u16_big_endian(uint16_t *dst, const uint8_t *src, size_t u8
         dst[i] = (((uint16_t)src[i*2]) << 8) | (uint16_t)(src[i*2 + 1]);
     }
 }
+
+// void utils_rand_bytes(uint8_t *dst, size_t len) {
+// 	for (size_t i = 0; i < len; i++) {
+// 		dst[i] = (uint8_t)rand();
+// 	}
+// }

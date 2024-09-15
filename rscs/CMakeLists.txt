@@ -20,19 +20,30 @@ else()
     add_definitions(-DTARGET_LITTLE_ENDIAN) # For little endian
 endif()
 
+# Find FUSE
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FUSE REQUIRED fuse3)
+
+message(STATUS "FUSE version is: ${FUSE_VERSION}")
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/plibsys)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libusb-cmake)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/plibsys/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libusb-cmake/libusb/libusb)
+# Add FUSE include directories
+include_directories(${FUSE_INCLUDE_DIRS})
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/uhfman.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ypdr200.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ch340.c
     ${CMAKE_CURRENT_SOURCE_DIR}/utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mtwister.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/uhfd.c
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys usb-1.0)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${FUSE_LIBRARIES})
 
 # include(ExternalProject)
 # ExternalProject_Add(
