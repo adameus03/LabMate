@@ -23,6 +23,8 @@ int uhfd_init(uhfd_t* pUHFD_out) {
     pUHFD_out->num_devs = 0;
     pUHFD_out->pCreateDevMutex =  p_mutex_new();
     assert(pUHFD_out->pCreateDevMutex != NULL); 
+    pUHFD_out->pDevRWLock = p_rwlock_new();
+    assert(pUHFD_out->pDevRWLock != NULL);
     pUHFD_out->uhfmanCtx = (uhfman_ctx_t){0};
     uhfman_err_t err = uhfman_device_take(&pUHFD_out->uhfmanCtx);
     if (err != UHFMAN_TAKE_ERR_SUCCESS) {
@@ -82,6 +84,31 @@ int uhfd_create_dev(uhfd_t* pUHFD, unsigned long* pDevNum_out) {
     }
 }
 
+// @dev consider refactoring to uhfd_dev_get_atomic - would require changing other function names as well
+int uhfd_atomic_get_dev(uhfd_t* pUHFD, unsigned long devno, uhfd_dev_t* pDev_out) {
+    assert(TRUE == p_rwlock_reader_lock(pUHFD->pDevRWLock));
+    if (devno < pUHFD->num_devs) {
+        *pDev_out = pUHFD->pDevs[devno];
+        assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDevRWLock));
+        return 0;
+    } else {
+        assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDevRWLock));
+        return -1;
+    }
+}
+
+int uhfd_atomic_get_dev_flags(uhfd_t* pUHFD, unsigned long devno, uint8_t* pFlags_out) {
+    assert(TRUE == p_rwlock_reader_lock(pUHFD->pDevRWLock));
+    if (devno < pUHFD->num_devs) {
+        *pFlags_out = pUHFD->pDevs[devno].flags;
+        assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDevRWLock));
+        return 0;
+    } else {
+        assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDevRWLock));
+        return -1;
+    }
+}
+
 //should we even bother to kill the tag? (it may not be neccessary!)
 int uhfd_delete_dev(uhfd_t* pUHFD, uhfd_dev_t* pDev, uint8_t flags) {
     // Set the 'deleted' flag for simplest solution
@@ -107,13 +134,14 @@ int uhfd_deinit(uhfd_t* pUHFD) {
     pUHFD->num_devs = 0;
     pUHFD->num_devs_flex_max = 0;
     pUHFD->state_flags &= ~(uint8_t)UHFD_STATE_FLAG_INITIALIZED;
-    p_mutex_free(pUHFD->pInitDeinitMutex);
     p_mutex_free(pUHFD->pCreateDevMutex);
+    p_rwlock_free(pUHFD->pDevRWLock);
     uhfman_device_release(&pUHFD->uhfmanCtx);
     if (errno != 0) {
         LOG_E("uhfd_deinit: uhfman_device_release failed, errno=%d", errno);
         return -1;
     }
     assert(TRUE == p_mutex_unlock(pUHFD->pInitDeinitMutex));
+    p_mutex_free(pUHFD->pInitDeinitMutex);
     return 0;
 }

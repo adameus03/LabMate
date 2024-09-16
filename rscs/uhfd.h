@@ -87,6 +87,7 @@ typedef struct {
     uhfd_dev_t* pDevs;
     PMutex* pInitDeinitMutex;
     PMutex* pCreateDevMutex;
+    PRWLock* pDevRWLock;
     uhfman_ctx_t uhfmanCtx;
 } uhfd_t;
 
@@ -94,6 +95,10 @@ int uhfd_init(uhfd_t* pUHFD_out);
 
 //int uhfd_create_dev(uhfd_t* pUHFD, uhfd_dev_t* pDev_out);
 int uhfd_create_dev(uhfd_t* pUHFD, unsigned long* pDevNum_out);
+
+int uhfd_atomic_get_dev(uhfd_t* pUHFD, unsigned long devno, uhfd_dev_t* pDev_out);
+
+int uhfd_atomic_get_dev_flags(uhfd_t* pUHFD, unsigned long devno, uint8_t* pFlags_out);
 
 //should we even bother to kill the tag? (it may not be neccessary!)
 /* 1 indicates that the underlying tag should be killed */

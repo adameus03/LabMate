@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(rcsc)
+project(rscs)
 set(CMAKE_C_STANDARD 11)
 set(BUILD_SHARED_LIBS OFF)
 
