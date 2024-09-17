@@ -1,3 +1,17 @@
+/*
+    bash/client software --- database
+         |
+    (filesystem)
+         |
+       main (FUSE)
+         |
+       uhfd
+        |
+      uhfman
+        |
+     ypdr200 <<< we are here
+*/
+
 #ifndef YPDR200_H
 #define YPDR200_H
 

@@ -3,6 +3,20 @@
  * @brief UHF RFID reader/writer management
  */
 
+/*
+    bash/client software --- database
+         |
+    (filesystem)
+         |
+       main (FUSE)
+         |
+       uhfd
+        |
+      uhfman <<< we are here
+        |
+     ypdr200
+*/
+
 #ifndef UHFMAN_H
 #define UHFMAN_H
 

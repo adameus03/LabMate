@@ -1,3 +1,17 @@
+/*
+    bash/client software --- database
+         |
+    (filesystem)
+         |
+       main (FUSE) <<< we are here
+         |
+       uhfd (UHF RFID tag devs driver)
+        |
+      uhfman (abstracted management for interrogator device)
+        |
+     ypdr200 (specific interrogator device driver)
+*/
+
 #define FUSE_USE_VERSION 30
 #define _FILE_OFFSET_BITS  64
 
@@ -17,6 +31,8 @@
 
 // #define __SID_CONTAINER_INITIAL_SIZE 16
 // #define __SID_CONTAINER_SCALING_FACTOR 1.5
+
+#define MAIN_SIDVAL_RINGBUF_SZ 100
 
 typedef struct {
 	struct { // Regular expressions
@@ -41,12 +57,18 @@ typedef struct {
 	} rgx; // Regular expressions
 	struct { // Locks
 		PMutex* pSess_counter_mtx; // Mutex for sess_counter
+		PMutex* pSidval_ringbuf_mtx; // Mutex for sidval_ringbuf
 	} l; // Locks
 	uhfd_t uhfd;
 	// unsigned long sid_container_size;
 	// unsigned long sid_container_size_flex_max;
 	// unsigned long* pSid_container;
-	unsigned long sess_counter; // Counter enabling simple sid generation when reading /uhfd/sid and writing /uhfd/mkdev
+	unsigned long sess_counter; // Please use pSess_counter_mtx when accessing. Counter enabling simple sid generation when reading /uhfd/sid and writing /uhfd/mkdev
+	struct {
+		unsigned long sid;
+		unsigned long value;
+	} sidval_ringbuf[MAIN_SIDVAL_RINGBUF_SZ];
+	unsigned long sidval_ringbuf_head;
 } main_globals_t;
 main_globals_t __main_globals;
 
@@ -71,6 +93,56 @@ static int main_ulong_from_path_regmatch(const char* path, regmatch_t* pRegmatch
 		return -1;
 	}
 	*pUlong_out = u;
+	return 0;
+}
+
+static int main_ulong_from_mkdev_buffer(const char* buffer, size_t size, unsigned long* pUlong_out) {
+	char* __endp = NULL;
+	unsigned long u = strtoul(buffer, &__endp, 10);
+	assert(__endp != NULL);
+	if (__endp <= buffer) { // Don't allow empty strings or strings like "w"
+		return -1;
+	}
+	if ((buffer[0] == '-') || (buffer[0] == '+')) { // Don't allow strings like +234 or -19
+		return -1;
+	}
+	if (__endp > (buffer + 1)) { // Don't allow strings like 0123
+		if (buffer[0] == '0') { 
+			return -1;
+		}
+	}
+	if (__endp < (buffer + size)) { // Don't allow strings like 123w
+		return -1;
+	}
+	*pUlong_out = u;
+	return 0;
+}
+
+static void main_sidval_ringbuf_push(unsigned long sid, unsigned long value) {
+	assert(TRUE == p_mutex_lock(__main_globals.l.pSidval_ringbuf_mtx));
+	__main_globals.sidval_ringbuf[__main_globals.sidval_ringbuf_head].sid = sid;
+	__main_globals.sidval_ringbuf[__main_globals.sidval_ringbuf_head].value = value;
+	__main_globals.sidval_ringbuf_head = (__main_globals.sidval_ringbuf_head + 1) % MAIN_SIDVAL_RINGBUF_SZ;
+	assert(TRUE == p_mutex_unlock(__main_globals.l.pSidval_ringbuf_mtx));
+}
+
+// Linear search starting from the head backwards excluding the head (it'll probably usually find the sid quicker than if we used bsearch)
+static int main_sidval_ringbuf_find(unsigned long sid, unsigned long* pValue_out) {
+	assert(TRUE == p_mutex_lock(__main_globals.l.pSidval_ringbuf_mtx));
+	if (__main_globals.sidval_ringbuf_head > 0) {
+		for (unsigned long i = __main_globals.sidval_ringbuf_head - 1; i != __main_globals.sidval_ringbuf_head; i--) { // TODO split into two loops for minor optimization?
+			if (i == (unsigned long)-1) {
+				i = MAIN_SIDVAL_RINGBUF_SZ - 1;
+			}
+			if (__main_globals.sidval_ringbuf[i].sid == sid) {
+				*pValue_out = __main_globals.sidval_ringbuf[i].value;
+				assert(TRUE == p_mutex_unlock(__main_globals.l.pSidval_ringbuf_mtx));
+				return 0;
+			}
+		}		
+	}
+	assert(TRUE == p_mutex_unlock(__main_globals.l.pSidval_ringbuf_mtx));
+	return -1;
 }
 
 static int do_getattr( const char *path, struct stat *st, struct fuse_file_info *fi )
@@ -94,28 +166,39 @@ static int do_getattr( const char *path, struct stat *st, struct fuse_file_info 
 		regmatch_t matches[2];
 		if ((0 == regexec( &__main_globals.rgx.d._m_uhfx, path, 2, matches, 0))
 		|| (0 == regexec( &__main_globals.rgx.d._m_uhfx_driver, path, 2, matches, 0))) {
-			unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+			//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+			//unsigned long num_devs = 0;
+			//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
 			unsigned long devno = (unsigned long)-1;
 			if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
 				LOG_D("getattr: devno is invalid");
 				return -ENOENT;
 			}
 			assert(devno != (unsigned long)-1);
-			if ((devno >= num_devs) || (devno < 0)) {
+			//if ((devno >= num_devs) || (devno < 0)) {
+			//	LOG_D("getattr: devno=%lu out of range", devno);
+			//	return -ENOENT;
+			//} else {
+			uhfd_dev_t dev;
+			int rv = uhfd_get_dev(&__main_globals.uhfd, devno, &dev);
+			if (rv != 0) {
 				LOG_D("getattr: devno=%lu out of range", devno);
 				return -ENOENT;
-			} else {
-				uint8_t flags;
-				assert(0 == uhfd_atomic_get_dev_flags(&__main_globals.uhfd, devno, &flags));
-				if (flags & UHFD_DEV_FLAG_DELETED) {
-					LOG_D("getattr: devno=%lu is deleted", devno);
-					return -ENOENT;
-				} else {
-					ck_flags |= dir_flag;
-				}
 			}
+			uint8_t flags = dev.flags;
+			//assert(0 == uhfd_atomic_get_dev_flags(&__main_globals.uhfd, devno, &flags));
+			if (flags & UHFD_DEV_FLAG_DELETED) {
+				LOG_D("getattr: devno=%lu is deleted", devno);
+				return -ENOENT;
+			} else {
+				ck_flags |= dir_flag;
+			}
+			//}
 		} else if (0 == regexec( &__main_globals.rgx.d._uhfd_result_m_sid, path, 2, matches, 0)) {
-			unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+			assert(TRUE == p_mutex_lock(__main_globals.l.pSess_counter_mtx));
+			//unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+			unsigned long sess_counter = __main_globals.sess_counter;
+			assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
 			//if (matches)
 			unsigned long sid = (unsigned long)-1;
 			if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &sid)) {
@@ -154,7 +237,10 @@ static int do_getattr( const char *path, struct stat *st, struct fuse_file_info 
 			regmatch_t matches[2];
 			if ((0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_value, path, 2, matches, 0))
 			|| (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_fin, path, 2, matches, 0))) {
-				unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+				assert(TRUE == p_mutex_lock(__main_globals.l.pSess_counter_mtx));
+				//unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+				unsigned long sess_counter = __main_globals.sess_counter;
+				assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
 				unsigned long sid = (unsigned long)-1;
 				if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &sid)) {
 					LOG_D("getattr: sid is invalid");
@@ -178,26 +264,33 @@ static int do_getattr( const char *path, struct stat *st, struct fuse_file_info 
 				|| (0 == regexec( &__main_globals.rgx._m_uhfx_driver_delete, path, 2, matches, 0))
 				|| (0 == regexec( &__main_globals.rgx._m_uhfx_driver_embody, path, 2, matches, 0))
 				|| (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0))) {
-				unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+				//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+				//unsigned long num_devs = 0;
+				//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
 				unsigned long devno = (unsigned long)-1;
 				if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
 					LOG_D("getattr: devno is invalid");
 					return -ENOENT;
 				}
 				assert(devno != (unsigned long)-1);
-				if ((devno >= num_devs) || (devno < 0)) {
+				// if ((devno >= num_devs) || (devno < 0)) {
+				// 	LOG_D("getattr: devno=%lu out of range", devno);
+				// 	return -ENOENT;
+				// } else {
+				uhfd_dev_t dev;
+				int rv = uhfd_get_dev(&__main_globals.uhfd, devno, &dev);
+				if (rv != 0) {
 					LOG_D("getattr: devno=%lu out of range", devno);
 					return -ENOENT;
-				} else {
-					uint8_t flags;
-					assert(0 == uhfd_atomic_get_dev_flags(&__main_globals.uhfd, devno, &flags));
-					if (flags & UHFD_DEV_FLAG_DELETED) {
-						LOG_D("getattr: devno=%lu is deleted", devno);
-						return -ENOENT;
-					} else {
-						ck_flags |= file_flag;
-					}
 				}
+				uint8_t flags = dev.flags;
+				if (flags & UHFD_DEV_FLAG_DELETED) {
+					LOG_D("getattr: devno=%lu is deleted", devno);
+					return -ENOENT;
+				} else {
+					ck_flags |= file_flag;
+				}
+				// }
 			}
 		}
 	}
@@ -246,10 +339,12 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 	if (!strcmp( path, "/" )) // If the user is trying to show the files/directories of the root directory show the following
 	{
 		filler( buffer, "uhfd", NULL, 0, 0 );
-		unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+		//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+		unsigned long num_devs = 0;
+		assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs)); //[WARNING] Combine into a single critical section with the below loop? This should be not harmful as long as devices are not actually deleted...
 		for (unsigned long i = 0; i < num_devs; i++) {
 			uhfd_dev_t dev;
-			assert(0 == uhfd_atomic_get_dev(&__main_globals.uhfd, i, &dev));
+			assert(0 == uhfd_get_dev(&__main_globals.uhfd, i, &dev));
 			if (dev.flags & UHFD_DEV_FLAG_DELETED) {
 				continue;
 			}
@@ -261,8 +356,11 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 		filler( buffer, "sid", NULL, 0, 0 );
 		filler( buffer, "mkdev", NULL, 0, 0 );
 		filler( buffer, "result", NULL, 0, 0 );
-	} else if (!strcmp( path, "/uhfd/result")) {
-		unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+	} else if (!strcmp( path, "/uhfd/result")) { // TODO remove sids which are no longer in any of the sidval_ringbuf's entries
+		assert(TRUE == p_mutex_lock(__main_globals.l.pSess_counter_mtx));
+		//unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+		unsigned long sess_counter = __main_globals.sess_counter;
+		assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
 		for (unsigned long i = 0; i < sess_counter; i++) {
 			char str_sid[30];
 			int n = snprintf(str_sid, sizeof(str_sid), "%lu", i);
@@ -270,24 +368,31 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 			filler( buffer, str_sid, NULL, 0, 0 );
 		}
 	} else if (0 == regexec( &__main_globals.rgx.d._m_uhfx, path, 2, matches, 0)) {
-		unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+		//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+		//unsigned long num_devs = 0;
+		//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
 		unsigned long devno = (unsigned long)-1;
 		if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
 			LOG_D("getattr: devno is invalid");
 			return -ENOENT;
 		}
 		assert(devno != (unsigned long)-1);
-		if (devno >= num_devs) {
+		// if (devno >= num_devs) {
+		// 	LOG_D("readdir: devno=%lu out of range", devno);
+		// 	return -ENOENT;
+		// } else {
+		uhfd_dev_t dev;
+		int rv = uhfd_get_dev(&__main_globals.uhfd, devno, &dev);
+		if (rv != 0) {
 			LOG_D("readdir: devno=%lu out of range", devno);
 			return -ENOENT;
-		} else {
-			uint8_t flags;
-			assert(0 == uhfd_atomic_get_dev_flags(&__main_globals.uhfd, devno, &flags));
-			if (flags & UHFD_DEV_FLAG_DELETED) {
-				LOG_D("readdir: devno=%lu is deleted", devno);
-				return -ENOENT;
-			}
 		}
+		uint8_t flags = dev.flags;
+		if (flags & UHFD_DEV_FLAG_DELETED) {
+			LOG_D("readdir: devno=%lu is deleted", devno);
+			return -ENOENT;
+		}
+		// }
 		filler( buffer, "epc", NULL, 0, 0 );
 		filler( buffer, "access_passwd", NULL, 0, 0 );
 		filler( buffer, "kill_passwd", NULL, 0, 0 );
@@ -302,12 +407,22 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 			return -ENOENT;
 		}
 		assert(devno != (unsigned long)-1);
-		unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
-		uint8_t dev_flags = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.pDevs[devno].flags);
-		if ((devno >= num_devs) || (devno < 0)) {
+		//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+		//unsigned long num_devs = 0;
+		//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
+		//uint8_t dev_flags = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.pDevs[devno].flags);
+		uhfd_dev_t dev;
+		int rv = uhfd_get_dev(&__main_globals.uhfd, devno, &dev);
+		if (rv != 0) {
 			LOG_D("readdir: devno=%lu out of range", devno);
 			return -ENOENT;
-		} else if (dev_flags & UHFD_DEV_FLAG_DELETED) {
+		}
+		uint8_t dev_flags = dev.flags;
+		// if ((devno >= num_devs) || (devno < 0)) {
+		// 	LOG_D("readdir: devno=%lu out of range", devno);
+		// 	return -ENOENT;
+		// } else if (dev_flags & UHFD_DEV_FLAG_DELETED) {
+		if (dev_flags & UHFD_DEV_FLAG_DELETED) {
 			LOG_D("readdir: devno=%lu is deleted", devno);
 			return -ENOENT;
 		}
@@ -315,7 +430,10 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 		filler( buffer, "embody", NULL, 0, 0 );
 		filler( buffer, "measure", NULL, 0, 0 );
 	} else if (0 == regexec( &__main_globals.rgx.d._uhfd_result_m_sid, path, 2, matches, 0)) {
-		unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+		assert(TRUE == p_mutex_lock(__main_globals.l.pSess_counter_mtx));
+		//unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+		unsigned long sess_counter = __main_globals.sess_counter;
+		assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
 		unsigned long sid = (unsigned long)-1;
 		if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &sid)) {
 			LOG_D("getattr: sid is invalid");
@@ -347,6 +465,38 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 		fi->fh = __main_globals.sess_counter; // Store the session counter value as session id (sid) in the file handle to easily share it accross partial reads
 		__main_globals.sess_counter++;
 		assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
+	} else {
+		regmatch_t matches[2];
+		if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_value, path, 2, matches, 0 )) { // TODO handle flush?
+			assert(TRUE == p_mutex_lock(__main_globals.l.pSess_counter_mtx));
+			//unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
+			unsigned long sess_counter = __main_globals.sess_counter;
+			assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
+			//if (matches)
+			unsigned long sid = (unsigned long)-1;
+			if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &sid)) {
+				LOG_D("open: sid is invalid");
+				return -ENOENT;
+			}
+			assert(sid != (unsigned long)-1);
+			if ((sid >= sess_counter) || (sid < 0)) {
+				LOG_D("open: sid=%lu out of range", sid);
+				return -ENOENT;
+			} else {
+				if (( fi->flags & 3 ) != O_RDONLY)
+				{
+					return -EACCES;
+				}
+				unsigned long val = (unsigned long)-1;
+				int rv = main_sidval_ringbuf_find(sid, &val);
+				if (rv != 0) {
+					LOG_D("open: sid=%lu not found in sidval_ringbuf", sid);
+					return -EBUSY;
+				}
+				assert(val != (unsigned long)-1);
+				fi->fh = val; // Store val in the file handle to easily share it accross partial reads
+			}
+		}
 	}
 	
 	return 0;
@@ -384,7 +534,19 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_value, path, 2, matches, 0 )) {
 		LOG_I("sid=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Read /uhfd/result/$sid/value: not implemented");
+		unsigned long val = (unsigned long) fi->fh; // see do_open
+		char str_val[30];
+		int n = snprintf(str_val, sizeof(str_val), "%lu", val);
+		assert(n > 0 && n < sizeof(str_val));
+		size_t len = strlen(str_val);
+		if (offset >= len) {
+			return 0;
+		}
+		if (offset + size > len) {
+			size = len - offset;
+		}
+		memcpy(buffer, str_val + offset, size);
+		return size;
 	} else if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_fin, path, 2, matches, 0 )) {
 		LOG_I("sid=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Read /uhfd/result/$sid/fin: can't read from fin");
@@ -443,8 +605,27 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		return -1;
 	}
 	else if (!strcmp( path, "/uhfd/mkdev")) {
-		LOG_E("Write /uhfd/mkdev: not implemented");
-		return -1;
+		unsigned long sid;
+		int rv = main_ulong_from_mkdev_buffer(buffer, size, &sid);
+		if (rv != 0) {
+			LOG_E("Write /uhfd/mkdev: invalid sid");
+			return -EINVAL;
+		}
+		p_mutex_lock(__main_globals.l.pSess_counter_mtx);
+		if (sid >= __main_globals.sess_counter) {
+			LOG_E("Write /uhfd/mkdev: sid=%lu is invalid (sess_counter=%lu)", sid, __main_globals.sess_counter);
+			p_mutex_unlock(__main_globals.l.pSess_counter_mtx);
+			return -EINVAL;
+		}
+		p_mutex_unlock(__main_globals.l.pSess_counter_mtx);
+		unsigned long devnum = (unsigned long)-1;
+		rv = uhfd_create_dev(&__main_globals.uhfd, &devnum);
+		if ((rv != 0) || (devnum == (unsigned long)-1)) {
+			LOG_E("Write /uhfd/mkdev: failed to create device");
+			return -EAGAIN;
+		}
+		main_sidval_ringbuf_push(sid, devnum);
+		return size;
 	} else if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_value, path, 2, matches, 0 )) {
 		LOG_I("sid=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Write /uhfd/result/$sid/value: can't write to value");
@@ -536,6 +717,7 @@ void main_init() {
 
 	// Locking init
 	assert(NULL != (__main_globals.l.pSess_counter_mtx = p_mutex_new()));
+	assert(NULL != (__main_globals.l.pSidval_ringbuf_mtx = p_mutex_new()));
 
 	__main_globals.sess_counter = 0;
 }
@@ -543,6 +725,7 @@ void main_init() {
 void main_deinit() {
 	// Locking deinit
 	p_mutex_free(__main_globals.l.pSess_counter_mtx);
+	p_mutex_free(__main_globals.l.pSidval_ringbuf_mtx);
 
 	// Regex deinit
 	regfree( &__main_globals.rgx._uhfd_result_m_sid_value );
