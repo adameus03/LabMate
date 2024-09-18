@@ -118,6 +118,14 @@ static int main_ulong_from_mkdev_buffer(const char* buffer, size_t size, unsigne
 	return 0;
 }
 
+static void main_sidval_ringbuf_init() {
+	__main_globals.sidval_ringbuf_head = 0;
+	for (unsigned long i = 0; i < MAIN_SIDVAL_RINGBUF_SZ; i++) {
+		__main_globals.sidval_ringbuf[i].sid = (unsigned long)-1;
+		__main_globals.sidval_ringbuf[i].value = (unsigned long)-1;
+	}
+}
+
 static void main_sidval_ringbuf_push(unsigned long sid, unsigned long value) {
 	assert(TRUE == p_mutex_lock(__main_globals.l.pSidval_ringbuf_mtx));
 	__main_globals.sidval_ringbuf[__main_globals.sidval_ringbuf_head].sid = sid;
@@ -143,6 +151,38 @@ static int main_sidval_ringbuf_find(unsigned long sid, unsigned long* pValue_out
 	}
 	assert(TRUE == p_mutex_unlock(__main_globals.l.pSidval_ringbuf_mtx));
 	return -1;
+}
+
+static int main_u8buf_from_hex(const char* hex, size_t hex_len, uint8_t* buf, size_t buf_len) {
+	if (hex_len % 2 != 0) {
+		return -1;
+	}
+	if (hex_len / 2 != buf_len) {
+		return -1;
+	}
+	for (size_t i = 0; i < hex_len; i += 2) {
+		char hex_byte[3];
+		hex_byte[0] = hex[i];
+		hex_byte[1] = hex[i + 1];
+		hex_byte[2] = '\0';
+		char* endptr = NULL;
+		unsigned long byte = strtoul(hex_byte, &endptr, 16);
+		if (endptr != hex_byte + 2) {
+			return -1;
+		}
+		buf[i / 2] = (uint8_t)byte;
+	}
+	return 0;
+}
+
+static int main_hex_from_u8buf(const uint8_t* buf, size_t buf_len, char* hex, size_t hex_len) {
+	if (hex_len < (buf_len * 2 + 1)) {
+		return -1;
+	}
+	for (size_t i = 0; i < buf_len; i++) {
+		snprintf(hex + i * 2, 3, "%02x", buf[i]);
+	}
+	return 0;
 }
 
 static int do_getattr( const char *path, struct stat *st, struct fuse_file_info *fi )
@@ -496,6 +536,35 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 				assert(val != (unsigned long)-1);
 				fi->fh = val; // Store val in the file handle to easily share it accross partial reads
 			}
+		} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
+			if (( fi->flags & 3 ) != O_RDONLY)
+			{
+				return -EACCES;
+			}
+			//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+			//unsigned long num_devs = 0;
+			//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
+			unsigned long devno = (unsigned long)-1;
+			if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
+				LOG_D("open: devno is invalid");
+				return -ENOENT;
+			}
+			assert(devno != (unsigned long)-1);
+			uhfd_dev_t* pDevCopy = (uhfd_dev_t*)malloc(sizeof(uhfd_dev_t));
+			int rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
+			if (rv != 0) {
+				LOG_D("open: devno=%lu out of range", devno);
+				return -ENOENT;
+			}
+			uint8_t flags = pDevCopy->flags;
+			if (flags & UHFD_DEV_FLAG_DELETED) {
+				LOG_D("open: devno=%lu is deleted", devno);
+				return -ENOENT;
+			}
+			//fi->fh = devno; // Store devno in the file handle to easily share it accross partial reads of epc
+			assert(sizeof(fi->fh) == sizeof(uhfd_dev_t*)); // Ensure that the file handle is large enough to store the pointer
+			assert(sizeof(unsigned long) == sizeof(uhfd_dev_t*));
+			fi->fh = (unsigned long)pDevCopy;
 		}
 	}
 	
@@ -505,7 +574,29 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 static int do_flush( const char* path, struct fuse_file_info* fi )
 {
 	printf( "--> Trying to flush %s\n", path );
-	// Nothing to do for now, may change in the future
+	// When dev copy is stored under fi->fh, it should be freed here
+
+	regmatch_t matches[2];
+	if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
+		if (( fi->flags & 3 ) != O_RDONLY)
+		{
+			return -EACCES;
+		}
+		//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
+		//unsigned long num_devs = 0;
+		//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
+		unsigned long devno = (unsigned long)-1;
+		if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
+			LOG_D("flush: devno is invalid");
+			return -ENOENT;
+		}
+		assert(devno != (unsigned long)-1);
+		uhfd_dev_t* pDevCopy = (uhfd_dev_t*)fi->fh;
+		assert(pDevCopy != NULL);
+		free(pDevCopy);
+		fi->fh = 0U;
+	}
+
 	return 0;
 }
 
@@ -553,8 +644,23 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Read /uhfX/epc: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		size_t hexbuf_len = sizeof(pd->epc) * 2 + 1;
+		char* hexbuf = (char*)malloc(hexbuf_len);
+		assert(0 == main_hex_from_u8buf((const uint8_t*)pd->epc, sizeof(pd->epc), hexbuf, hexbuf_len));
+		size_t len = strlen(hexbuf);
+		assert(len == hexbuf_len - 1);
+		if (offset >= len) {
+			free(hexbuf);
+			return 0;
+		}
+		if (offset + size > len) {
+			size = len - offset;
+		}
+		memcpy(buffer, hexbuf + offset, size);
+		free(hexbuf);
+		return size;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Read /uhfX/access_passwd: not implemented");
@@ -605,6 +711,10 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		return -1;
 	}
 	else if (!strcmp( path, "/uhfd/mkdev")) {
+		if (offset != 0) { // We don't support partial writes for simplicity
+			LOG_E("Write /uhfd/mkdev: offset=%lu is invalid", offset);
+			return -ESPIPE;
+		}
 		unsigned long sid;
 		int rv = main_ulong_from_mkdev_buffer(buffer, size, &sid);
 		if (rv != 0) {
@@ -718,6 +828,8 @@ void main_init() {
 	// Locking init
 	assert(NULL != (__main_globals.l.pSess_counter_mtx = p_mutex_new()));
 	assert(NULL != (__main_globals.l.pSidval_ringbuf_mtx = p_mutex_new()));
+
+	main_sidval_ringbuf_init();
 
 	__main_globals.sess_counter = 0;
 }

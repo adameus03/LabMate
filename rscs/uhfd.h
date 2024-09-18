@@ -74,13 +74,15 @@
 #define UHFD_LOCK_FLAG_DEV_RWLOCK_READ 0x04
 #define UHFD_LOCK_FLAG_DEV_RWLOCK_WRITE 0x08
 
+#define UHFD_EPC_LENGTH UHFMAN_TAG_EPC_STANDARD_LENGTH
+
 typedef struct {
     uint8_t rssi;
     uint8_t read_rate;
 } uhfd_dev_m_t;
 
 typedef struct {
-    uint8_t epc[12];
+    uint8_t epc[UHFD_EPC_LENGTH];
     uint8_t access_passwd[4];
     uint8_t kill_passwd[4];
     uint8_t flags;
