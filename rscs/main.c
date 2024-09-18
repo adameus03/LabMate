@@ -153,6 +153,16 @@ static int main_sidval_ringbuf_find(unsigned long sid, unsigned long* pValue_out
 	return -1;
 }
 
+static int main_check_u8_hex_byte(const char bh0, const char bh1) {
+	if (!((bh0 >= '0' && bh0 <= '9') || (bh0 >= 'a' && bh0 <= 'f') || (bh0 >= 'A' && bh0 <= 'F'))) {
+		return -1;
+	}
+	if (!((bh1 >= '0' && bh1 <= '9') || (bh1 >= 'a' && bh1 <= 'f') || (bh1 >= 'A' && bh1 <= 'F'))) {
+		return -1;
+	}
+	return 0;
+}
+
 static int main_u8buf_from_hex(const char* hex, size_t hex_len, uint8_t* buf, size_t buf_len) {
 	if (hex_len % 2 != 0) {
 		return -1;
@@ -161,6 +171,9 @@ static int main_u8buf_from_hex(const char* hex, size_t hex_len, uint8_t* buf, si
 		return -1;
 	}
 	for (size_t i = 0; i < hex_len; i += 2) {
+		if (0 != main_check_u8_hex_byte(hex[i], hex[i + 1])) { //prevent +, -, etc
+			return -1;
+		}
 		char hex_byte[3];
 		hex_byte[0] = hex[i];
 		hex_byte[1] = hex[i + 1];
@@ -494,6 +507,7 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 static int do_open( const char* path, struct fuse_file_info* fi )
 {
 	printf( "--> Trying to open %s\n", path );
+	fi->keep_cache = 0;
 	
 	if ( strcmp( path, "/uhfd/sid" ) == 0 )
 	{
@@ -507,7 +521,7 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 		assert(TRUE == p_mutex_unlock(__main_globals.l.pSess_counter_mtx));
 	} else {
 		regmatch_t matches[2];
-		if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_value, path, 2, matches, 0 )) { // TODO handle flush?
+		if (0 == regexec( &__main_globals.rgx._uhfd_result_m_sid_value, path, 2, matches, 0 )) { // TODO handle release?
 			assert(TRUE == p_mutex_lock(__main_globals.l.pSess_counter_mtx));
 			//unsigned long sess_counter = (unsigned long)p_atomic_pointer_get(&__main_globals.sess_counter);
 			unsigned long sess_counter = __main_globals.sess_counter;
@@ -537,10 +551,8 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 				fi->fh = val; // Store val in the file handle to easily share it accross partial reads
 			}
 		} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
-			if (( fi->flags & 3 ) != O_RDONLY)
-			{
-				return -EACCES;
-			}
+			// We allow reading as well as writing to the epc file
+
 			//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
 			//unsigned long num_devs = 0;
 			//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
@@ -571,9 +583,9 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 	return 0;
 }
 
-static int do_flush( const char* path, struct fuse_file_info* fi )
+static int do_release( const char* path, struct fuse_file_info* fi )
 {
-	printf( "--> Trying to flush %s\n", path );
+	printf( "--> Trying to release %s\n", path );
 	// When dev copy is stored under fi->fh, it should be freed here
 
 	regmatch_t matches[2];
@@ -587,7 +599,7 @@ static int do_flush( const char* path, struct fuse_file_info* fi )
 		//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
 		unsigned long devno = (unsigned long)-1;
 		if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
-			LOG_D("flush: devno is invalid");
+			LOG_D("release: devno is invalid");
 			return -ENOENT;
 		}
 		assert(devno != (unsigned long)-1);
@@ -744,9 +756,20 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		LOG_E("Write /uhfd/result/$sid/fin: not implemented");
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
+		if (offset != 0) { // We don't support partial writes for simplicity
+			LOG_E("Write /uhfX/epc: offset=%lu is invalid", offset);
+			return -ESPIPE;
+		}
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Write /uhfX/epc: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		int rv = main_u8buf_from_hex(buffer, size, pd->epc, sizeof(pd->epc));
+		if (rv != 0) {
+			LOG_E("Write /uhfX/epc: invalid epc");
+			return -EINVAL;
+		}
+		uhfd_set_dev(&__main_globals.uhfd, pd->devno, *pd); // Update the device in uhfd (Handles locking, etc.)
+		return size;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Write /uhfX/access_passwd: not implemented");
@@ -802,7 +825,10 @@ static struct fuse_operations operations = {
     .read		= do_read,
 	.write      = do_write,
 	.open       = do_open,
-	.flush 	    = do_flush
+	//.flush 	= NULL,
+	.release    = do_release,
+	//.destroy  = NULL,
+	//.init	    = NULL
 };
 
 void main_init() {
