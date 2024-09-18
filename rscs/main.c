@@ -770,7 +770,7 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		assert((pd->flags & UHFD_DEV_FLAG_DELETED) == 0); // We should not even get here if the device is deleted
 		if ((pd->flags & UHFD_DEV_FLAG_EMBODIED)
 			&&! (pd->flags & UHFD_DEV_FLAG_IGNORED)) {
-			LOG_E("Write /uhfX/epc: can't write to embodied device"); // For now, we don't allow writing to the epc of an embodied device (for the sake of simplicity)
+			LOG_E("Write /uhfX/epc: can't write to embodied device"); // For now, we don't allow writing to the epc of an embodied non-ignored device (for the sake of simplicity)
 			return -EINVAL;
 		}
 
