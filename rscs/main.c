@@ -105,19 +105,24 @@ static int main_ulong_from_mkdev_buffer(const char* buffer, size_t size, unsigne
 	unsigned long u = strtoul(_buffer, &__endp, 10);
 	assert(__endp != NULL);
 	if (__endp <= _buffer) { // Don't allow empty strings or strings like "w"
+		free(_buffer);
 		return -1;
 	}
 	if ((_buffer[0] == '-') || (_buffer[0] == '+')) { // Don't allow strings like +234 or -19
+		free(_buffer);
 		return -1;
 	}
 	if (__endp > (_buffer + 1)) { // Don't allow strings like 0123
 		if (_buffer[0] == '0') { 
+			free(_buffer);
 			return -1;
 		}
 	}
 	if (__endp < (_buffer + size)) { // Don't allow strings like 123w
+		free(_buffer);
 		return -1;
 	}
+	free(_buffer);
 	*pUlong_out = u;
 	return 0;
 }
