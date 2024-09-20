@@ -97,21 +97,25 @@ static int main_ulong_from_path_regmatch(const char* path, regmatch_t* pRegmatch
 }
 
 static int main_ulong_from_mkdev_buffer(const char* buffer, size_t size, unsigned long* pUlong_out) {
+	char* _buffer = (char*)malloc(size + 1);
+	assert(NULL != _buffer);
+	memcpy(_buffer, buffer, size);
+	_buffer[size] = '\0';
 	char* __endp = NULL;
-	unsigned long u = strtoul(buffer, &__endp, 10);
+	unsigned long u = strtoul(_buffer, &__endp, 10);
 	assert(__endp != NULL);
-	if (__endp <= buffer) { // Don't allow empty strings or strings like "w"
+	if (__endp <= _buffer) { // Don't allow empty strings or strings like "w"
 		return -1;
 	}
-	if ((buffer[0] == '-') || (buffer[0] == '+')) { // Don't allow strings like +234 or -19
+	if ((_buffer[0] == '-') || (_buffer[0] == '+')) { // Don't allow strings like +234 or -19
 		return -1;
 	}
-	if (__endp > (buffer + 1)) { // Don't allow strings like 0123
-		if (buffer[0] == '0') { 
+	if (__endp > (_buffer + 1)) { // Don't allow strings like 0123
+		if (_buffer[0] == '0') { 
 			return -1;
 		}
 	}
-	if (__endp < (buffer + size)) { // Don't allow strings like 123w
+	if (__endp < (_buffer + size)) { // Don't allow strings like 123w
 		return -1;
 	}
 	*pUlong_out = u;
@@ -550,9 +554,14 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 				assert(val != (unsigned long)-1);
 				fi->fh = val; // Store val in the file handle to easily share it accross partial reads
 			}
-		} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
-			// We allow reading as well as writing to the epc file
-
+		// Exposing dev copy ptr via fi->fh seams to be the easiest way to share it accross partial reads, thus the common code for files in uhfX
+		} else if ((0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0))
+			|| (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0))
+			|| (0 == regexec( &__main_globals.rgx._m_uhfx_kill_passwd, path, 2, matches, 0))
+			|| (0 == regexec( &__main_globals.rgx._m_uhfx_flags, path, 2, matches, 0))
+			|| (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0))
+			|| (0 == regexec( &__main_globals.rgx._m_uhfx_read_rate, path, 2, matches, 0))
+		) {
 			//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
 			//unsigned long num_devs = 0;
 			//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
@@ -573,7 +582,7 @@ static int do_open( const char* path, struct fuse_file_info* fi )
 				LOG_D("open: devno=%lu is deleted", devno);
 				return -ENOENT;
 			}
-			//fi->fh = devno; // Store devno in the file handle to easily share it accross partial reads of epc
+			//fi->fh = devno; // Store devno in the file handle to easily share it accross partial reads
 			assert(sizeof(fi->fh) == sizeof(uhfd_dev_t*)); // Ensure that the file handle is large enough to store the pointer
 			assert(sizeof(unsigned long) == sizeof(uhfd_dev_t*));
 			fi->fh = (unsigned long)pDevCopy;
@@ -589,11 +598,17 @@ static int do_release( const char* path, struct fuse_file_info* fi )
 	// When dev copy is stored under fi->fh, it should be freed here
 
 	regmatch_t matches[2];
-	if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
-		if (( fi->flags & 3 ) != O_RDONLY)
-		{
-			return -EACCES;
-		}
+	if ((0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0))
+		|| (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0))
+		|| (0 == regexec( &__main_globals.rgx._m_uhfx_kill_passwd, path, 2, matches, 0))
+		|| (0 == regexec( &__main_globals.rgx._m_uhfx_flags, path, 2, matches, 0))
+		|| (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0))
+		|| (0 == regexec( &__main_globals.rgx._m_uhfx_read_rate, path, 2, matches, 0))
+	) {
+		// if (( fi->flags & 3 ) != O_RDONLY)
+		// {
+		// 	return -EACCES;
+		// }
 		//unsigned long num_devs = (unsigned long)p_atomic_pointer_get(&__main_globals.uhfd.num_devs);
 		//unsigned long num_devs = 0;
 		//assert(0 == uhfd_get_num_devs(&__main_globals.uhfd, &num_devs));
@@ -610,6 +625,24 @@ static int do_release( const char* path, struct fuse_file_info* fi )
 	}
 
 	return 0;
+}
+
+static int main_uhfx_read(uint8_t* pField, size_t fieldSize, const char* path, char* buffer, size_t size, off_t offset) {
+	size_t hexbuf_len = fieldSize * 2 + 1;
+	char* hexbuf = (char*)malloc(hexbuf_len);
+	assert(0 == main_hex_from_u8buf((const uint8_t*)pField, fieldSize, hexbuf, hexbuf_len));
+	size_t len = strlen(hexbuf);
+	assert(len == hexbuf_len - 1);
+	if (offset >= len) {
+		free(hexbuf);
+		return 0;
+	}
+	if (offset + size > len) {
+		size = len - offset;
+	}
+	memcpy(buffer, hexbuf + offset, size);
+	free(hexbuf);
+	return size;
 }
 
 static int do_read( const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
@@ -656,35 +689,24 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh; 
 		assert(pd != NULL);
-		size_t hexbuf_len = sizeof(pd->epc) * 2 + 1;
-		char* hexbuf = (char*)malloc(hexbuf_len);
-		assert(0 == main_hex_from_u8buf((const uint8_t*)pd->epc, sizeof(pd->epc), hexbuf, hexbuf_len));
-		size_t len = strlen(hexbuf);
-		assert(len == hexbuf_len - 1);
-		if (offset >= len) {
-			free(hexbuf);
-			return 0;
-		}
-		if (offset + size > len) {
-			size = len - offset;
-		}
-		memcpy(buffer, hexbuf + offset, size);
-		free(hexbuf);
-		return size;
+		return main_uhfx_read(pd->epc, sizeof(pd->epc), path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Read /uhfX/access_passwd: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_read(pd->access_passwd, sizeof(pd->access_passwd), path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_kill_passwd, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Read /uhfX/kill_passwd: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_read(pd->kill_passwd, sizeof(pd->kill_passwd), path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_flags, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Read /uhfX/flags: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_read(&pd->flags, sizeof(pd->flags), path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Read /uhfX/rssi: not implemented");
@@ -710,6 +732,35 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 		LOG_E("Read %s: not supported", path);
 		return -1;
 	}
+}
+
+static int main_uhfx_write(uint8_t* pField, size_t fieldSize, uhfd_dev_t* pd, const char* path, const char* buffer, size_t size, off_t offset) {
+	if (offset != 0) { // We don't support partial writes for simplicity
+		LOG_E("Write %s: offset=%lu is invalid", path, offset);
+		return -ESPIPE;
+	}
+	if(pd->flags & UHFD_DEV_FLAG_DELETED) {
+		LOG_E("Write %s: can't write to deleted device", path);
+		assert((pd->flags & UHFD_DEV_FLAG_DELETED) == 0); // We should not even get here if the device is deleted
+		return -EPERM;
+	}
+	if ((pd->flags & UHFD_DEV_FLAG_EMBODIED)
+		&&! (pd->flags & UHFD_DEV_FLAG_IGNORED)) {
+		LOG_E("Write %s: can't write to embodied device", path); // For now, we don't allow writing to properties of an embodied non-ignored device (for the sake of simplicity)
+		return -EPERM;
+	}
+
+	if (pd->flags & UHFD_DEV_FLAG_IGNORED) {
+		LOG_W("Write %s: writing to ignored device", path);
+	}
+
+	int rv = main_u8buf_from_hex(buffer, size, pField, fieldSize);
+	if (rv != 0) {
+		LOG_E("Write %s: invalid value", path);
+		return -EINVAL;
+	}
+	uhfd_set_dev(&__main_globals.uhfd, pd->devno, *pd); // Update the device in uhfd (Handles locking, etc.)
+	return size;
 }
 
 static int do_write( const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
@@ -756,47 +807,25 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		LOG_E("Write /uhfd/result/$sid/fin: not implemented");
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_epc, path, 2, matches, 0)) {
-		if (offset != 0) { // We don't support partial writes for simplicity
-			LOG_E("Write /uhfX/epc: offset=%lu is invalid", offset);
-			return -ESPIPE;
-		}
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
 		assert(pd != NULL);
-		if(pd->flags & UHFD_DEV_FLAG_DELETED) {
-			LOG_E("Write /uhfX/epc: can't write to deleted device");
-			return -EINVAL;
-		}
-		assert((pd->flags & UHFD_DEV_FLAG_DELETED) == 0); // We should not even get here if the device is deleted
-		if ((pd->flags & UHFD_DEV_FLAG_EMBODIED)
-			&&! (pd->flags & UHFD_DEV_FLAG_IGNORED)) {
-			LOG_E("Write /uhfX/epc: can't write to embodied device"); // For now, we don't allow writing to the epc of an embodied non-ignored device (for the sake of simplicity)
-			return -EINVAL;
-		}
-
-		if (pd->flags & UHFD_DEV_FLAG_IGNORED) {
-			LOG_W("Write /uhfX/epc: writing to ignored device");
-		}
-
-		int rv = main_u8buf_from_hex(buffer, size, pd->epc, sizeof(pd->epc));
-		if (rv != 0) {
-			LOG_E("Write /uhfX/epc: invalid epc");
-			return -EINVAL;
-		}
-		uhfd_set_dev(&__main_globals.uhfd, pd->devno, *pd); // Update the device in uhfd (Handles locking, etc.)
-		return size;
+		return main_uhfx_write(pd->epc, sizeof(pd->epc), pd, path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_access_passwd, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Write /uhfX/access_passwd: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_write(pd->access_passwd, sizeof(pd->access_passwd), pd, path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_kill_passwd, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Write /uhfX/kill_passwd: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_write(pd->kill_passwd, sizeof(pd->kill_passwd), pd, path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_flags, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Write /uhfX/flags: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_write(&pd->flags, sizeof(pd->flags), pd, path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Write /uhfX/rssi: can't write to rssi");
