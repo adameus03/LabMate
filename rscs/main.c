@@ -725,13 +725,13 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 	// } else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_request, path, 2
 	// }
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_delete, path, 2, matches, 0)) {
-		LOG_E("Read /uhfX/driver/delete: not implemented");
+		LOG_E("Read /uhfX/driver/delete: can't read from delete");
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_embody, path, 2, matches, 0)) {
-		LOG_E("Read /uhfX/driver/embody: not implemented");
+		LOG_E("Read /uhfX/driver/embody: can't read from embody");
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0)) {
-		LOG_E("Read /uhfX/driver/measure: not implemented");
+		LOG_E("Read /uhfX/driver/measure: can't read from measure");
 		return -1;
 	} else {
 		LOG_E("Read %s: not supported", path);
@@ -854,8 +854,32 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		return -1;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_embody, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Write /uhfX/driver/embody: not implemented");
-		return -1;
+		unsigned long devno = (unsigned long)-1;
+		if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
+			LOG_D("write: devno is invalid");
+			return -ENOENT;
+		}
+		assert(devno != (unsigned long)-1);
+		uhfd_dev_t* pDevCopy = (uhfd_dev_t*)malloc(sizeof(uhfd_dev_t));
+		int rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
+		if (rv != 0) {
+			LOG_D("write: devno=%lu out of range", devno);
+			return -ENOENT;
+		}
+		uint8_t flags = pDevCopy->flags;
+		if (flags & UHFD_DEV_FLAG_DELETED) {
+			LOG_D("write: devno=%lu is deleted", devno);
+			return -ENOENT;
+		}
+		rv = uhfd_embody_dev(&__main_globals.uhfd, pDevCopy->devno);
+		if (rv != 0) {
+			LOG_W("write: failed tag embodiment");
+			return -EAGAIN;
+		}
+		rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
+		assert(rv == 0);
+		assert(pDevCopy->flags & UHFD_DEV_FLAG_EMBODIED);
+		return 0;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Write /uhfX/driver/measure: not implemented");

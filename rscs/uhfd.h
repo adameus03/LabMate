@@ -64,6 +64,9 @@
 #define UHFD_DEV_FLAG_EMBODIED 0x02
 #define UHFD_DEV_FLAG_DELETED 0x04
 
+#define UHFD_DEV_FLAG1_PASSWDS_WRITTEN 0x01
+#define UHFD_DEV_FLAG1_EPC_WRITTEN 0x02
+
 #define UHFD_NUM_DEVS_INITIAL 16
 #define UHFD_NUM_DEVS_SCALING_FACTOR 1.5
 
@@ -86,6 +89,7 @@ typedef struct {
     uint8_t access_passwd[4];
     uint8_t kill_passwd[4];
     uint8_t flags;
+    uint8_t flags1; // internal flags for handling partial write
     uhfd_dev_m_t measurement;
     unsigned long devno;
 } uhfd_dev_t;
@@ -115,7 +119,7 @@ typedef struct {
     //PRWLock* pDevRWLock; // [obsolete] For device read/write operations. Single coarse lock for the whole array stored at pDevs. If neccessary in the future, we can implement fine-grained locking. Think about spinlocks as well (not sure about them actually). For now reallocs are handled using this lock as well (together with pDevCSizeMutex). ~~We can't use atomic operations instead, because we need to lock the entire array for realloc.~~
     
     PRWLock* pDaRWLock; // uhfd internal. For device array read/write operations. Single coarse lock for the whole `da` struct field. If neccessary in the future, we can implement fine-grained locking for da.pDev. Think about spinlocks as well (not sure about them actually). For now da.pDev reallocs are handled using this lock as well (together with pDevCSizeMutex). We can't use atomic operations instead, because they work on memory ranges which are too small on popular hardware platforms.
-
+    PMutex* pUhfmanCtxMutex; // uhfd internal. For uhfman_ctx_t operations. 
     //PMutex* pDevsReallocMutex; // [obsolete] For reallocs of the pDevs array
 
     uhfman_ctx_t uhfmanCtx; // refactor to uhfman_ctx ?
@@ -150,10 +154,10 @@ int uhfd_get_num_devs(uhfd_t* pUHFD, unsigned long* pNumDevs_out);
    0 indicates that the dev will still remain in the directory, though having the UHFD_DEV_FLAG_IGNORED flag set */
 #define UHFD_DELETE_DEV_FLAG_REMOVE 0x02
 
-int uhfd_delete_dev(uhfd_t* pUHFD, uhfd_dev_t* pDev, uint8_t flags);
+int uhfd_delete_dev(uhfd_t* pUHFD, unsigned long devno, uint8_t flags);
 
-int uhfd_embody_dev(uhfd_t* pUHFD, uhfd_dev_t* pDev);
+int uhfd_embody_dev(uhfd_t* pUHFD, unsigned long devno);
 
-int uhfd_measure_dev(uhfd_t* pUHFD, uhfd_dev_t* pDev, uhfd_dev_m_t* pMeasurement);
+int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, uhfd_dev_m_t* pMeasurement);
 
 int uhfd_deinit(uhfd_t* pUHFD);

@@ -155,6 +155,23 @@ static void uhfman_debug_print_bits(void const * const ptr, size_t const size)
     }
 }
 
+static void uhfman_ctx_config_init(uhfman_ctx_t* pCtx) {
+    pCtx->_config.select_params.target = UHFMAN_SELECT_TARGET_UNKNOWN;
+    pCtx->_config.select_params.action = UHFMAN_SELECT_ACTION_UNKNOWN;
+    pCtx->_config.select_params.memBank = UHFMAN_SELECT_MEMBANK_UNKNOWN;
+    pCtx->_config.select_params.ptr = 0;
+    pCtx->_config.select_params.maskLen = 0;
+    pCtx->_config.select_params.truncate = 0;
+    pCtx->_config.select_params.pMask = NULL;
+    pCtx->_config.select_mode = UHFMAN_SELECT_MODE_UNKNOWN;
+    pCtx->_config.query_params.sel = UHFMAN_QUERY_SEL_UNKNOWN;
+    pCtx->_config.query_params.session = UHFMAN_QUERY_SESSION_UNKNOWN;
+    pCtx->_config.query_params.target = UHFMAN_QUERY_TARGET_UNKNOWN;
+    pCtx->_config.query_params.q = 0;
+    pCtx->_config.txPower = NAN;
+    pCtx->_config.flags = 0; // no params initialized with hardware
+}
+
 uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
 #if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_UART
 #error "UHFMAN_DEVICE_CONNECTION_TYPE_UART not supported for now"
@@ -311,6 +328,8 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         tcflush(fd, TCIOFLUSH); // Flush just in case there is any garbage in the buffers
 
         pCtx_out->fd = fd;
+        uhfman_ctx_config_init(pCtx_out);
+        
         //printf("EXITING FOR NOW\n"); exit(EXIT_SUCCESS);
         // int rv = ypdr200_x11(pCtx_out, YPDR200_X11_PARAM_BAUD_RATE_115200); // Set baud rate to 115200 bps
         // if (rv != YPDR200_X11_ERR_SUCCESS) {
@@ -447,6 +466,55 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+static void uhfman_config_select_params_update(uhfman_ctx_t* pCtx, 
+                                                uint8_t target, 
+                                                uint8_t action, 
+                                                uint8_t memBank, 
+                                                uint32_t ptr, 
+                                                uint8_t maskLen, 
+                                                uint8_t truncate, 
+                                                const uint8_t* pMask) {
+    pCtx->_config.select_params.target = target;
+    pCtx->_config.select_params.action = action;
+    pCtx->_config.select_params.memBank = memBank;
+    pCtx->_config.select_params.ptr = ptr;
+    pCtx->_config.select_params.maskLen = maskLen;
+    pCtx->_config.select_params.truncate = truncate;
+    pCtx->_config.select_params.pMask = (uint8_t*)malloc((maskLen + 7) >> 3);
+    memcpy(pCtx->_config.select_params.pMask, pMask, (maskLen + 7) >> 3);
+    pCtx->_config.flags |= UHFMAN_CTX_CONFIG_FLAG_SELECT_INITIALIZED;
+}
+
+static int uhfman_config_select_params_cache_cmp(uhfman_ctx_t* pCtx, 
+                                                    uint8_t target, 
+                                                    uint8_t action, 
+                                                    uint8_t memBank, 
+                                                    uint32_t ptr, 
+                                                    uint8_t maskLen, 
+                                                    uint8_t truncate, 
+                                                    const uint8_t* pMask) {
+    if ((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_SELECT_INITIALIZED) == 0) {
+        return 1;
+    }
+    if ((pCtx->_config.select_params.target != target)
+    || (pCtx->_config.select_params.action != action)
+    || (pCtx->_config.select_params.memBank != memBank)
+    || (pCtx->_config.select_params.ptr != ptr)
+    || (pCtx->_config.select_params.maskLen != maskLen)
+    || (pCtx->_config.select_params.truncate != truncate)) {
+        return 1;
+    } else {
+        if (!memcmp(pCtx->_config.select_params.pMask, pMask, maskLen >> 3)) {
+            return 1;
+        } else if (maskLen & 0x07) {
+            if (pCtx->_config.select_params.pMask[maskLen >> 3] != pMask[maskLen >> 3]) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx, 
                                      uint8_t target, 
                                      uint8_t action, 
@@ -456,6 +524,9 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
                                      uint8_t truncate, 
                                      const uint8_t* pMask) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    if (!uhfman_config_select_params_cache_cmp(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask)) {
+        return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
+    }
     ypdr200_x0c_req_param_t reqParam = {
         .hdr = {
             .target = target,
@@ -476,6 +547,7 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
     int rv = ypdr200_x0c(pCtx, &reqParam, &rerr);
     switch (rv) {
         case YPDR200_X0C_ERR_SUCCESS:
+            uhfman_config_select_params_update(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask);
             return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
         case YPDR200_X0C_ERR_SEND_COMMAND:
             return UHFMAN_SET_SELECT_PARAM_ERR_SEND_COMMAND;
@@ -517,8 +589,25 @@ uint8_t uhfman_select_action(uint8_t uTagMatching, uint8_t uTagNotMatching) {
 //     uhfman_err_t err = uhfman_set_select_param(pCtx,)
 // }
 
+static void uhfman_config_select_mode_update(uhfman_ctx_t* pCtx, 
+                                                uhfman_select_mode_t mode) {
+    pCtx->_config.select_mode = mode;
+    pCtx->_config.flags |= UHFMAN_CTX_CONFIG_FLAG_SELECT_MODE_INITIALIZED;
+}
+
+static int uhfman_config_select_mode_cache_cmp(uhfman_ctx_t* pCtx, 
+                                                    uhfman_select_mode_t mode) {
+    if ((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_SELECT_MODE_INITIALIZED) == 0) {
+        return 1;
+    }
+    return (pCtx->_config.select_mode != mode);
+}
+
 uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mode) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    if (!uhfman_config_select_mode_cache_cmp(pCtx, mode)) {
+        return UHFMAN_SET_SELECT_MODE_ERR_SUCCESS;
+    }
     uint8_t uMode = 0;
     switch (mode) {
         case UHFMAN_SELECT_MODE_ALWAYS:
@@ -538,6 +627,7 @@ uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mod
     int rv = ypdr200_x12(pCtx, uMode, &rerr);
     switch (rv) {
         case YPDR200_X0E_ERR_SUCCESS:
+            uhfman_config_select_mode_update(pCtx, mode);
             return UHFMAN_SET_SELECT_MODE_ERR_SUCCESS;
         case YPDR200_X0E_ERR_SEND_COMMAND:
             return UHFMAN_SET_SELECT_MODE_ERR_SEND_COMMAND;
@@ -580,8 +670,29 @@ uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+static void uhfman_config_query_params_update(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel, uhfman_query_session_t session, uhfman_query_target_t target, uint8_t q) {
+    pCtx->_config.query_params.sel = sel;
+    pCtx->_config.query_params.session = session;
+    pCtx->_config.query_params.target = target;
+    pCtx->_config.query_params.q = q;
+    pCtx->_config.flags |= UHFMAN_CTX_CONFIG_FLAG_QUERY_INITIALIZED;
+}
+
+static int uhfman_config_query_params_cache_cmp(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel, uhfman_query_session_t session, uhfman_query_target_t target, uint8_t q) {
+    if ((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_QUERY_INITIALIZED) == 0) {
+        return 1;
+    }
+    return (pCtx->_config.query_params.sel != sel)
+    || (pCtx->_config.query_params.session != session)
+    || (pCtx->_config.query_params.target != target)
+    || (pCtx->_config.query_params.q != q);
+}
+
 uhfman_err_t uhfman_set_query_params(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel, uhfman_query_session_t session, uhfman_query_target_t target, uint8_t q) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    if (!uhfman_config_query_params_cache_cmp(pCtx, sel, session, target, q)) {
+        return UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS;
+    }
     ypdr200_x0e_req_param_t reqParam = {
         .dr = 0x00, // DR=8
         .m = 0x00, // M=1
@@ -627,6 +738,7 @@ uhfman_err_t uhfman_set_query_params(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel,
     int rv = ypdr200_x0e(pCtx, reqParam, &rerr);
     switch (rv) {
         case YPDR200_X0E_ERR_SUCCESS:
+            uhfman_config_query_params_update(pCtx, sel, session, target, q);
             return UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS;
         case YPDR200_X0E_ERR_SEND_COMMAND:
             return UHFMAN_SET_QUERY_PARAMS_ERR_SEND_COMMAND;
@@ -720,14 +832,31 @@ uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+static void uhfman_config_tx_power_update(uhfman_ctx_t* pCtx, float txPower) {
+    pCtx->_config.txPower = txPower;
+    pCtx->_config.flags |= UHFMAN_CTX_CONFIG_FLAG_TX_POWER_INITIALIZED;
+}
+
+static int uhfman_config_tx_power_cache_cmp(uhfman_ctx_t* pCtx, float txPower) {
+    if ((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_TX_POWER_INITIALIZED) == 0) {
+        return 1;
+    }
+    return (pCtx->_config.txPower != txPower) ? 0 : 1;
+}
+
 uhfman_err_t uhfman_set_transmit_power(uhfman_ctx_t* pCtx, float txPower) {
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    if (!uhfman_config_tx_power_cache_cmp(pCtx, txPower)) {
+        LOG_I("Transmit power level already set to: %2.2f dBm", txPower);
+        return UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS;
+    }
     ypdr200_resp_err_code_t rerr = 0;
     uint16_t powerLevel = (uint16_t)(txPower * 100.0f);
     int rv = ypdr200_xb6(pCtx, powerLevel, &rerr);
     switch (rv) {
         case YPDR200_XB6_ERR_SUCCESS:
             LOG_I("Transmit power level set to: 0x%02X (%2.2f dBm)", powerLevel, txPower);
+            uhfman_config_tx_power_update(pCtx, txPower);
             return UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS;
         case YPDR200_XB6_ERR_SEND_COMMAND:
             return UHFMAN_SET_TRANSMIT_POWER_ERR_SEND_COMMAND;

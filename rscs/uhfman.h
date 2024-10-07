@@ -96,6 +96,7 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx);
 #define UHFMAN_SELECT_TARGET_RFU0 0x05
 #define UHFMAN_SELECT_TARGET_RFU1 0x06
 #define UHFMAN_SELECT_TARGET_RFU2 0x07
+#define UHFMAN_SELECT_TARGET_UNKNOWN 0xFF
 
 #define UHFMAN_SEL_SL_ASSERT 0
 #define UHFMAN_SEL_SL_DEASSERT 1
@@ -105,7 +106,7 @@ uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx);
 #define UHFMAN_SEL_INVEN_B 1
 #define UHFMAN_SEL_INVEN_TOGGLE 2
 
-#define UHFMAN_SELECT_ACTION_INVALID 0xFF
+#define UHFMAN_SELECT_ACTION_UNKNOWN 0xFF
 
 uint8_t uhfman_select_action(uint8_t uTagMatching, uint8_t uTagNotMatching);
 
@@ -113,6 +114,7 @@ uint8_t uhfman_select_action(uint8_t uTagMatching, uint8_t uTagNotMatching);
 #define UHFMAN_SELECT_MEMBANK_EPC 0x01
 #define UHFMAN_SELECT_MEMBANK_TID 0x02
 #define UHFMAN_SELECT_MEMBANK_FILE_0 0x03
+#define UHFMAN_SELECT_MEMBANK_UNKNOWN 0xFF
 
 #define UHFMAN_SELECT_TRUNCATION_DISABLED 0x00
 #define UHFMAN_SELECT_TRUNCATION_ENABLED 0x01
@@ -148,14 +150,6 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
 // 
 // uhfman_err_t uhfman_set_select_param_by_epc_code(uhfman_ctx_t* pCtx, const uint8_t* pEPC, size_t epcLen);
 
-typedef enum {
-    // Before any operation
-    UHFMAN_SELECT_MODE_ALWAYS = 0x00,
-    // Never
-    UHFMAN_SELECT_MODE_NEVER = 0x01,
-    // Before read, write, lock, kill operations
-    UHFMAN_SELECT_MODE_RWLK = 0x02
-} uhfman_select_mode_t;
 
 #define UHFMAN_SET_SELECT_MODE_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_SET_SELECT_MODE_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
@@ -182,24 +176,6 @@ uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mod
  */
 uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx);
 
-typedef enum {
-    UHFMAN_QUERY_SEL_ALL = 0x00,
-    UHFMAN_QUERY_SEL_ALL1 = 0x01,
-    UHFMAN_QUERY_SEL_NOT_SL = 0x02,
-    UHFMAN_QUERY_SEL_SL = 0x03
-} uhfman_query_sel_t;
-
-typedef enum {
-    UHFMAN_QUERY_SESSION_S0 = 0x00,
-    UHFMAN_QUERY_SESSION_S1 = 0x01,
-    UHFMAN_QUERY_SESSION_S2 = 0x02,
-    UHFMAN_QUERY_SESSION_S3 = 0x03
-} uhfman_query_session_t;
-
-typedef enum {
-    UHFMAN_QUERY_TARGET_A = 0x00,
-    UHFMAN_QUERY_TARGET_B = 0x01
-} uhfman_query_target_t;
 
 #define UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_SET_QUERY_PARAMS_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND

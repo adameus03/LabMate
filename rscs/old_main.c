@@ -9,13 +9,13 @@
 #include "uhfman.h"
 
 void main_uhfman_poll_handler(uint16_t handle) {
-    // uhfman_tag_t tag = uhfman_tag_get(handle);
-    // fprintf(stdout, "Tag %u, EPC: ", tag.handle);
-    // for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
-    //     fprintf(stdout, "%02X ", tag.epc[j]);
-    // }
-    // fprintf(stdout, "\n");
-    // return;
+    uhfman_tag_t tag = uhfman_tag_get(handle);
+    fprintf(stdout, "Tag %u, EPC: ", tag.handle);
+    for (uint32_t j = 0; j < YPDR200_X22_NTF_PARAM_EPC_LENGTH; j++) {
+        fprintf(stdout, "%02X ", tag.epc[j]);
+    }
+    fprintf(stdout, "\n");
+    return;
 
 
     uhfman_tag_t* pTags = NULL;
@@ -99,19 +99,21 @@ int main() {
     fprintf(stdout, "Calling uhfman_set_select_param\n");
     uint8_t target = UHFMAN_SELECT_TARGET_SL;
     uint8_t action = uhfman_select_action(UHFMAN_SEL_SL_ASSERT, UHFMAN_SEL_SL_DEASSERT);
-    assert(action != UHFMAN_SELECT_ACTION_INVALID);
+    assert(action != UHFMAN_SELECT_ACTION_UNKNOWN);
     printf("Select action = 0x%02X\n", action);
     uint8_t memBank = UHFMAN_SELECT_MEMBANK_EPC;
     uint32_t ptr = 0x20;
-    uint8_t maskLen = 0x60;
+    //uint8_t maskLen = 0x60;
+    uint8_t maskLen = 0x00;
     uint8_t truncate = UHFMAN_SELECT_TRUNCATION_DISABLED;
-    const uint8_t mask[12] = {
+    const uint8_t mask[0] = {};
+    //const uint8_t mask[12] = {
         //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
         //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
         //0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
         //0xE2, 0x80, 0x68, 0x94, 0x00, 0x00, 0x40, 0x24, 0xED, 0x64, 0x21, 0x84 
-        0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
-    };
+        //0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
+    //};
 
     err = uhfman_set_select_param(&uhfmanCtx, target, action, memBank, ptr, maskLen, truncate, mask);
     if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
@@ -174,15 +176,15 @@ int main() {
     }
 
 
-    // fprintf(stdout, "!!! Calling uhfman_set_transmit_power !!!\n");
-    // err = uhfman_set_transmit_power(&uhfmanCtx, 15.0f);
-    // if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
-    //     P_ERROR("USB related error");
-    //     fprintf(stderr, "ERROR (ignoring): uhfman_set_transmit_power returned %d\n", err);
-    //     //return 1;
-    // } else {
-    //     fprintf(stdout, "uhfman_set_transmit_power returned successfully\n");
-    // }
+    fprintf(stdout, "!!! Calling uhfman_set_transmit_power !!!\n");
+    err = uhfman_set_transmit_power(&uhfmanCtx, 15.0f);
+    if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
+        P_ERROR("USB related error");
+        fprintf(stderr, "ERROR (ignoring): uhfman_set_transmit_power returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "uhfman_set_transmit_power returned successfully\n");
+    }
 
 
     fprintf(stdout, "Calling uhfman_dbg_get_transmit_power\n");
@@ -226,7 +228,8 @@ int main() {
     //     //0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
     //     //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
     //     //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
-    //     0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
+    //     //0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
+    //     0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD
     // };
     // uint16_t pc = 0xFFFF;
     // uint8_t* pEPC = NULL;
@@ -261,6 +264,7 @@ int main() {
     //     free (pEPC);
     //     fprintf(stdout, "uhfman_write_tag_mem returned successfully\n");
     // }
+
     // exit(0);
 
     // fprintf(stdout, "Calling uhfman_dbg_single_polling\n");

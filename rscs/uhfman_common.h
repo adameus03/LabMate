@@ -27,16 +27,70 @@
 
 typedef int uhfman_err_t;
 
+typedef enum {
+    // Before any operation
+    UHFMAN_SELECT_MODE_ALWAYS = 0x00,
+    // Never
+    UHFMAN_SELECT_MODE_NEVER = 0x01,
+    // Before read, write, lock, kill operations
+    UHFMAN_SELECT_MODE_RWLK = 0x02,
+    // Unknown
+    UHFMAN_SELECT_MODE_UNKNOWN = 0xFF
+} uhfman_select_mode_t;
+
+typedef enum {
+    UHFMAN_QUERY_SEL_ALL = 0x00,
+    UHFMAN_QUERY_SEL_ALL1 = 0x01,
+    UHFMAN_QUERY_SEL_NOT_SL = 0x02,
+    UHFMAN_QUERY_SEL_SL = 0x03,
+    UHFMAN_QUERY_SEL_UNKNOWN = 0xFF
+} uhfman_query_sel_t;
+
+typedef enum {
+    UHFMAN_QUERY_SESSION_S0 = 0x00,
+    UHFMAN_QUERY_SESSION_S1 = 0x01,
+    UHFMAN_QUERY_SESSION_S2 = 0x02,
+    UHFMAN_QUERY_SESSION_S3 = 0x03,
+    UHFMAN_QUERY_SESSION_UNKNOWN = 0xFF
+} uhfman_query_session_t;
+
+typedef enum {
+    UHFMAN_QUERY_TARGET_A = 0x00,
+    UHFMAN_QUERY_TARGET_B = 0x01,
+    UHFMAN_QUERY_TARGET_UNKNOWN = 0xFF
+} uhfman_query_target_t;
+
+#define UHFMAN_CTX_CONFIG_FLAG_SELECT_INITIALIZED 0x01
+#define UHFMAN_CTX_CONFIG_FLAG_QUERY_INITIALIZED 0x02
+#define UHFMAN_CTX_CONFIG_FLAG_SELECT_MODE_INITIALIZED 0x04
+#define UHFMAN_CTX_CONFIG_FLAG_TX_POWER_INITIALIZED 0x08
 typedef struct {
     /* For libusb */
     libusb_device_handle *handle;
     libusb_context *context;
     /* For serial port emulation */
     int fd;
-    /* Other config */
+    
     struct uhfman_config {
-        // Nothing here for now
-    } config;
+        struct {
+            uint8_t target;
+            uint8_t action; 
+            uint8_t memBank;
+            uint32_t ptr;
+            uint8_t maskLen; 
+            uint8_t truncate; 
+            uint8_t* pMask;
+        } select_params;
+        uhfman_select_mode_t select_mode;
+        struct {
+            uhfman_query_sel_t sel;
+            uhfman_query_session_t session;
+            uhfman_query_target_t target;
+            uint8_t q;            
+        } query_params;
+        float txPower;
+        uint8_t flags; // config flags
+    } _config;
 } uhfman_ctx_t;
 
 #if UHFMAN_USE_DEBUG_EXTENSIONS == 1
