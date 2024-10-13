@@ -33,7 +33,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libusb-cmake/libusb/libusb)
 # Add FUSE include directories
 include_directories(${FUSE_INCLUDE_DIRS})
 add_executable(${CMAKE_PROJECT_NAME} 
-    ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/old_main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/uhfman.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ypdr200.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ch340.c

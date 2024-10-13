@@ -217,24 +217,31 @@ int main() {
         fprintf(stdout, "uhfman_set_select_mode returned successfully\n");
     }
 
-    // fprintf(stdout, "Calling uhfman_write_tag_mem\n");
-    // const uint8_t access_password[4] = {
-    //     0x00, 0x00, 0x00, 0x00
-    // };
-    // uhfman_tag_mem_bank_t mem_bank = UHFMAN_TAG_MEM_BANK_EPC;
-    // uint16_t wordPtr = UHFMAN_TAG_MEM_EPC_WORD_PTR_EPC;
-    // uint16_t wordCount = UHFMAN_TAG_MEM_EPC_WORD_COUNT_EPC;
-    // const uint8_t epc[12] = {
-    //     //0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
-    //     //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
-    //     //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
-    //     //0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
-    //     0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD
-    // };
-    // uint16_t pc = 0xFFFF;
-    // uint8_t* pEPC = NULL;
-    // size_t epc_len = 0;
-    // uint8_t resp_err = 0;
+    fprintf(stdout, "Calling uhfman_write_tag_mem\n");
+    const uint8_t access_password[4] = {
+        //0x00, 0x00, 0x00, 0x00
+        //0x00, 0x00, 0xFF, 0xFF
+        //0xFF, 0xFF, 0x00, 0x00
+        0x12, 0x34, 0x56, 0x78
+        //0x77, 0x77, 0x77, 0x77
+    };
+    uhfman_tag_mem_bank_t mem_bank = UHFMAN_TAG_MEM_BANK_EPC;
+    uint16_t wordPtr = UHFMAN_TAG_MEM_EPC_WORD_PTR_EPC;
+    uint16_t wordCount = UHFMAN_TAG_MEM_EPC_WORD_COUNT_EPC;
+    const uint8_t epc[12] = {
+        //0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
+        //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
+        //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
+        //0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
+        //0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD, 0xCD
+        //0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88
+        //0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99
+        0x33,0x33,0x33,0x33,0x33,0x33,0x33,0x33,0x33,0x33,0x33,0x33,
+    };
+    uint16_t pc = 0xFFFF;
+    uint8_t* pEPC = NULL;
+    size_t epc_len = 0;
+    uint8_t resp_err = 0;
     // err = uhfman_write_tag_mem(&uhfmanCtx, access_password, mem_bank, wordPtr, wordCount, epc, &pc, &pEPC, &epc_len, &resp_err);
     // if (err != UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS) {
     //     if (err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE) {
@@ -264,6 +271,47 @@ int main() {
     //     free (pEPC);
     //     fprintf(stdout, "uhfman_write_tag_mem returned successfully\n");
     // }
+    // Write access password
+    const uint8_t new_access_passwd[4] = {
+        0x12, 0x34, 0x56, 0x78
+        //0x77, 0x77, 0x77, 0x77
+    };
+    mem_bank = UHFMAN_TAG_MEM_BANK_RESERVED;
+    wordPtr = UHFMAN_TAG_MEM_RESERVED_WORD_PTR_ACCESS_PASSWD;
+    wordCount = UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_ACCESS_PASSWD;
+    pc = 0xFFFF;
+    pEPC = NULL;
+    epc_len = 0;
+    resp_err = 0;
+    err = uhfman_write_tag_mem(&uhfmanCtx, access_password, mem_bank, wordPtr, wordCount, new_access_passwd, &pc, &pEPC, &epc_len, &resp_err);
+    if (err != UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS) {
+        if (err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE) {
+            if (resp_err == UHFMAN_TAG_ERR_ACCESS_DENIED) {
+                //P_ERROR("Error response obtained from tag");
+                P_ERROR("Access denied error when trying to write tag's memory (most probably the provided access password was invalid)");
+                fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
+                fprintf(stdout, "EPC: ");
+                for (size_t i = 0; i < epc_len; i++) {
+                    fprintf(stdout, "%02X ", pEPC[i]);
+                }
+                fprintf(stdout, "\n");
+                free (pEPC);
+            }
+        } else {
+            P_ERROR("USB related error"); // TODO improve those error messages, theses are not always really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
+        }
+        fprintf(stderr, "ERROR (ignoring): uhfman_write_tag_mem returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
+        fprintf(stdout, "EPC: ");
+        for (size_t i = 0; i < epc_len; i++) {
+            fprintf(stdout, "%02X ", pEPC[i]);
+        }
+        fprintf(stdout, "\n");
+        free (pEPC);
+        fprintf(stdout, "uhfman_write_tag_mem returned successfully (for access passwd write)\n");
+    }
 
     // exit(0);
 
@@ -277,18 +325,18 @@ int main() {
     //     fprintf(stdout, "uhfman_dbg_single_polling returned successfully\n");
     // }
 
-    fprintf(stdout, "Calling uhfman_set_poll_handler\n");
-    ufhman_set_poll_handler(main_uhfman_poll_handler);
+    // fprintf(stdout, "Calling uhfman_set_poll_handler\n");
+    // ufhman_set_poll_handler(main_uhfman_poll_handler);
 
-    fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
-    err = uhfman_dbg_multiple_polling(&uhfmanCtx);
-    if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
-        P_ERROR("USB related error");
-        fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);
-        //return 1;
-    } else {
-        fprintf(stdout, "uhfman_dbg_multiple_polling returned successfully\n");
-    }
+    // fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
+    // err = uhfman_dbg_multiple_polling(&uhfmanCtx);
+    // if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
+    //     P_ERROR("USB related error");
+    //     fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);
+    //     //return 1;
+    // } else {
+    //     fprintf(stdout, "uhfman_dbg_multiple_polling returned successfully\n");
+    // }
 
     fprintf(stdout, "Calling uhfman_device_release\n");
     uhfman_device_release(&uhfmanCtx);

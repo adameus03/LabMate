@@ -131,6 +131,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X27 = 0x27,
     YPDR200_FRAME_CMD_X39 = 0x39,
     YPDR200_FRAME_CMD_X49 = 0x49,
+    YPDR200_FRAME_CMD_X82 = 0x82,
     YPDR200_FRAME_CMD_XAA = 0xaa,
     YPDR200_FRAME_CMD_XB6 = 0xb6,
     YPDR200_FRAME_CMD_XB7 = 0xb7,
@@ -176,8 +177,12 @@ static ypdr200_frame_t ypdr200_frame_construct(ypdr200_frame_type_t type, ypdr20
 }
 
 static ypdr200_x49_resp_param_t __special_x49_error_response_param = {};
+static ypdr200_x82_resp_param_t __special_x82_error_response_param = {};
 static ypdr200_x49_resp_param_t special_x49_error_response_param_get() {
     return __special_x49_error_response_param;
+}
+static ypdr200_x82_resp_param_t special_x82_error_response_param_get() {
+    return __special_x82_error_response_param;
 }
 /**
  * @param pRawParamData the copy operation performed on this buffer shall not include the `parameter` byte
@@ -186,6 +191,14 @@ static ypdr200_x49_resp_param_t special_x49_error_response_param_get() {
 static void special_x49_error_response_param_set(uint8_t* pRawParamData, uint8_t parameter) {
     memcpy(__special_x49_error_response_param.raw, pRawParamData, sizeof(__special_x49_error_response_param.raw) - 1); // - 1 because no `parameter` - this is a special case
     __special_x49_error_response_param.parameter = parameter;
+}
+/**
+ * @param pRawParamData the copy operation performed on this buffer shall not include the `parameter` byte
+ * @param parameter not really important, but we agree that it shall hold the error code in this special case
+ */
+static void special_x82_error_response_param_set(uint8_t* pRawParamData, uint8_t parameter) {
+    memcpy(__special_x82_error_response_param.raw, pRawParamData, sizeof(__special_x82_error_response_param.raw) - 1); // - 1 because no `parameter` - this is a special case
+    __special_x82_error_response_param.parameter = parameter;
 }
 
 #define YPDR200_FRAME_RECV_ERR_SUCCESS UHFMAN_ERR_SUCCESS
@@ -347,13 +360,13 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
                     return YPDR200_FRAME_RECV_ERR_READ;
                 }
                 if (respParamLen != 1) {
-                    if (expectedCmd != YPDR200_FRAME_CMD_X49) { // normally we expect respParamLen to strictly always be 1 for error response frames...
+                    if ((expectedCmd != YPDR200_FRAME_CMD_X49) && (expectedCmd != YPDR200_FRAME_CMD_X82)) { // normally we expect respParamLen to strictly always be 1 for error response frames...
                         if (pParamIn != (uint8_t*)0) {
                             free(pParamIn);
                         }
                         LOG_W("Received error response frame, but resp param had unexpected length %u\n", respParamLen);
                         return YPDR200_FRAME_RECV_ERR_READ;
-                    } else { // ...but in case of x49, it is possible that we receive a special error response (see YPD-R200 user protocol reference) and need to set a file-scope variable for that
+                    } else if (expectedCmd == YPDR200_FRAME_CMD_X49) { // ...but in case of x49, it is possible that we receive a special error response (see YPD-R200 user protocol reference) and need to set a file-scope variable for that
                         if (respParamLen != YPDR200_X49_RESP_PARAM_SIZE) { // `parameter` is excluded, but the dat is prepended with the error code byte instead, so we still get an expected resp param length of YPDR200_X49_RESP_PARAM_SIZE bytes
                             if (pParamIn != (uint8_t*)0) {
                                 free(pParamIn);
@@ -363,6 +376,16 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
                         }
                         // pParamIn[0] is the error code and is already handled few lines later, however we will still save it as parameter - this field would be otherwise unused, but it makes to put the error code in there
                         special_x49_error_response_param_set(pParamIn + 1, pParamIn[0]);
+                    } else if (expectedCmd == YPDR200_FRAME_CMD_X82) { // ...same for x82
+                        if (respParamLen != YPDR200_X82_RESP_PARAM_SIZE) { // `parameter` is excluded, but the dat is prepended with the error code byte instead, so we still get an expected resp param length of YPDR200_X82_RESP_PARAM_SIZE bytes
+                            if (pParamIn != (uint8_t*)0) {
+                                free(pParamIn);
+                            }
+                            LOG_W("Received special x82 error response frame, but resp param had unexpected length %u\n", respParamLen);
+                            return YPDR200_FRAME_RECV_ERR_READ;
+                        }
+                        // pParamIn[0] is the error code and is already handled few lines later, however we will still save it as parameter - this field would be otherwise unused, but it makes to put the error code in there
+                        special_x82_error_response_param_set(pParamIn + 1, pParamIn[0]);
                     }
                 }
                 
@@ -1374,4 +1397,51 @@ int ypdr200_x49(uhfman_ctx_t* pCtx, ypdr200_x49_req_param_t param, ypdr200_x49_r
 
     *pRespParam_out = respParam;
     return YPDR200_X49_ERR_SUCCESS;
+}
+
+int ypdr200_x82(uhfman_ctx_t* pCtx, ypdr200_x82_req_param_t param, ypdr200_x82_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode) {
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X82, YPDR200_X82_REQ_PARAM_SIZE, param.raw);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X82_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X82, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) { // TODO try not to repeat these lines of code
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            if (*pRespErrCode == YPDR200_RESP_ERR_CODE_ACCESS_FAIL) {
+                // Handle the special x49 error response
+                *pRespParam_out = special_x82_error_response_param_get();
+                if (pRespParam_out->ul + 2 != YPDR200_X82_RESP_PARAM_SIZE) { // +2 because it is the special case - error code is before the ul byte and replaces the parameter byte
+                    LOG_W("Unexpected ul: expected=%d, actual=%d", YPDR200_X82_RESP_PARAM_SIZE - 2, pRespParam_out->ul);
+                    ypdr200_frame_dispose(&frameIn);
+                    return YPDR200_X82_ERR_READ_RESPONSE;
+                } 
+            }
+            return YPDR200_X82_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_X82_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != YPDR200_X82_RESP_PARAM_SIZE) {
+        LOG_W("Unexpected param data length: expected=%d, actual=%d", YPDR200_X82_RESP_PARAM_SIZE, paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X82_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_x82_resp_param_t respParam = {};
+    memcpy(respParam.raw, frameIn.pParamData, YPDR200_X82_RESP_PARAM_SIZE);
+
+    if (respParam.parameter != 0U) { // TODO check for consistency with other functions using the same pattern for success check?
+        LOG_W("Unexpected 0x82 command response data: %02x. We were expecting 0x00 for success.", respParam.parameter);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X82_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+
+    *pRespParam_out = respParam;
+    return YPDR200_X82_ERR_SUCCESS;
 }

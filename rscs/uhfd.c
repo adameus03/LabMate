@@ -223,8 +223,7 @@ int uhfd_delete_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno, uint
 
 //Designed to handle locking for tag devs and partial write (when passwords write succeeds, but EPC write fails)
 int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
-    LOG_E("uhfd_embody_dev: not implemented");
-    return -1;
+    LOG_I("uhfd_embody_dev requested for devno %lu", devno);
 
     /* dev attention
     *  WE NEED TO FIND OUT WHETHER WE CAN WRITE THE TAG USING GENERIC OR SPECIFIC SELECT BEFOREHAND

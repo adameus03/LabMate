@@ -501,7 +501,7 @@ ypdr200_x49_req_param_t ypdr200_x49_req_param_make(ypdr200_x49_req_param_hdr_t h
 
 void ypdr200_x49_req_param_dispose(ypdr200_x49_req_param_t* pReqParam);
 
-#define YPDR200_X49_RESP_PARAM_SIZE 16
+#define YPDR200_X49_X82_RESP_PARAM_SIZE 16
 typedef union {
     struct {
         uint8_t ul;
@@ -509,8 +509,11 @@ typedef union {
         uint8_t epc[12];
         uint8_t parameter;
     };
-    uint8_t raw[YPDR200_X49_RESP_PARAM_SIZE]; // TODO support longer EPC by conforming to the `ul` value?
-} __attribute__((__packed__)) ypdr200_x49_resp_param_t;
+    uint8_t raw[YPDR200_X49_X82_RESP_PARAM_SIZE]; // TODO support longer EPC by conforming to the `ul` value?
+} __attribute__((__packed__)) ypdr200_x49_x82_resp_param_t;
+
+#define YPDR200_X49_RESP_PARAM_SIZE YPDR200_X49_X82_RESP_PARAM_SIZE
+typedef ypdr200_x49_x82_resp_param_t ypdr200_x49_resp_param_t;
 
 #define YPDR200_X49_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define YPDR200_X49_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
@@ -520,5 +523,26 @@ typedef union {
  * @brief Write label data storage area
  */
 int ypdr200_x49(uhfman_ctx_t* pCtx, ypdr200_x49_req_param_t param, ypdr200_x49_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
+
+#define YPDR200_X82_REQ_PARAM_SIZE 7
+typedef union {
+    struct {
+        uint8_t ap[4]; // access password (MSB first)
+        uint8_t ld[3]; // lock operand (MSB first)
+    };
+    uint8_t raw[YPDR200_X82_REQ_PARAM_SIZE];
+} __attribute__((__packed__)) ypdr200_x82_req_param_t;
+
+#define YPDR200_X82_RESP_PARAM_SIZE YPDR200_X49_X82_RESP_PARAM_SIZE
+typedef ypdr200_x49_x82_resp_param_t ypdr200_x82_resp_param_t;
+
+#define YPDR200_X82_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define YPDR200_X82_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define YPDR200_X82_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define YPDR200_X82_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+/**
+ * @brief Lock label data store
+ */
+int ypdr200_x82(uhfman_ctx_t* pCtx, ypdr200_x82_req_param_t param, ypdr200_x82_resp_param_t* pRespParam_out, ypdr200_resp_err_code_t* pRespErrCode);
 
 #endif // YPDR200_H
