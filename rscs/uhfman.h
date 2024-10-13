@@ -329,6 +329,65 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
                                   size_t* pEPC_len_out,
                                   uint8_t* pRespErrCode_out);
 
+#define UHFMAN_LOCK_TAG_MEM_FILE_0_PERMALOCK        (1U<<0)
+#define UHFMAN_LOCK_TAG_MEM_FILE_0_WRITE            (1U<<1)
+#define UHFMAN_LOCK_TAG_MEM_TID_PERMALOCK           (1U<<2)
+#define UHFMAN_LOCK_TAG_MEM_TID_WRITE               (1U<<3)
+#define UHFMAN_LOCK_TAG_MEM_EPC_PERMALOCK           (1U<<4)
+#define UHFMAN_LOCK_TAG_MEM_EPC_WRITE               (1U<<5)
+#define UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PERMALOCK (1U<<6)
+#define UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_RW        (1U<<7)
+#define UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PERMALOCK   (1U<<8)
+#define UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_RW          (1U<<9)
+
+#define UHFMAN_LOCK_TAG_MEM_FILE_0_MASK_PERMALOCK UHFMAN_LOCK_TAG_MEM_FILE_0_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_FILE_0_MASK_WRITE UHFMAN_LOCK_TAG_MEM_FILE_0_WRITE
+#define UHFMAN_LOCK_TAG_MEM_TID_MASK_PERMALOCK UHFMAN_LOCK_TAG_MEM_TID_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_TID_MASK_WRITE UHFMAN_LOCK_TAG_MEM_TID_WRITE
+#define UHFMAN_LOCK_TAG_MEM_EPC_MASK_PERMALOCK UHFMAN_LOCK_TAG_MEM_EPC_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_EPC_MASK_WRITE UHFMAN_LOCK_TAG_MEM_EPC_WRITE
+#define UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_MASK_PERMALOCK UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_MASK_RW UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_RW
+#define UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_MASK_PERMALOCK UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_MASK_RW UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_RW
+
+#define UHFMAN_LOCK_TAG_MEM_FILE_0_ACTION_PERMALOCK UHFMAN_LOCK_TAG_MEM_FILE_0_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_FILE_0_ACTION_WRITE UHFMAN_LOCK_TAG_MEM_FILE_0_WRITE
+#define UHFMAN_LOCK_TAG_MEM_TID_ACTION_PERMALOCK UHFMAN_LOCK_TAG_MEM_TID_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_TID_ACTION_WRITE UHFMAN_LOCK_TAG_MEM_TID_WRITE
+#define UHFMAN_LOCK_TAG_MEM_EPC_ACTION_PERMALOCK UHFMAN_LOCK_TAG_MEM_EPC_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_EPC_ACTION_WRITE UHFMAN_LOCK_TAG_MEM_EPC_WRITE
+#define UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_ACTION_PERMALOCK UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_ACTION_RW UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_RW
+#define UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_ACTION_PERMALOCK UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PERMALOCK
+#define UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_ACTION_RW UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_RW
+
+#define UHFMAN_LOCK_TAG_MEM_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_LOCK_TAG_MEM_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define UHFMAN_LOCK_TAG_MEM_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define UHFMAN_LOCK_TAG_MEM_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+#define UHFMAN_LOCK_TAG_MEM_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN_DEVICE_MODEL
+#define UHFMAN_LOCK_TAG_MEM_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define UHFMAN_LOCK_TAG_MEM_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+/**
+ * @brief Lock tag memory
+ * @param accessPasswd Access password to perform the lock operation
+ * @param lock_mask_flags Lock mask flags (see UHFMAN_LOCK_TAG_MEM_*_MASK_*)
+ * @param lock_action_flags Lock action flags (see UHFMAN_LOCK_TAG_MEM_*_ACTION_*)
+ * @param pPC_out Pointer to the PC value of the tag which was locked, can be NULL
+ * @param ppEPC_out Pointer to the address where to store the EPC of the tag which was locked, can be NULL. If not NULL, the caller is responsible for freeing the memory allocated for the EPC by this function
+ * @param pEPC_len_out Pointer to the length of the EPC of the tag which was locked, can be NULL
+ * @param pRespErrCode_out Address where to store error code read from error response frame, can be NULL
+ */
+uhfman_err_t uhfman_lock_tag_mem(uhfman_ctx_t* pCtx, 
+                                 const uint8_t accessPasswd[4],
+                                 uint16_t lock_mask_flags, 
+                                 uint16_t lock_action_flags,
+                                 uint16_t* pPC_out,
+                                 uint8_t** ppEPC_out,
+                                 size_t* pEPC_len_out,
+                                 uint8_t* pRespErrCode_out);
+
 //TODO add & implement more functions
 
 //----------------------------------------------

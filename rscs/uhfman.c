@@ -1204,3 +1204,91 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
     return UHFMAN_WRITE_TAG_MEM_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200   
 }
+
+uhfman_err_t uhfman_lock_tag_mem(uhfman_ctx_t* pCtx, 
+                                 const uint8_t accessPasswd[4],
+                                 uint16_t lock_mask_flags, 
+                                 uint16_t lock_action_flags,
+                                 uint16_t* pPC_out,
+                                 uint8_t** ppEPC_out,
+                                 size_t* pEPC_len_out,
+                                 uint8_t* pRespErrCode_out) {
+    if (pRespErrCode_out != NULL) {
+        *pRespErrCode_out = 0U; // assume success frame err code until we receive an error response frame with an error code (we do not won't garbage value in here)
+    }
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    if (accessPasswd[0] == 0 && accessPasswd[1] == 0 && accessPasswd[2] == 0 && accessPasswd[3] == 0) {
+        //LOG_W("Access password is all zeros, which is not allowed");
+        //return UHFMAN_LOCK_TAG_MEM_ERR_NOT_SUPPORTED;
+        LOG_W("Access password is all zeros");
+    }
+    ypdr200_x82_req_param_t reqParam = {};
+    memcpy(reqParam.ap, accessPasswd, 4 * sizeof(uint8_t));
+    memset(reqParam.ld, 0, 3 * sizeof(uint8_t));
+    //ld = 0000xxxx xxxxxxxx xxxxxxxx
+    reqParam.ld[0] &= 0x0F; // First 4 bits are reserved
+    //             ld = 0000VVVV xxxxxxxx xxxxxxxx
+    //lock_mask_flags = 000000VV VV000000
+    reqParam.ld[0] |= (lock_mask_flags >> 6) & 0x0F; 
+    //             ld = 0000xxxx VVVVVVxx xxxxxxxx
+    //lock_mask_flags = 000000xx xxVVVVVV
+    reqParam.ld[1] |= (lock_mask_flags & 0x3F) << 2;
+    //               ld = 0000xxxx xxxxxxVV xxxxxxxx
+    //lock_action_flags = 000000VV xxxxxxxx
+    reqParam.ld[1] |= (lock_action_flags >> 8) & 0x03;
+    //               ld = 0000xxxx xxxxxxxx VVVVVVVV
+    //lock_action_flags = 000000xx VVVVVVVV
+    reqParam.ld[2] |= lock_action_flags & 0xFF;
+    ypdr200_resp_err_code_t rerr = 0;
+    ypdr200_x82_resp_param_t respParam = {};
+    LOG_I_TBC("Locking tag memory: accessPasswd=[ %02X %02X %02X %02X ], lock_mask_flags=0x%04X, lock_action_flags=0x%04X", accessPasswd[0], accessPasswd[1], accessPasswd[2], accessPasswd[3], lock_mask_flags, lock_action_flags);
+    int rv = ypdr200_x82(pCtx, reqParam, &respParam, &rerr);
+    switch (rv) {
+        case YPDR200_X82_ERR_SUCCESS:
+            assert(respParam.ul == __UHFMAN_TAG_EPC_LENGTH + __UHFMAN_TAG_PC_LENGTH); //defensive + see @[N_267abdf1]
+            if (pPC_out != NULL) {
+                *pPC_out = ((uint16_t)(respParam.pc[0]) << 8) | (uint16_t)(respParam.pc[1]);
+            }
+            if (ppEPC_out != NULL) {
+                *ppEPC_out = (uint8_t*) malloc(__UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+                memcpy(*ppEPC_out, respParam.epc, __UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+            }
+            if (pEPC_len_out != NULL) {
+                *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
+            }
+            return UHFMAN_LOCK_TAG_MEM_ERR_SUCCESS;
+        case YPDR200_X82_ERR_SEND_COMMAND:
+            return UHFMAN_LOCK_TAG_MEM_ERR_SEND_COMMAND;
+        case YPDR200_X82_ERR_READ_RESPONSE:
+            return UHFMAN_LOCK_TAG_MEM_ERR_READ_RESPONSE;
+        case YPDR200_X82_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            if (pPC_out != NULL) {
+                *pPC_out = ((uint16_t)(respParam.pc[0]) << 8) | (uint16_t)(respParam.pc[1]);
+            }
+            if (ppEPC_out != NULL) {
+                *ppEPC_out = (uint8_t*) malloc(__UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+                memcpy(*ppEPC_out, respParam.epc, __UHFMAN_TAG_EPC_LENGTH * sizeof(uint8_t));
+            }
+            if (pEPC_len_out != NULL) {
+                *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
+            }
+            if (pRespErrCode_out != NULL) {
+                switch (rerr) {
+                    case YPDR200_RESP_ERR_CODE_ACCESS_FAIL:
+                        *pRespErrCode_out = UHFMAN_TAG_ERR_ACCESS_DENIED;
+                        break;
+                    default:
+                        *pRespErrCode_out = UHFMAN_TAG_ERR_UNKNOWN;
+                        break;
+                }
+            }
+            return UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_x82: %d", rv);
+            return UHFMAN_WRITE_TAG_MEM_ERR_UNKNOWN;
+    }    
+    #else
+    return UHFMAN_LOCK_TAG_MEM_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
