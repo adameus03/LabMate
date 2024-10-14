@@ -7,6 +7,7 @@
 #include <ptypes.h>
 #include <assert.h>
 #include "uhfman.h"
+#include "tag_err.h"
 
 void main_uhfman_poll_handler(uint16_t handle) {
     uhfman_tag_t tag = uhfman_tag_get(handle);
@@ -217,14 +218,52 @@ int main() {
         fprintf(stdout, "uhfman_set_select_mode returned successfully\n");
     }
 
-    fprintf(stdout, "Calling uhfman_write_tag_mem\n");
     const uint8_t access_password[4] = {
-        //0x00, 0x00, 0x00, 0x00
+        0x00, 0x00, 0x00, 0x00
         //0x00, 0x00, 0xFF, 0xFF
         //0xFF, 0xFF, 0x00, 0x00
-        0x12, 0x34, 0x56, 0x78
+        //0x12, 0x34, 0x56, 0x78
         //0x77, 0x77, 0x77, 0x77
     };
+
+    fprintf(stdout, "Calling uhfman_lock_tag_mem\n");
+    uint16_t _lock_mask_flags = UHFMAN_LOCK_TAG_MEM_EPC_MASK_PWD_WRITE | UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PWD_RW | UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PWD_RW;
+    uint16_t _lock_action_flags = (uint16_t)(~UHFMAN_LOCK_TAG_MEM_EPC_ACTION_PWD_WRITE & ~UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_ACTION_PWD_RW & ~UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_ACTION_PWD_RW);
+    uint16_t _pc = 0xFFFF;
+    uint8_t* _pEPC = NULL;
+    size_t _epc_len = 0;
+    uint8_t _resp_err = 0;
+    err = uhfman_lock_tag_mem(&uhfmanCtx, access_password, _lock_mask_flags, _lock_action_flags, &_pc, &_pEPC, &_epc_len, &_resp_err);
+    if (err != UHFMAN_LOCK_TAG_MEM_ERR_SUCCESS) {
+        if (err == UHFMAN_LOCK_TAG_MEM_ERR_ERROR_RESPONSE) {
+            if (_resp_err == TAG_ERR_ACCESS_DENIED) {
+                //P_ERROR("Error response obtained from tag");
+                P_ERROR("Access denied error when trying to lock tag's memory (most probably the provided access password was invalid)");
+                fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", _pc, _epc_len);
+                fprintf(stdout, "EPC: ");
+                for (size_t i = 0; i < _epc_len; i++) {
+                    fprintf(stdout, "%02X ", _pEPC[i]);
+                }
+                fprintf(stdout, "\n");
+                free (_pEPC);
+            }
+        } else {
+            P_ERROR("USB related error"); // TODO improve those error messages, theses are not always really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
+        }
+        fprintf(stderr, "ERROR (ignoring): uhfman_lock_tag_mem returned %d\n", err);
+        //return 1;
+    } else {
+        fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", _pc, _epc_len);
+        fprintf(stdout, "EPC: ");
+        for (size_t i = 0; i < _epc_len; i++) {
+            fprintf(stdout, "%02X ", _pEPC[i]);
+        }
+        fprintf(stdout, "\n");
+        free (_pEPC);
+        fprintf(stdout, "uhfman_lock_tag_mem returned successfully\n");
+    }
+
+    fprintf(stdout, "Calling uhfman_write_tag_mem\n");
     uhfman_tag_mem_bank_t mem_bank = UHFMAN_TAG_MEM_BANK_EPC;
     uint16_t wordPtr = UHFMAN_TAG_MEM_EPC_WORD_PTR_EPC;
     uint16_t wordCount = UHFMAN_TAG_MEM_EPC_WORD_COUNT_EPC;
@@ -286,7 +325,7 @@ int main() {
     err = uhfman_write_tag_mem(&uhfmanCtx, access_password, mem_bank, wordPtr, wordCount, new_access_passwd, &pc, &pEPC, &epc_len, &resp_err);
     if (err != UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS) {
         if (err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE) {
-            if (resp_err == UHFMAN_TAG_ERR_ACCESS_DENIED) {
+            if (resp_err == TAG_ERR_ACCESS_DENIED) {
                 //P_ERROR("Error response obtained from tag");
                 P_ERROR("Access denied error when trying to write tag's memory (most probably the provided access password was invalid)");
                 fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
@@ -312,6 +351,43 @@ int main() {
         free (pEPC);
         fprintf(stdout, "uhfman_write_tag_mem returned successfully (for access passwd write)\n");
     }
+
+    // fprintf(stdout, "Calling uhfman_lock_tag_mem\n");
+    // uint16_t lock_mask_flags = UHFMAN_LOCK_TAG_MEM_EPC_MASK_PWD_WRITE | UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PWD_RW | UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PWD_RW;
+    // uint16_t lock_action_flags = UHFMAN_LOCK_TAG_MEM_EPC_ACTION_PWD_WRITE | UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_ACTION_PWD_RW | UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_ACTION_PWD_RW;
+    // pc = 0xFFFF;
+    // pEPC = NULL;
+    // epc_len = 0;
+    // resp_err = 0;
+    // err = uhfman_lock_tag_mem(&uhfmanCtx, new_access_passwd, lock_mask_flags, lock_action_flags, &pc, &pEPC, &epc_len, &resp_err);
+    // if (err != UHFMAN_LOCK_TAG_MEM_ERR_SUCCESS) {
+    //     if (err == UHFMAN_LOCK_TAG_MEM_ERR_ERROR_RESPONSE) {
+    //         if (resp_err == UHFMAN_TAG_ERR_ACCESS_DENIED) {
+    //             //P_ERROR("Error response obtained from tag");
+    //             P_ERROR("Access denied error when trying to lock tag's memory (most probably the provided access password was invalid)");
+    //             fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
+    //             fprintf(stdout, "EPC: ");
+    //             for (size_t i = 0; i < epc_len; i++) {
+    //                 fprintf(stdout, "%02X ", pEPC[i]);
+    //             }
+    //             fprintf(stdout, "\n");
+    //             free (pEPC);
+    //         }
+    //     } else {
+    //         P_ERROR("USB related error"); // TODO improve those error messages, theses are not always really neccessarily USB related, but rather related to underlying UHF RFID interrogator module
+    //     }
+    //     fprintf(stderr, "ERROR (ignoring): uhfman_lock_tag_mem returned %d\n", err);
+    //     //return 1;
+    // } else {
+    //     fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", pc, epc_len);
+    //     fprintf(stdout, "EPC: ");
+    //     for (size_t i = 0; i < epc_len; i++) {
+    //         fprintf(stdout, "%02X ", pEPC[i]);
+    //     }
+    //     fprintf(stdout, "\n");
+    //     free (pEPC);
+    //     fprintf(stdout, "uhfman_lock_tag_mem returned successfully\n");
+    // }
 
     // exit(0);
 

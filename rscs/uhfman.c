@@ -1186,14 +1186,15 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
                 *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
             }
             if (pRespErrCode_out != NULL) {
-                switch (rerr) {
-                    case YPDR200_RESP_ERR_CODE_ACCESS_FAIL:
-                        *pRespErrCode_out = UHFMAN_TAG_ERR_ACCESS_DENIED;
-                        break;
-                    default:
-                        *pRespErrCode_out = UHFMAN_TAG_ERR_UNKNOWN;
-                        break;
-                }
+                // switch (rerr) {
+                //     case YPDR200_RESP_ERR_CODE_ACCESS_FAIL:
+                //         *pRespErrCode_out = UHFMAN_TAG_ERR_ACCESS_DENIED;
+                //         break;
+                //     default:
+                //         *pRespErrCode_out = UHFMAN_TAG_ERR_UNKNOWN;
+                //         break;
+                // }
+                *pRespErrCode_out = rerr;
             }
             return UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE;
         default:
@@ -1274,14 +1275,15 @@ uhfman_err_t uhfman_lock_tag_mem(uhfman_ctx_t* pCtx,
                 *pEPC_len_out = __UHFMAN_TAG_EPC_LENGTH;
             }
             if (pRespErrCode_out != NULL) {
-                switch (rerr) {
-                    case YPDR200_RESP_ERR_CODE_ACCESS_FAIL:
-                        *pRespErrCode_out = UHFMAN_TAG_ERR_ACCESS_DENIED;
-                        break;
-                    default:
-                        *pRespErrCode_out = UHFMAN_TAG_ERR_UNKNOWN;
-                        break;
-                }
+                // switch (rerr) {
+                //     case YPDR200_RESP_ERR_CODE_ACCESS_FAIL:
+                //         *pRespErrCode_out = UHFMAN_TAG_ERR_ACCESS_DENIED;
+                //         break;
+                //     default:
+                //         *pRespErrCode_out = UHFMAN_TAG_ERR_UNKNOWN;
+                //         break;
+                // }
+                *pRespErrCode_out = rerr;
             }
             return UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE;
         default:

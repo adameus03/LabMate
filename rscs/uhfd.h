@@ -84,12 +84,20 @@ typedef struct {
     uint8_t read_rate;
 } uhfd_dev_m_t;
 
+// typedef enum {
+//     UHFD_DEV_EMB_STATE_READY = 0x00,
+//     UHFD_DEV_EMB_STATE
+//     UHFD_DEV_EMB_STATE_PASSWDS_WRITTEN = 0x01,
+//     UHFD_DEV_EMB_STATE_EPC_WRITTEN = 0x02,
+// } uhfd_dev_emb_state_t;
+
 typedef struct {
     uint8_t epc[UHFD_EPC_LENGTH];
     uint8_t access_passwd[4];
     uint8_t kill_passwd[4];
     uint8_t flags;
     uint8_t flags1; // internal flags for handling partial write
+    //uint8_t emb_state; // internal state for handling partial progress during embodiment
     uhfd_dev_m_t measurement;
     unsigned long devno;
 } uhfd_dev_t;

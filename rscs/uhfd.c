@@ -6,6 +6,7 @@
 #include <pmacros.h>
 #include <assert.h>
 #include "uhfman.h"
+#include "tag_err.h"
 #include "log.h"
 
 //MTRand __uhfd_mtrand;
@@ -239,7 +240,16 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     // [skip] Set select and query parameters such that we communicate only with that tag (see old_main.c)
     // [skip]Check if the EPC is already used by any tag and handle that (error? or warning? or not?)
     
-    // Set generic query parameters, select mode, select params, tx power (smaller range to avoid unwanted writes)
+    // Schedule:
+    // 1. Set generic query parameters, select mode, select params, tx power (smaller range to avoid unwanted writes)
+    // 2. lock tag (deassert pwd). If we get memory overrun error from tag (error response frame with error code 0xC3), then return and indicate that the tag doesn't support access/kill password
+    // 3. write passwords
+    // 4. lock tag (assert pwd)
+    // 5. write epc
+
+    // Implementation:
+
+    // 1. Set generic query parameters, select mode, select params, tx power (smaller range to avoid unwanted writes)
     uint8_t select_target = UHFMAN_SELECT_TARGET_SL;
     uint8_t select_action = uhfman_select_action(UHFMAN_SEL_SL_ASSERT, UHFMAN_SEL_SL_DEASSERT);
     assert(select_action != UHFMAN_SELECT_ACTION_UNKNOWN);
@@ -256,21 +266,25 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     float txPower = 15.0f; // for now 15dBm, but we can make setting it 0 automatically use the minimum power for specific interrogator hardware (in the future)
     
     assert(TRUE == p_mutex_lock(pUHFD->pUhfmanCtxMutex));
+    LOG_D("uhfd_embody_dev: Setting select parameters");
     uhfman_err_t err = uhfman_set_select_param(&pUHFD->uhfmanCtx, select_target, select_action, select_memBank, select_ptr, select_maskLen, select_truncate, select_mask);
     if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_select_param failed with error %d", err);
         return -1;
     }
+    LOG_D("uhfd_embody_dev: Setting query parameters");
     err = uhfman_set_query_params(&pUHFD->uhfmanCtx, query_sel, query_session, query_target, query_q);
     if (err != UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_query_params failed with error %d", err);
         return -1;
     }
+    LOG_D("uhfd_embody_dev: Setting select mode");
     err = uhfman_set_select_mode(&pUHFD->uhfmanCtx, select_mode);
     if (err != UHFMAN_SET_SELECT_MODE_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_select_mode failed with error %d", err);
         return -1;
     }
+    LOG_D("uhfd_embody_dev: Setting transmit power");
     err = uhfman_set_transmit_power(&pUHFD->uhfmanCtx, txPower);
     if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_transmit_power failed with error %d", err);
@@ -298,13 +312,59 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
 
     assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_PASSWDS_WRITTEN) != (dev.flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_PASSWDS_WRITTEN)));
     if (!(dev.flags1 & UHFD_DEV_FLAG1_PASSWDS_WRITTEN)) {
-        // Write kill password and access password (by default they are zeroes before doing anything. Should we allow embodying a tag which already has a non-zero password?)
+        // 2. lock tag (deassert pwd). If we get memory overrun error from tag (error response frame with error code 0xC3), then return and indicate that the tag doesn't support access/kill password
+        uint16_t _lock_mask_flags = UHFMAN_LOCK_TAG_MEM_EPC_MASK_PWD_WRITE | UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PWD_RW | UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PWD_RW;
+        uint16_t _lock_action_flags = (uint16_t)(~UHFMAN_LOCK_TAG_MEM_EPC_ACTION_PWD_WRITE & ~UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_ACTION_PWD_RW & ~UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_ACTION_PWD_RW);
+        _pc = 0xFFFF;
+        _pEPC = NULL;
+        _epc_len = 0;
+        _resp_err = 0;
+        LOG_D("uhfd_embody_dev: Locking tag memory to deassert pwd");
+        err = uhfman_lock_tag_mem(&pUHFD->uhfmanCtx, (uint8_t[4]){0x00, 0x00, 0x00, 0x00}, _lock_mask_flags, _lock_action_flags, &_pc, &_pEPC, &_epc_len, &_resp_err);
+        if (err != UHFMAN_LOCK_TAG_MEM_ERR_SUCCESS) {
+            if (err == UHFMAN_LOCK_TAG_MEM_ERR_ERROR_RESPONSE) {
+                tag_gen2_err_type_t _tag_errtype;
+                uint8_t _resp_err_resolved = tag_gen2_err_resolve(_resp_err, &_tag_errtype);
+                if (_resp_err_resolved == TAG_GEN2_ERR_MEMORY_OVERRUN) {
+                    assert (TAG_GEN2_ERR_TYPE_LOCK == _tag_errtype);
+                    LOG_E("uhfd_embody_dev: Tag doesn't support access/kill password (memory overrun error)");
+                    free (_pEPC);
+                    return -1;
+                }
+                if (_resp_err == TAG_ERR_ACCESS_DENIED) {
+                    assert (_tag_errtype == TAG_GEN2_ERR_TYPE_OTHER);
+                    assert(_resp_err_resolved == TAG_GEN2_ERR_UNKNOWN);
+                    //P_ERROR("Error response obtained from tag");
+                    LOG_E("uhfd_embody_dev: Access denied error when trying to lock tag's memory (most probably the provided access password was invalid)");
+                    fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", _pc, _epc_len);
+                    fprintf(stdout, "EPC: ");
+                    for (size_t i = 0; i < _epc_len; i++) {
+                        fprintf(stdout, "%02X ", _pEPC[i]);
+                    }
+                    fprintf(stdout, "\n");
+                    free (_pEPC);
+                    return -1;
+                } 
+                LOG_E("uhfd_embody_dev: Received unexpected error response from tag (error code 0x%02X)", _resp_err);
+                free (_pEPC);
+                return -1;
+            } else {
+                LOG_E("uhfd_embody_dev: Error communicating with interrogator (uhfman_lock_tag_mem returned %d)", err);
+                return -1;
+            }
+        }
+        // 3. Write kill password and access password (by default they are zeroes before doing anything. Should we allow embodying a tag which already has a non-zero password?)
+        _pc = 0xFFFF;
+        _pEPC = NULL;
+        _epc_len = 0;
+        _resp_err = 0;
         assert(UHFMAN_TAG_MEM_RESERVED_WORD_PTR_KILL_PASSWD + UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_KILL_PASSWD == UHFMAN_TAG_MEM_RESERVED_WORD_PTR_ACCESS_PASSWD);
         assert(sizeof(dev.kill_passwd) == 2*UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_KILL_PASSWD);
         assert(sizeof(dev.access_passwd) == 2*UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_ACCESS_PASSWD);
         uint8_t passwords[2*(UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_KILL_PASSWD + UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_ACCESS_PASSWD)] = {0};
         memcpy(passwords, dev.kill_passwd, 2*UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_KILL_PASSWD);
         memcpy(passwords + 2*UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_KILL_PASSWD, dev.access_passwd, 2*UHFMAN_TAG_MEM_RESERVED_WORD_COUNT_ACCESS_PASSWD);
+        LOG_D("uhfd_embody_dev: Writing kill and access passwords to tag");
         err = uhfman_write_tag_mem(&pUHFD->uhfmanCtx, 
                                     (uint8_t[4]){0x00, 0x00, 0x00, 0x00}, 
                                     UHFMAN_TAG_MEM_BANK_RESERVED, 
@@ -313,7 +373,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
                                     passwords,
                                     &_pc, &_pEPC, &_epc_len, &_resp_err);
         if (err != UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS) {
-            if (err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE && _resp_err == UHFMAN_TAG_ERR_ACCESS_DENIED) {
+            if (err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE && _resp_err == TAG_ERR_ACCESS_DENIED) {
                 assert(_pEPC != NULL);
                 LOG_I_TBC("Access denied for tag (pc = 0x0x%04X, epc_len = %lu, EPC: ", _pc, _epc_len);
                 for (size_t i=0; i<_epc_len; i++) {
@@ -350,8 +410,56 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     } else {
         LOG_W("uhfd_embody_dev: Passwords already written for tag (devno = %lu)", dev.devno);
     }
-    // Write EPC
+    // 4. Lock tag (assert pwd)
+    uint16_t _lock_mask_flags = UHFMAN_LOCK_TAG_MEM_EPC_MASK_PWD_WRITE | UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_PWD_RW | UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_PWD_RW;
+    uint16_t _lock_action_flags = UHFMAN_LOCK_TAG_MEM_EPC_ACTION_PWD_WRITE | UHFMAN_LOCK_TAG_MEM_ACCESS_PASSWD_ACTION_PWD_RW | UHFMAN_LOCK_TAG_MEM_KILL_PASSWD_ACTION_PWD_RW;
+    _pc = 0xFFFF;
+    _pEPC = NULL;
+    _epc_len = 0;
+    _resp_err = 0;
+    LOG_D("uhfd_embody_dev: Locking tag memory to assert pwd");
+    err = uhfman_lock_tag_mem(&pUHFD->uhfmanCtx, dev.access_passwd, _lock_mask_flags, _lock_action_flags, &_pc, &_pEPC, &_epc_len, &_resp_err);
+    if (err != UHFMAN_LOCK_TAG_MEM_ERR_SUCCESS) {
+        if (err == UHFMAN_LOCK_TAG_MEM_ERR_ERROR_RESPONSE) {
+            tag_gen2_err_type_t _tag_errtype;
+            uint8_t _resp_err_resolved = tag_gen2_err_resolve(_resp_err, &_tag_errtype);
+            if (_resp_err_resolved == TAG_GEN2_ERR_MEMORY_OVERRUN) {
+                assert (TAG_GEN2_ERR_TYPE_LOCK == _tag_errtype);
+                LOG_E("uhfd_embody_dev: Tag doesn't support access/kill password (memory overrun error)");
+                free (_pEPC);
+                assert(0); // this shouldn't happen
+            }
+            if (_resp_err == TAG_ERR_ACCESS_DENIED) {
+                assert (_tag_errtype == TAG_GEN2_ERR_TYPE_OTHER);
+                assert(_resp_err_resolved == TAG_GEN2_ERR_UNKNOWN);
+                //P_ERROR("Error response obtained from tag");
+                LOG_E("uhfd_embody_dev: Access denied error when trying to lock tag's memory (most probably the provided access password was invalid)");
+                assert(0); // this shouldn't happen
+                fprintf(stdout, "pc = 0x%04X, epc_len = %lu\n", _pc, _epc_len);
+                fprintf(stdout, "EPC: ");
+                for (size_t i = 0; i < _epc_len; i++) {
+                    fprintf(stdout, "%02X ", _pEPC[i]);
+                }
+                fprintf(stdout, "\n");
+                free (_pEPC);
+            } else {
+                LOG_E("uhfd_embody_dev: Received unexpected error response from tag (error code 0x%02X)", _resp_err);
+                free (_pEPC);
+            }
+        } else {
+            LOG_E("uhfd_embody_dev: Error communicating with interrogator (uhfman_lock_tag_mem returned %d)", err);
+        }
+        assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
+        uhfd_dev_t* pDev = &pUHFD->da.pDevs[devno];
+        pDev->flags1 |= UHFD_DEV_FLAG1_PASSWDS_WRITTEN;
+        assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN | ~UHFD_DEV_FLAG1_EPC_WRITTEN) == (pDev->flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_EPC_WRITTEN)));
+        assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex)); // TODO Have we forgotten about this somewhere else? And does it always matter (e.g. when the driver terminates due to critical error)
+        return -1;
+    }
+    // 5. Write EPC
     //err = uhfman_write_tag_mem(&pUHFD->uhfmanCtx, access_password, mem_bank, wordPtr, wordCount, pDev->epc, &_pc, &_pEPC, &_epc_len, &_resp_err);
+    LOG_D("uhfd_embody_dev: Writing EPC to tag");
     err = uhfman_write_tag_mem(&pUHFD->uhfmanCtx, 
                                 dev.access_passwd, 
                                 UHFMAN_TAG_MEM_BANK_EPC, 
@@ -360,7 +468,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
                                 dev.epc,
                                 &_pc, &_pEPC, &_epc_len, &_resp_err);
     if (err != UHFMAN_WRITE_TAG_MEM_ERR_SUCCESS) {
-        if ((err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE) && (_resp_err == UHFMAN_TAG_ERR_ACCESS_DENIED)) {
+        if ((err == UHFMAN_WRITE_TAG_MEM_ERR_ERROR_RESPONSE) && (_resp_err == TAG_ERR_ACCESS_DENIED)) {
             assert(_pEPC != NULL);
             LOG_I_TBC("Access denied for tag (pc = 0x0x%04X, epc_len = %lu, EPC: ", _pc, _epc_len);
             for (size_t i=0; i<_epc_len; i++) {
