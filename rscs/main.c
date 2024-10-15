@@ -870,6 +870,9 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		if (flags & UHFD_DEV_FLAG_DELETED) {
 			LOG_D("write: devno=%lu is deleted", devno);
 			return -ENOENT;
+		} else if (flags & UHFD_DEV_FLAG_EMBODIED) {
+			LOG_D("write: devno=%lu is already embodied", devno); // TODO allow re-embodying in the future?
+			return -EPERM;
 		}
 		rv = uhfd_embody_dev(&__main_globals.uhfd, pDevCopy->devno);
 		if (rv != 0) {
@@ -879,7 +882,7 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
 		assert(rv == 0);
 		assert(pDevCopy->flags & UHFD_DEV_FLAG_EMBODIED);
-		return 0;
+		return size;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
 		LOG_E("Write /uhfX/driver/measure: not implemented");
@@ -888,8 +891,8 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		LOG_E("Write %s: not supported", path);
 		return -1;
 	}
-	
-	return strlen( buffer );
+	LOG_W("Write %s: Invalid path", path);
+	return -ENOENT;
 }
 
 static struct fuse_operations operations = {

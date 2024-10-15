@@ -270,24 +270,28 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     uhfman_err_t err = uhfman_set_select_param(&pUHFD->uhfmanCtx, select_target, select_action, select_memBank, select_ptr, select_maskLen, select_truncate, select_mask);
     if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_select_param failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
         return -1;
     }
     LOG_D("uhfd_embody_dev: Setting query parameters");
     err = uhfman_set_query_params(&pUHFD->uhfmanCtx, query_sel, query_session, query_target, query_q);
     if (err != UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_query_params failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
         return -1;
     }
     LOG_D("uhfd_embody_dev: Setting select mode");
     err = uhfman_set_select_mode(&pUHFD->uhfmanCtx, select_mode);
     if (err != UHFMAN_SET_SELECT_MODE_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_select_mode failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
         return -1;
     }
     LOG_D("uhfd_embody_dev: Setting transmit power");
     err = uhfman_set_transmit_power(&pUHFD->uhfmanCtx, txPower);
     if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
         LOG_E("uhfd_embody_dev: uhfman_set_transmit_power failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
         return -1;
     }
 
@@ -310,6 +314,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     uhfd_dev_t dev = pUHFD->da.pDevs[devno];
     assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDaRWLock));
 
+    LOG_V("uhfd_embody_dev: dev.flags = 0x%02X, dev.flags1 = 0x%02X", dev.flags, dev.flags1);
     assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_PASSWDS_WRITTEN) != (dev.flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_PASSWDS_WRITTEN)));
     if (!(dev.flags1 & UHFD_DEV_FLAG1_PASSWDS_WRITTEN)) {
         // 2. lock tag (deassert pwd). If we get memory overrun error from tag (error response frame with error code 0xC3), then return and indicate that the tag doesn't support access/kill password
@@ -329,9 +334,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
                     assert (TAG_GEN2_ERR_TYPE_LOCK == _tag_errtype);
                     LOG_E("uhfd_embody_dev: Tag doesn't support access/kill password (memory overrun error)");
                     free (_pEPC);
-                    return -1;
-                }
-                if (_resp_err == TAG_ERR_ACCESS_DENIED) {
+                } else if (_resp_err == TAG_ERR_ACCESS_DENIED) {
                     assert (_tag_errtype == TAG_GEN2_ERR_TYPE_OTHER);
                     assert(_resp_err_resolved == TAG_GEN2_ERR_UNKNOWN);
                     //P_ERROR("Error response obtained from tag");
@@ -343,15 +346,14 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
                     }
                     fprintf(stdout, "\n");
                     free (_pEPC);
-                    return -1;
                 } 
                 LOG_E("uhfd_embody_dev: Received unexpected error response from tag (error code 0x%02X)", _resp_err);
                 free (_pEPC);
-                return -1;
             } else {
                 LOG_E("uhfd_embody_dev: Error communicating with interrogator (uhfman_lock_tag_mem returned %d)", err);
-                return -1;
             }
+            assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+            return -1;
         }
         // 3. Write kill password and access password (by default they are zeroes before doing anything. Should we allow embodying a tag which already has a non-zero password?)
         _pc = 0xFFFF;
@@ -452,7 +454,8 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
         assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
         uhfd_dev_t* pDev = &pUHFD->da.pDevs[devno];
         pDev->flags1 |= UHFD_DEV_FLAG1_PASSWDS_WRITTEN;
-        assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN | ~UHFD_DEV_FLAG1_EPC_WRITTEN) == (pDev->flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_EPC_WRITTEN)));
+        //assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN | ~UHFD_DEV_FLAG1_EPC_WRITTEN) == (pDev->flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_EPC_WRITTEN)));
+        assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN & ~UHFD_DEV_FLAG1_EPC_WRITTEN) == (pDev->flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_EPC_WRITTEN)));
         assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
         assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex)); // TODO Have we forgotten about this somewhere else? And does it always matter (e.g. when the driver terminates due to critical error)
         return -1;
@@ -482,7 +485,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
         assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
         uhfd_dev_t* pDev = &pUHFD->da.pDevs[devno];
         pDev->flags1 |= UHFD_DEV_FLAG1_PASSWDS_WRITTEN;
-        assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN | ~UHFD_DEV_FLAG1_EPC_WRITTEN) == (pDev->flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_EPC_WRITTEN)));
+        assert((UHFD_DEV_FLAG1_PASSWDS_WRITTEN & ~UHFD_DEV_FLAG1_EPC_WRITTEN) == (pDev->flags1 & (UHFD_DEV_FLAG1_PASSWDS_WRITTEN | UHFD_DEV_FLAG1_EPC_WRITTEN)));
         assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
         assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
         return -1;
