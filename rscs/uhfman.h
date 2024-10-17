@@ -265,7 +265,7 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx);
 #define UHFMAN_SINGLE_POLLING_ERR_READ_NOTIFICATION UHFMAN_ERR_READ_NOTIFICATION
 #define UHFMAN_SINGLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE UHFMAN_ERR_UNEXPECTED_FRAME_TYPE
 #define UHFMAN_SINGLE_POLLING_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
-uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx);
+uhfman_err_t uhfman_single_polling(uhfman_ctx_t* pCtx, void* pUserData);
 
 #define UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS UHFMAN_ERR_SUCCESS
 #define UHFMAN_MULTIPLE_POLLING_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
@@ -276,7 +276,16 @@ uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx);
 #define UHFMAN_MULTIPLE_POLLING_ERR_READ_NOTIFICATION UHFMAN_ERR_READ_NOTIFICATION
 #define UHFMAN_MULTIPLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE UHFMAN_ERR_UNEXPECTED_FRAME_TYPE
 #define UHFMAN_MULTIPLE_POLLING_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
-uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx);
+uhfman_err_t uhfman_multiple_polling(uhfman_ctx_t* pCtx, unsigned long timeout_us, void* pUserData);
+
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_SEND_COMMAND UHFMAN_ERR_SEND_COMMAND
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_READ_RESPONSE UHFMAN_ERR_READ_RESPONSE
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_NOT_SUPPORTED UHFMAN_ERR_NOT_SUPPORTED
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_UNKNOWN_DEVICE_MODEL UHFMAN_ERR_UNKNOWN_DEVICE_MODEL
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_ERROR_RESPONSE UHFMAN_ERR_ERROR_RESPONSE
+#define UHFMAN_MULTIPLE_POLLING_STOP_ERR_UNKNOWN UHFMAN_ERR_UNKNOWN
+uhfman_err_t uhfman_multiple_polling_stop(uhfman_ctx_t* pCtx);
 
 typedef enum {
     UHFMAN_TAG_MEM_BANK_RESERVED = 0x00,
@@ -393,14 +402,17 @@ uhfman_err_t uhfman_lock_tag_mem(uhfman_ctx_t* pCtx,
 //----------------------------------------------
 
 //TODO adjust UHFMAN_TAG_PERIOD_NREADS
-#define UHFMAN_TAG_PERIOD_NREADS /*40*/ /*5*/ /*10*/ 2
+// TODO make dynamic in the future (replace with dynamic mem allocation) --> more robust especially when using UHFMAN_POLL_MODE_RAW
+/* Affects the stats collecting when using UHFMAN_POLL_MODE_TRACK. When using UHFMAN_POLL_MODE_RAW it should be set big enough to handle most frequent reads in multiple polling. */
+#define UHFMAN_TAG_PERIOD_NREADS /*40*/ /*5*/ 10 /*2*/
 // TODO Make UHFMAN_MAX_NUM_TAGS dynamic in the future (replace with dynamic mem allocation)
 #define UHFMAN_MAX_NUM_TAGS 500 
 typedef struct {
     uint16_t handle;
     uint8_t epc[YPDR200_X22_NTF_PARAM_EPC_LENGTH];
     uint32_t num_reads;
-    uint32_t read_times[UHFMAN_TAG_PERIOD_NREADS];
+    //uint32_t read_times[UHFMAN_TAG_PERIOD_NREADS];
+    unsigned long read_times[UHFMAN_TAG_PERIOD_NREADS];
     uint8_t rssi[UHFMAN_TAG_PERIOD_NREADS];
 } uhfman_tag_t;
 
@@ -411,15 +423,34 @@ typedef struct {
 
 void uhfman_list_tags(uhfman_tag_t** ppTags, uint32_t* pnTags_out);
 
-typedef void (*uhfman_tag_handler_t)(uhfman_tag_t tag);
-typedef void (*uhfman_poll_handler_t)(uint16_t handle);
+typedef void (*uhfman_tag_handler_t)(uhfman_tag_t tag, void* pUserData);
+typedef void (*uhfman_poll_handler_t)(uint16_t handle, void* pUserData);
 void uhfman_set_new_tag_event_handler(uhfman_tag_handler_t handler);
 
 void uhfman_unset_new_tag_event_handler();
 
-void ufhman_set_poll_handler(uhfman_poll_handler_t handler);
+void uhfman_set_poll_handler(uhfman_poll_handler_t handler);
 
-void ufhman_unset_poll_handler();
+void uhfman_unset_poll_handler();
+
+void uhfman_tag_anonymous_forget(); // TODO what about passing the context parameter here and in similar functions? Should we pass it and why?
+
+typedef enum {
+  /* Raw mode: the tag is not tracked, only the EPC is read and rssi is measured. Computationally leightweight. */
+  UHFMAN_POLL_MODE_RAW = 0,
+  /* Track mode: the tag is tracked, the EPC is read, rssi is measured and the tag is stored in an internal array which increases in size as new tags are discovered. Searching the array when updating statistics increases computational cost. (TODO unless tags were given sequential EPC or devno numbers were stored in tag memory) */
+  UHFMAN_POLL_MODE_TRACK = 1
+} uhfman_poll_mode_t;
+
+void uhfman_set_poll_mode(const uhfman_poll_mode_t mode);
+
+typedef enum {
+  UHFMAN_TIME_PRECISION_MS = 0,
+  UHFMAN_TIME_PRECISION_US = 1,
+  UHFMAN_TIME_PRECISION_NS = 2
+} uhfman_time_precision_t;
+
+void uhfman_set_time_precision(const uhfman_time_precision_t precision);
 
 uhfman_tag_t uhfman_tag_get(uint16_t handle); // TODO threading, locking
 

@@ -129,6 +129,7 @@ typedef enum ypdr200_frame_cmd {
     YPDR200_FRAME_CMD_X12 = 0x12,
     YPDR200_FRAME_CMD_X22 = 0x22,
     YPDR200_FRAME_CMD_X27 = 0x27,
+    YPDR200_FRAME_CMD_X28 = 0x28,
     YPDR200_FRAME_CMD_X39 = 0x39,
     YPDR200_FRAME_CMD_X49 = 0x49,
     YPDR200_FRAME_CMD_X82 = 0x82,
@@ -829,52 +830,52 @@ static int ypdr200_x22_ntf_param_check_crc(ypdr200_x22_ntf_param_t* pNtfParam) {
     return 1; // TODO Fix CRC16
 }
 
-int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData) {
+int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, void* pCbUserData) {
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X22, 0U, NULL);
     int err = ypdr200_frame_send(&frameOut, pCtx);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X22_ERR_SEND_COMMAND;
     }
 
-    while (1) { // for now // TODO change this
-        ypdr200_frame_t frameIn = {};
-        err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X22, pRespErrCode);
-        if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
-            if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
-                return YPDR200_X22_ERR_ERROR_RESPONSE;
-            }
-            return YPDR200_X22_ERR_READ_RESPONSE;
+    //while (1) { // for now // TODO change this
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X22, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X22_ERR_ERROR_RESPONSE;
         }
-
-        if (frameIn.prolog.type != YPDR200_FRAME_TYPE_NOTIFICATION) {
-            LOG_W("Unexpected frame type: expected=0x%02X, actual=0x%02X", YPDR200_FRAME_TYPE_NOTIFICATION, frameIn.prolog.type);
-            ypdr200_frame_dispose(&frameIn);
-            return YPDR200_X22_ERR_UNEXPECTED_FRAME_TYPE;
-        }
-
-        uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
-        if (paramInLen != YPDR200_X22_NTF_PARAM_SIZE) {
-            LOG_W("Unexpected param data length: expected=%d, actual=%d", YPDR200_X22_NTF_PARAM_SIZE, paramInLen);
-            ypdr200_frame_dispose(&frameIn);
-            return YPDR200_X22_ERR_READ_NOTIFICATION;
-        }
-
-        ypdr200_x22_ntf_param_t ntfParam;
-        memcpy(ntfParam.raw, frameIn.pParamData, YPDR200_X22_NTF_PARAM_SIZE);
-        if (!ypdr200_x22_ntf_param_check_crc(&ntfParam)) {
-            LOG_W("ypdr200 0x22 notification CRC16 check failed for tag reply");
-            ypdr200_frame_dispose(&frameIn);
-            return YPDR200_X22_ERR_READ_NOTIFICATION;
-        }
-
-        if (cb != NULL) {
-            cb(ntfParam, pCbUserData);
-        } else {
-            LOG_W("WARNING (ypdr200_x22): No callback provided for notification handling");
-        }
-
-        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X22_ERR_READ_RESPONSE;
     }
+
+    if (frameIn.prolog.type != YPDR200_FRAME_TYPE_NOTIFICATION) {
+        LOG_W("Unexpected frame type: expected=0x%02X, actual=0x%02X", YPDR200_FRAME_TYPE_NOTIFICATION, frameIn.prolog.type);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X22_ERR_UNEXPECTED_FRAME_TYPE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != YPDR200_X22_NTF_PARAM_SIZE) {
+        LOG_W("Unexpected param data length: expected=%d, actual=%d", YPDR200_X22_NTF_PARAM_SIZE, paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X22_ERR_READ_NOTIFICATION;
+    }
+
+    ypdr200_x22_ntf_param_t ntfParam;
+    memcpy(ntfParam.raw, frameIn.pParamData, YPDR200_X22_NTF_PARAM_SIZE);
+    if (!ypdr200_x22_ntf_param_check_crc(&ntfParam)) {
+        LOG_W("ypdr200 0x22 notification CRC16 check failed for tag reply");
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X22_ERR_READ_NOTIFICATION;
+    }
+
+    if (cb != NULL) {
+        cb(ntfParam, pCbUserData);
+    } else {
+        LOG_W("WARNING (ypdr200_x22): No callback provided for notification handling");
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+    //}
     return YPDR200_X22_ERR_SUCCESS;
 }
 
@@ -886,14 +887,19 @@ ypdr200_x27_req_param_t ypdr200_x27_req_param_make(uint16_t cnt) {
     };
 }
 
-int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, const void* pCbUserData) {
+int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_err_code_t* pRespErrCode, ypdr200_x22_callback cb, void* pCbUserData, size_t timeout_us) {
+    // <<< implement timeout
     ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X27, YPDR200_X27_REQ_PARAM_SIZE, param.raw);
     int err = ypdr200_frame_send(&frameOut, pCtx);
     if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
         return YPDR200_X27_ERR_SEND_COMMAND;
     }
 
-    while (1) { // for now // TODO change this
+    struct timespec ts;
+    assert(0 == clock_gettime(CLOCK_MONOTONIC, &ts));
+    uint64_t start_us = (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+
+    while (1) { // until timeout
         ypdr200_frame_t frameIn = {};
         err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X27, pRespErrCode);
         if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
@@ -940,8 +946,48 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
         }
 
         ypdr200_frame_dispose(&frameIn);
+
+        // Check timeout
+        assert(0 == clock_gettime(CLOCK_MONOTONIC, &ts));
+        uint64_t now_us = (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+        if (now_us - start_us >= timeout_us) {
+            break;
+        }
     }
     return YPDR200_X27_ERR_SUCCESS;
+}
+
+int ypdr200_x28(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode) {
+    ypdr200_frame_t frameOut = ypdr200_frame_construct(YPDR200_FRAME_TYPE_COMMAND, YPDR200_FRAME_CMD_X28, 0U, NULL);
+    int err = ypdr200_frame_send(&frameOut, pCtx);
+    if (err != YPDR200_FRAME_SEND_ERR_SUCCESS) {
+        return YPDR200_X28_ERR_SEND_COMMAND;
+    }
+
+    ypdr200_frame_t frameIn = {};
+    err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X28, pRespErrCode);
+    if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
+        if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
+            return YPDR200_X28_ERR_ERROR_RESPONSE;
+        }
+        return YPDR200_X28_ERR_READ_RESPONSE;
+    }
+
+    uint16_t paramInLen = ypdr200_frame_prolog_get_param_length(&frameIn.prolog);
+    if (paramInLen != 1) {
+        LOG_W("Unexpected param data length: expected=1, actual=%d", paramInLen);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X28_ERR_READ_RESPONSE;
+    }
+
+    if (frameIn.pParamData[0] != 0U) {
+        LOG_W("Unexpected 0x28 command response data: %02x. We were expecting 0x00 for success.", frameIn.pParamData[0]);
+        ypdr200_frame_dispose(&frameIn);
+        return YPDR200_X28_ERR_READ_RESPONSE;
+    }
+
+    ypdr200_frame_dispose(&frameIn);
+    return YPDR200_X28_ERR_SUCCESS;
 }
 
 int ypdr200_x12(uhfman_ctx_t* pCtx, uint8_t mode, ypdr200_resp_err_code_t* pRespErrCode) {

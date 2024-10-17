@@ -143,7 +143,7 @@ static void main_sidval_ringbuf_push(unsigned long sid, unsigned long value) {
 	assert(TRUE == p_mutex_unlock(__main_globals.l.pSidval_ringbuf_mtx));
 }
 
-// Linear search starting from the head backwards excluding the head (it'll probably usually find the sid quicker than if we used bsearch)
+// Linear search starting from the head backwards excluding the head (it'll probably usually find the sid quicker than if we used bsearch ( TODO ))
 static int main_sidval_ringbuf_find(unsigned long sid, unsigned long* pValue_out) {
 	assert(TRUE == p_mutex_lock(__main_globals.l.pSidval_ringbuf_mtx));
 	if (__main_globals.sidval_ringbuf_head > 0) {
@@ -714,11 +714,14 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 		return main_uhfx_read(&pd->flags, sizeof(pd->flags), path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_rssi, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Read /uhfX/rssi: not implemented");
-		return -1;
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_read(&pd->measurement.rssi, sizeof(pd->measurement.rssi), path, buffer, size, offset);
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_read_rate, path, 2, matches, 0)) {
-		LOG_E("Read /uhfX/read_rate: not implemented");
-		return -1;
+		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
+		uhfd_dev_t* pd = (uhfd_dev_t*)fi->fh;
+		assert(pd != NULL);
+		return main_uhfx_read(&pd->measurement.read_rate, sizeof(pd->measurement.read_rate), path, buffer, size, offset);
 	// } else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_flags, path, 2, matches, 0)) {
 	// 	LOG_I("Read /uhfX/driver/flags");
 	// 	return 0;
@@ -864,29 +867,97 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		int rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
 		if (rv != 0) {
 			LOG_D("write: devno=%lu out of range", devno);
+			free(pDevCopy);
 			return -ENOENT;
 		}
 		uint8_t flags = pDevCopy->flags;
 		if (flags & UHFD_DEV_FLAG_DELETED) {
 			LOG_D("write: devno=%lu is deleted", devno);
+			free(pDevCopy);
 			return -ENOENT;
 		} else if (flags & UHFD_DEV_FLAG_EMBODIED) {
 			LOG_D("write: devno=%lu is already embodied", devno); // TODO allow re-embodying in the future?
+			free(pDevCopy);
 			return -EPERM;
 		}
 		rv = uhfd_embody_dev(&__main_globals.uhfd, pDevCopy->devno);
 		if (rv != 0) {
 			LOG_W("write: failed tag embodiment");
+			free(pDevCopy);
 			return -EAGAIN;
 		}
 		rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
 		assert(rv == 0);
 		assert(pDevCopy->flags & UHFD_DEV_FLAG_EMBODIED);
+		free(pDevCopy);
 		return size;
 	} else if (0 == regexec( &__main_globals.rgx._m_uhfx_driver_measure, path, 2, matches, 0)) {
 		LOG_I("uhf=%.*s", matches[1].rm_eo - matches[1].rm_so, path + matches[1].rm_so);
-		LOG_E("Write /uhfX/driver/measure: not implemented");
-		return -1;
+		unsigned long devno = (unsigned long)-1;
+		if (-1 == main_ulong_from_path_regmatch(path, &matches[1], &devno)) {
+			LOG_D("write: devno is invalid");
+			return -ENOENT;
+		}
+		assert(devno != (unsigned long)-1);
+		uhfd_dev_t* pDevCopy = (uhfd_dev_t*)malloc(sizeof(uhfd_dev_t));
+		int rv = uhfd_get_dev(&__main_globals.uhfd, devno, pDevCopy);
+		if (rv != 0) {
+			LOG_D("write: devno=%lu out of range", devno);
+			free(pDevCopy);
+			return -ENOENT;
+		}
+		uint8_t flags = pDevCopy->flags;
+		if (flags & UHFD_DEV_FLAG_DELETED) {
+			LOG_D("write: devno=%lu is deleted", devno);
+			free(pDevCopy);
+			return -ENOENT;
+		} else if (! (flags & UHFD_DEV_FLAG_EMBODIED)) {
+			LOG_D("write: devno=%lu is not embodied", devno); // TODO print FUSE path in these logs?
+			free(pDevCopy);
+			return -EPERM;
+		}
+
+		assert(offset == 0); // We don't support partial writes for simplicity
+		// User writes to this file:
+		//	a) a natural number to request a full measurement (rssi + read_rate)
+		//  b) -1 to request a quick measurement (rssi only)
+
+		// Read the value from the buffer
+		char str_val[30];
+		memcpy(str_val, buffer, size);
+		str_val[size] = '\0';
+		long val; // us timeout for full measurement or -1 for quick measurement
+		int n = sscanf(str_val, "%ld", &val);
+		if (n != 1) {
+			LOG_E("Write %s: invalid value", path);
+			free(pDevCopy);
+			return -EINVAL;
+		}
+		if (val < -1) {
+			LOG_E("Write %s: invalid value", path);
+			free(pDevCopy);
+			return -EINVAL;
+		}
+		assert(pDevCopy->flags & UHFD_DEV_FLAG_EMBODIED);//TODO or remove it if neccessary here and deeper in the code to enable testing for duplicate tag EPCs ?
+		if (val == -1) {
+			// Request a quick measurement
+			rv = uhfd_quick_measure_dev_rssi(&__main_globals.uhfd, pDevCopy->devno);
+			if (rv != 0) {
+				LOG_W("write: failed quick measurement");
+				free(pDevCopy);
+				return -EAGAIN;
+			}
+		} else {
+			// Request a full measurement
+			rv = uhfd_measure_dev(&__main_globals.uhfd, pDevCopy->devno, val);
+			if (rv != 0) {
+				LOG_W("write: failed measurement");
+				free(pDevCopy);
+				return -EAGAIN;
+			}
+		}
+		free(pDevCopy);
+		return size;
 	} else {
 		LOG_E("Write %s: not supported", path);
 		return -1;
@@ -963,6 +1034,7 @@ void main_deinit() {
 
 int main( int argc, char *argv[] )
 {
+	//assert(sizeof(unsigned long) == sizeof(uint64_t));
 	p_libsys_init();
 	main_init();
 	assert(0 == uhfd_init(&__main_globals.uhfd));

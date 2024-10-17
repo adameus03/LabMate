@@ -263,7 +263,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     uhfman_query_target_t query_target = UHFMAN_QUERY_TARGET_A;
     uint8_t query_q = 0x00;
     uhfman_select_mode_t select_mode = UHFMAN_SELECT_MODE_ALWAYS;
-    float txPower = 15.0f; // for now 15dBm, but we can make setting it 0 automatically use the minimum power for specific interrogator hardware (in the future)
+    float txPower = 15.0f; // for now 15dBm, but we can make setting it 0 automatically use the minimum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
     
     assert(TRUE == p_mutex_lock(pUHFD->pUhfmanCtxMutex));
     LOG_D("uhfd_embody_dev: Setting select parameters");
@@ -511,9 +511,197 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     return 0;
 }
 
-int uhfd_measure_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno, uhfd_dev_m_t* pMeasurement) {
-    LOG_E("uhfd_measure_dev: not implemented");
-    return -1;
+static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
+    LOG_D("uhfd_uhfman_poll_handler_quick: handle = %d", handle);
+    uhfman_tag_t tag = uhfman_tag_get(handle);
+    assert(tag.num_reads == 1);
+    LOG_D_TBC("uhfd_uhfman_poll_handler_quick: EPC: [");
+    for (size_t i=0; i<sizeof(tag.epc); i++) {
+        LOG_D_CTBC("%02X ", tag.epc[i]);
+    }
+    LOG_D_CFIN("], RSSI: %d", tag.rssi);
+    uint8_t* pRSSI = (uint8_t*)pUserData;
+    *pRSSI = tag.rssi[tag.num_reads - 1];
+}
+
+static void uhfd_uhfman_poll_handler(uint16_t handle, void* pUserData) {
+    LOG_D("uhfd_uhfman_poll_handler_quick: handle = %d", handle);
+    uhfman_tag_t tag = uhfman_tag_get(handle);
+    LOG_D_TBC("uhfd_uhfman_poll_handler_quick: EPC: [");
+    for (size_t i=0; i<sizeof(tag.epc); i++) {
+        LOG_D_CTBC("%02X ", tag.epc[i]);
+    }
+    LOG_D_CTBC("], RSSI: %d, num_reads: %d, read_times: [", tag.rssi, tag.num_reads);
+    for (size_t i=0; i<tag.num_reads; i++) {
+        LOG_D_CTBC("%lu ", tag.read_times[i]);
+    }
+    LOG_D_CFIN("]");
+    uhfd_dev_m_t* pMeasurement = (uhfd_dev_m_t*)pUserData;
+    uint32_t sum_rssi = 0;
+    for (uint32_t i=0; i<tag.num_reads; i++) {
+        sum_rssi += tag.rssi[i];
+    }
+    uint8_t avg_rssi = (uint8_t)(sum_rssi / tag.num_reads); // TODO make float/double ?
+    pMeasurement->rssi = avg_rssi;
+    pMeasurement->read_rate = tag.num_reads;
+    // TODO handle read times and individual rssi values if needed (would need changing the uhfd_dev_m_t struct and also the FUSE interface in main.c)
+}
+
+//int uhfd_measure_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno, uhfd_dev_m_t* pMeasurement) {
+int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_us) {
+    LOG_I("uhfd_measure_dev requested for devno %lu", devno);
+    // Schedule:
+    // 0. Obtain tag EPC
+    // 1. Set tag-specific query parameters, select mode, select params, tx power (larger range to ensure tag is read)
+    // 2. Perform measurement using uhfman_multiple_polling (remember to reset the collected tag data before - use uhfman_tag_anonymous_forget)
+    // 3. Stop multiple polling
+
+    // Implementation:
+
+    // 0. Obtain tag EPC
+    assert(TRUE == p_rwlock_reader_lock(pUHFD->pDaRWLock));
+    uhfd_dev_t dev = pUHFD->da.pDevs[devno];
+    assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDaRWLock));
+
+    // 1. Set tag-specific query parameters, select mode, select params, tx power (larger range to ensure tag is read)
+    uint8_t select_target = UHFMAN_SELECT_TARGET_SL;
+    uint8_t select_action = uhfman_select_action(UHFMAN_SEL_SL_ASSERT, UHFMAN_SEL_SL_DEASSERT);
+    assert(select_action != UHFMAN_SELECT_ACTION_UNKNOWN);
+    uint8_t select_memBank = UHFMAN_SELECT_MEMBANK_EPC;
+    uint8_t select_ptr = 0x20;
+    uint8_t select_maskLen = 0x60; // 96 bits (12 bytes) of EPC code
+    uint8_t select_truncate = UHFMAN_SELECT_TRUNCATION_DISABLED;
+    const uint8_t* select_mask = dev.epc;
+    uhfman_query_sel_t query_sel = UHFMAN_QUERY_SEL_SL;
+    uhfman_query_session_t query_session = UHFMAN_QUERY_SESSION_S0;
+    uhfman_query_target_t query_target = UHFMAN_QUERY_TARGET_A;
+    uint8_t query_q = 0x00;
+    uhfman_select_mode_t select_mode = UHFMAN_SELECT_MODE_ALWAYS;
+    float txPower = 26.0f; // for now 26dBm, but we can make setting it to max float to automatically use the maximum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
+
+    assert(TRUE == p_mutex_lock(pUHFD->pUhfmanCtxMutex));
+    LOG_D("uhfd_measure_dev: Setting select parameters");
+    uhfman_err_t err = uhfman_set_select_param(&pUHFD->uhfmanCtx, select_target, select_action, select_memBank, select_ptr, select_maskLen, select_truncate, select_mask);
+    if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
+        LOG_E("uhfd_measure_dev: uhfman_set_select_param failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+    LOG_D("uhfd_measure_dev: Setting query parameters");
+    err = uhfman_set_query_params(&pUHFD->uhfmanCtx, query_sel, query_session, query_target, query_q);
+    if (err != UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS) {
+        LOG_E("uhfd_measure_dev: uhfman_set_query_params failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+    LOG_D("uhfd_measure_dev: Setting select mode");
+    err = uhfman_set_select_mode(&pUHFD->uhfmanCtx, select_mode);
+    if (err != UHFMAN_SET_SELECT_MODE_ERR_SUCCESS) {
+        LOG_E("uhfd_measure_dev: uhfman_set_select_mode failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+    LOG_D("uhfd_measure_dev: Setting transmit power");
+    err = uhfman_set_transmit_power(&pUHFD->uhfmanCtx, txPower);
+    if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
+        LOG_E("uhfd_measure_dev: uhfman_set_transmit_power failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+
+    // 2. Perform measurement using uhfman_multiple_polling (remember to reset the collected tag data before - use uhfman_tag_anonymous_forget)
+    uhfman_tag_anonymous_forget();
+    uhfman_set_time_precision(UHFMAN_TIME_PRECISION_US);
+    uhfman_set_poll_mode(UHFMAN_POLL_MODE_RAW);
+    uhfman_set_poll_handler((uhfman_poll_handler_t)uhfd_uhfman_poll_handler);
+    uhfd_dev_m_t measurement = {0};
+    uhfman_multiple_polling(&pUHFD->uhfmanCtx, timeout_us, (void*)&measurement);
+    // Need to stop polling as it is multiple polling
+    uhfman_multiple_polling_stop(&pUHFD->uhfmanCtx);
+    uhfman_unset_poll_handler();
+    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+    // update the dev's measurement data
+    assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
+    pUHFD->da.pDevs[devno].measurement = measurement;
+    assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
+    return 0;
+}
+
+int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno) {
+    LOG_I("uhfd_quick_measure_rssi requested for devno %lu", devno);
+    // Schedule:
+    // 0. Obtain tag EPC
+    // 1. Set specific query parameters, select mode, select params, tx power (larger range to ensure tag is read)
+    // 2. Read RSSI using uhfman_single_polling (remember to reset the collected tag data before - use uhfman_tag_anonymous_forget)
+
+    // Implementation:
+
+    // 0. Obtain tag EPC
+    assert(TRUE == p_rwlock_reader_lock(pUHFD->pDaRWLock));
+    uhfd_dev_t dev = pUHFD->da.pDevs[devno];
+    assert(TRUE == p_rwlock_reader_unlock(pUHFD->pDaRWLock));
+
+    // 1. Set specific query parameters, select mode, select params, tx power (larger range to ensure tag is read)
+    uint8_t select_target = UHFMAN_SELECT_TARGET_SL;
+    uint8_t select_action = uhfman_select_action(UHFMAN_SEL_SL_ASSERT, UHFMAN_SEL_SL_DEASSERT);
+    assert(select_action != UHFMAN_SELECT_ACTION_UNKNOWN);
+    uint8_t select_memBank = UHFMAN_SELECT_MEMBANK_EPC;
+    uint8_t select_ptr = 0x20;
+    uint8_t select_maskLen = 0x60; // 96 bits (12 bytes) of EPC code
+    uint8_t select_truncate = UHFMAN_SELECT_TRUNCATION_DISABLED;
+    const uint8_t* select_mask = dev.epc;
+    uhfman_query_sel_t query_sel = UHFMAN_QUERY_SEL_SL;
+    uhfman_query_session_t query_session = UHFMAN_QUERY_SESSION_S0;
+    uhfman_query_target_t query_target = UHFMAN_QUERY_TARGET_A;
+    uint8_t query_q = 0x00;
+    uhfman_select_mode_t select_mode = UHFMAN_SELECT_MODE_ALWAYS;
+    float txPower = 26.0f; // for now 26dBm, but we can make setting it to max float to automatically use the maximum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
+
+    assert(TRUE == p_mutex_lock(pUHFD->pUhfmanCtxMutex));
+    LOG_D("uhfd_quick_measure_dev_rssi: Setting select parameters");
+    uhfman_err_t err = uhfman_set_select_param(&pUHFD->uhfmanCtx, select_target, select_action, select_memBank, select_ptr, select_maskLen, select_truncate, select_mask);
+    if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
+        LOG_E("uhfd_quick_measure_dev_rssi: uhfman_set_select_param failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+    LOG_D("uhfd_quick_measure_dev_rssi: Setting query parameters");
+    err = uhfman_set_query_params(&pUHFD->uhfmanCtx, query_sel, query_session, query_target, query_q);
+    if (err != UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS) {
+        LOG_E("uhfd_quick_measure_dev_rssi: uhfman_set_query_params failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+    LOG_D("uhfd_quick_measure_dev_rssi: Setting select mode");
+    err = uhfman_set_select_mode(&pUHFD->uhfmanCtx, select_mode);
+    if (err != UHFMAN_SET_SELECT_MODE_ERR_SUCCESS) {
+        LOG_E("uhfd_quick_measure_dev_rssi: uhfman_set_select_mode failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+    LOG_D("uhfd_quick_measure_dev_rssi: Setting transmit power");
+    err = uhfman_set_transmit_power(&pUHFD->uhfmanCtx, txPower);
+    if (err != UHFMAN_SET_TRANSMIT_POWER_ERR_SUCCESS) {
+        LOG_E("uhfd_quick_measure_dev_rssi: uhfman_set_transmit_power failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+
+    // 2. Read RSSI using uhfman_single_polling (remember to reset the collected tag data before - use uhfman_tag_anonymous_forget)
+    uhfman_tag_anonymous_forget();
+    uhfman_set_time_precision(UHFMAN_TIME_PRECISION_US);
+    uhfman_set_poll_mode(UHFMAN_POLL_MODE_RAW);
+    uhfman_set_poll_handler((uhfman_poll_handler_t)uhfd_uhfman_poll_handler_quick);
+    uint8_t rssi = 0;
+    uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
+    uhfman_unset_poll_handler();
+    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+    // no need to stop polling as it is single polling
+    // update the dev's rssi
+    assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
+    pUHFD->da.pDevs[devno].measurement.rssi = rssi;
+    assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
+    return 0;
 }
 
 /*  The function is supposed to be called only once and will not care about pending file operations if they even exist

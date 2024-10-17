@@ -367,6 +367,7 @@ void uhfman_device_release(uhfman_ctx_t *pCtx) {
 }
 
 uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_HARDWARE_VERSION, ppcVersion_out, &rerr);
@@ -390,6 +391,7 @@ uhfman_err_t uhfman_get_hardware_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
 }
 
 uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_out) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_SOFTWARE_VERSION, ppcVersion_out, &rerr);
@@ -413,6 +415,7 @@ uhfman_err_t uhfman_get_software_version(uhfman_ctx_t* pCtx, char** ppcVersion_o
 }
 
 uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_out) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     int rv = ypdr200_x03(pCtx, YPDR200_X03_PARAM_MANUFACTURER, ppcManufacturer_out, &rerr);
@@ -436,6 +439,7 @@ uhfman_err_t uhfman_get_manufacturer(uhfman_ctx_t* pCtx, char** ppcManufacturer_
 }
 
 uhfman_err_t uhfman_dbg_get_select_param(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     ypdr200_x0b_resp_param_t respParam;
@@ -523,6 +527,7 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
                                      uint8_t maskLen, 
                                      uint8_t truncate, 
                                      const uint8_t* pMask) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     if (!uhfman_config_select_params_cache_cmp(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask)) {
         return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
@@ -604,6 +609,7 @@ static int uhfman_config_select_mode_cache_cmp(uhfman_ctx_t* pCtx,
 }
 
 uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mode) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     if (!uhfman_config_select_mode_cache_cmp(pCtx, mode)) {
         return UHFMAN_SET_SELECT_MODE_ERR_SUCCESS;
@@ -646,6 +652,7 @@ uhfman_err_t uhfman_set_select_mode(uhfman_ctx_t* pCtx, uhfman_select_mode_t mod
 }
 
 uhfman_err_t uhfman_dbg_get_query_params(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     ypdr200_x0d_resp_param_t respParam;
@@ -689,6 +696,7 @@ static int uhfman_config_query_params_cache_cmp(uhfman_ctx_t* pCtx, uhfman_query
 }
 
 uhfman_err_t uhfman_set_query_params(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel, uhfman_query_session_t session, uhfman_query_target_t target, uint8_t q) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     if (!uhfman_config_query_params_cache_cmp(pCtx, sel, session, target, q)) {
         return UHFMAN_SET_QUERY_PARAMS_ERR_SUCCESS;
@@ -757,6 +765,7 @@ uhfman_err_t uhfman_set_query_params(uhfman_ctx_t* pCtx, uhfman_query_sel_t sel,
 }
 
 uhfman_err_t uhfman_dbg_get_working_channel(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     uint8_t chIndex = 0;
@@ -782,6 +791,7 @@ uhfman_err_t uhfman_dbg_get_working_channel(uhfman_ctx_t* pCtx) {
 }
 
 uhfman_err_t uhfman_dbg_get_work_area(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     ypdr200_x08_region_t region;
@@ -807,6 +817,7 @@ uhfman_err_t uhfman_dbg_get_work_area(uhfman_ctx_t* pCtx) {
 }
 
 uhfman_err_t uhfman_dbg_get_transmit_power(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     uint16_t powerLevel = 0;
@@ -845,6 +856,7 @@ static int uhfman_config_tx_power_cache_cmp(uhfman_ctx_t* pCtx, float txPower) {
 }
 
 uhfman_err_t uhfman_set_transmit_power(uhfman_ctx_t* pCtx, float txPower) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     if (!uhfman_config_tx_power_cache_cmp(pCtx, txPower)) {
         LOG_I("Transmit power level already set to: %2.2f dBm", txPower);
@@ -875,6 +887,7 @@ uhfman_err_t uhfman_set_transmit_power(uhfman_ctx_t* pCtx, float txPower) {
 }
 
 uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
     ypdr200_xf1_rx_demod_params_t respParam;
@@ -900,12 +913,23 @@ uhfman_err_t uhfman_dbg_get_demod_params(uhfman_ctx_t* pCtx) {
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
+#define UHFMAN_TAG_HANDLE_INVALID 0xFFFEU
+/* Used by mode UHFMAN_POLL_MODE_RAW (when tags shall not be tracked by uhfman) */
+#define UHFMAN_TAG_HANDLE_ANONYMOUS 0xFFFFU
+
 static uhfman_tag_t __uhfman_tags[UHFMAN_MAX_NUM_TAGS];
 static uint32_t __num_tags = 0U;
+static uhfman_tag_t __uhfman_tag_anonymous = {
+    .handle = UHFMAN_TAG_HANDLE_ANONYMOUS,
+    .epc = {0},
+    .num_reads = 0,
+    .read_times = {0},
+    .rssi = {0}
+};
 static uhfman_tag_handler_t __uhfman_new_tag_handler = NULL;
 static uhfman_poll_handler_t __uhfman_poll_handler = NULL;
-
-#define UHFMAN_TAG_HANDLE_INVALID 0xFFFFU
+static uhfman_poll_mode_t __uhfman_poll_mode = UHFMAN_POLL_MODE_TRACK;
+static uhfman_time_precision_t __uhfman_time_precision = UHFMAN_TIME_PRECISION_MS;
 
 static uint16_t __uhfman_tag_find(uint8_t* epc) { // TODO Optimize this search
     for (uint32_t i = 0; i < __num_tags; i++) {
@@ -917,50 +941,84 @@ static uint16_t __uhfman_tag_find(uint8_t* epc) { // TODO Optimize this search
     return (uint16_t)UHFMAN_TAG_HANDLE_INVALID;
 }
 
-static void __uhfman_tag_add_read(uint8_t* epc, uint8_t rssi) { // TODO think about splitting into threads if performance is an issue?
+//static void __uhfman_tag_add_read(uint8_t* epc, uint8_t rssi) { // TODO think about splitting into threads if performance is an issue?
+static void __uhfman_tag_submit_read(uint8_t* epc, uint8_t rssi, void* pUserData) {
     if (epc == NULL) {
         assert(0);
         return;
     }
 
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    uint32_t time_ms = 1000 * tv.tv_sec + (tv.tv_usec / 1000);
-    
-    uint16_t tagHandle = __uhfman_tag_find(epc);
-    if (tagHandle != UHFMAN_TAG_HANDLE_INVALID) {
-        uint32_t readMod = __uhfman_tags[tagHandle].num_reads % UHFMAN_TAG_PERIOD_NREADS; // write in a circular buffer fashion
-        __uhfman_tags[tagHandle].read_times[readMod] = time_ms;
-        //printf("readMod: %d, read_times[readMod]: %lu\n", readMod, __uhfman_tags[tagHandle].read_times[readMod]);
-        __uhfman_tags[tagHandle].rssi[readMod] = rssi;
-        __uhfman_tags[tagHandle].num_reads++;
-        if (__uhfman_poll_handler != NULL) {
-            __uhfman_poll_handler(tagHandle);
-        }
-        return;
+    // struct timeval tv;
+    // gettimeofday(&tv,NULL);
+    // uint32_t time_ms = 1000 * tv.tv_sec + (tv.tv_usec / 1000);
+    struct timespec ts;
+    //assert(0 == clock_gettime(CLOCK_REALTIME, &ts)); // What about CLOCK_MONOTONIC? (avoid system time changes)
+    //unsigned long time_us = ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+    assert(0 == clock_gettime(CLOCK_MONOTONIC, &ts)); // TODO check for efficiency
+    uint64_t time_xs;
+    switch (__uhfman_time_precision) {
+        case UHFMAN_TIME_PRECISION_MS:
+            time_xs = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+            break;
+        case UHFMAN_TIME_PRECISION_US:
+            time_xs = ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+            break;
+        case UHFMAN_TIME_PRECISION_NS:
+            time_xs = ts.tv_sec * 1000000000 + ts.tv_nsec; //TODO beware of overflow especially if architecture is 32-bit or less
+            break;
+        default:
+            assert(0);
     }
 
-    if (__num_tags >= UHFMAN_MAX_NUM_TAGS) {
-        assert(0);
-        return;
-    } else {
-        memcpy(__uhfman_tags[__num_tags].epc, epc, YPDR200_X22_NTF_PARAM_EPC_LENGTH);
-        __uhfman_tags[__num_tags].rssi[0] = rssi;
-        __uhfman_tags[__num_tags].read_times[0] = time_ms;
-        __uhfman_tags[__num_tags].num_reads = 1;
-        __uhfman_tags[__num_tags].handle = __num_tags;
-        __num_tags++;
-        if (__uhfman_new_tag_handler != NULL) {
-            __uhfman_new_tag_handler(__uhfman_tags[__num_tags - 1]);
+    if (__uhfman_poll_mode == UHFMAN_POLL_MODE_TRACK) {
+        uint16_t tagHandle = __uhfman_tag_find(epc);
+        if (tagHandle != UHFMAN_TAG_HANDLE_INVALID) {
+            uint32_t readMod = __uhfman_tags[tagHandle].num_reads % UHFMAN_TAG_PERIOD_NREADS; // write in a circular buffer fashion
+            __uhfman_tags[tagHandle].read_times[readMod] = time_xs;
+            //printf("readMod: %d, read_times[readMod]: %lu\n", readMod, __uhfman_tags[tagHandle].read_times[readMod]);
+            __uhfman_tags[tagHandle].rssi[readMod] = rssi;
+            __uhfman_tags[tagHandle].num_reads++;
+            if (__uhfman_poll_handler != NULL) {
+                __uhfman_poll_handler(tagHandle, pUserData);
+            }
+            return;
         }
+
+        if (__num_tags >= UHFMAN_MAX_NUM_TAGS) {
+            assert(0);
+            return;
+        } else {
+            memcpy(__uhfman_tags[__num_tags].epc, epc, YPDR200_X22_NTF_PARAM_EPC_LENGTH);
+            __uhfman_tags[__num_tags].rssi[0] = rssi;
+            __uhfman_tags[__num_tags].read_times[0] = time_xs;
+            __uhfman_tags[__num_tags].num_reads = 1;
+            __uhfman_tags[__num_tags].handle = __num_tags;
+            __num_tags++;
+            if (__uhfman_new_tag_handler != NULL) {
+                __uhfman_new_tag_handler(__uhfman_tags[__num_tags - 1], pUserData);
+            }
+            if (__uhfman_poll_handler != NULL) {
+                __uhfman_poll_handler(__num_tags - 1, pUserData); // TODO change when refactoring to using multiple threads? - No? (because the interrogator needs to be handled sequentially anyway)
+            }
+        }
+    } else if (__uhfman_poll_mode == UHFMAN_POLL_MODE_RAW) {
+        uint16_t tagHandle = UHFMAN_TAG_HANDLE_ANONYMOUS;
+        memcpy(__uhfman_tag_anonymous.epc, epc, YPDR200_X22_NTF_PARAM_EPC_LENGTH);
+        __uhfman_tag_anonymous.rssi[__uhfman_tag_anonymous.num_reads] = rssi;
+        __uhfman_tag_anonymous.read_times[__uhfman_tag_anonymous.num_reads] = time_xs;
+        __uhfman_tag_anonymous.num_reads++;
+        // note: num_reads should be reset by user when needed (using uhfman_tag_anonymous_forget)
+        assert(__uhfman_tag_anonymous.handle == UHFMAN_TAG_HANDLE_ANONYMOUS);
         if (__uhfman_poll_handler != NULL) {
-            __uhfman_poll_handler(__num_tags - 1); // TODO change when refactoring to using multiple threads?
+            __uhfman_poll_handler(tagHandle, pUserData);
         }
+    } else {
+        assert(0);
     }
 }
 
 #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param_t ntfParam, const void* pUserData) {
+static void uhfman_polling_notification_handler(ypdr200_x22_ntf_param_t ntfParam, void* pUserData) {
     // if ((ntfParam.crc[0] == 0x07 && ntfParam.crc[1] == 0x75)
     //     || (ntfParam.crc[0] == 0xDC && ntfParam.crc[1] == 0x20)) {
     //     return; // Ignore those tags
@@ -970,7 +1028,7 @@ static void uhfman_dbg_single_polling_notification_handler(ypdr200_x22_ntf_param
         LOG_D_CTBC("%02X ", ntfParam.epc[i]);
     }
     LOG_D_CFIN("], crc=0x%04X", ((uint16_t)(ntfParam.crc[0]) << 8) | (uint16_t)(ntfParam.crc[1]));
-    __uhfman_tag_add_read(ntfParam.epc, ntfParam.rssi);
+    __uhfman_tag_submit_read(ntfParam.epc, ntfParam.rssi, pUserData);
 }
 #else
 #error "Unknown UHFMAN_DEVICE_MODEL"
@@ -994,19 +1052,37 @@ void uhfman_unset_new_tag_event_handler() {
     __uhfman_new_tag_handler = NULL;
 }
 
-void ufhman_set_poll_handler(uhfman_poll_handler_t handler) {
+void uhfman_set_poll_handler(uhfman_poll_handler_t handler) {
     __uhfman_poll_handler = handler;
 }
 
-void ufhman_unset_poll_handler() {
+void uhfman_unset_poll_handler() {
     __uhfman_poll_handler = NULL;
 }
 
+void uhfman_set_poll_mode(const uhfman_poll_mode_t mode) {
+    __uhfman_poll_mode = mode;
+}
+
+void uhfman_set_time_precision(const uhfman_time_precision_t precision) {
+    __uhfman_time_precision = precision;
+}
+
+void uhfman_tag_anonymous_forget() {
+    __uhfman_tag_anonymous.num_reads = 0;
+}
+
 uhfman_tag_t uhfman_tag_get(uint16_t handle) {
-    return __uhfman_tags[handle];
+    if (handle == UHFMAN_TAG_HANDLE_ANONYMOUS) {
+        return __uhfman_tag_anonymous;
+    } else {
+        assert(handle < __num_tags);
+        return __uhfman_tags[handle];   
+    }
 }
 
 uhfman_tag_stats_t uhfman_tag_get_stats(uint16_t handle) {
+    assert(handle < __num_tags);
     uhfman_tag_t tag = __uhfman_tags[handle];
 
     uint32_t rssi_sum = 0U;
@@ -1023,7 +1099,7 @@ uhfman_tag_stats_t uhfman_tag_get_stats(uint16_t handle) {
 
     //printf("( "); //dbg
     uint32_t read_interval_sum = 0U; //TODO support less than 32-bit systems
-    int difference = ((int)(tag.read_times[0])) - ((int)(tag.read_times[iMax - 1]));
+    int difference = ((int64_t)(tag.read_times[0])) - ((int64_t)(tag.read_times[iMax - 1])); // [DONE using int64_t] beware of overflow when using UHFMAN_TIME_PRECISION_NS !
     if (difference > 0) {
         read_interval_sum += difference;
         //printf("%u-%u=%d ", tag.read_times[0], tag.read_times[iMax - 1], difference); //dbg
@@ -1046,10 +1122,11 @@ uhfman_tag_stats_t uhfman_tag_get_stats(uint16_t handle) {
     };
 }
 
-uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
+uhfman_err_t uhfman_single_polling(uhfman_ctx_t* pCtx, void* pUserData) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
-    int rv = ypdr200_x22(pCtx, &rerr, uhfman_dbg_single_polling_notification_handler, NULL);
+    int rv = ypdr200_x22(pCtx, &rerr, uhfman_polling_notification_handler, pUserData);
     switch (rv) {
         case YPDR200_X22_ERR_SUCCESS:
             return UHFMAN_SINGLE_POLLING_ERR_SUCCESS;
@@ -1069,35 +1146,61 @@ uhfman_err_t uhfman_dbg_single_polling(uhfman_ctx_t* pCtx) {
             return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN;
     }
     #else
-    return UHFMAN_DBG_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+    return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
-uhfman_err_t uhfman_dbg_multiple_polling(uhfman_ctx_t* pCtx) {
+uhfman_err_t uhfman_multiple_polling(uhfman_ctx_t* pCtx, unsigned long timeout_us, void* pUserData) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_x27_req_param_t param = ypdr200_x27_req_param_make(0xffff);
     ypdr200_resp_err_code_t rerr = 0;
-    int rv = ypdr200_x27(pCtx, param, &rerr, uhfman_dbg_single_polling_notification_handler, NULL);
+    int rv = ypdr200_x27(pCtx, param, &rerr, uhfman_polling_notification_handler, pUserData, timeout_us);
     switch (rv) {
         case YPDR200_X27_ERR_SUCCESS:
-            return UHFMAN_SINGLE_POLLING_ERR_SUCCESS;
+            pCtx->_config.flags |= UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY;
+            return UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS;
         case YPDR200_X27_ERR_SEND_COMMAND:
-            return UHFMAN_SINGLE_POLLING_ERR_SEND_COMMAND;
+            return UHFMAN_MULTIPLE_POLLING_ERR_SEND_COMMAND;
         case YPDR200_X27_ERR_READ_RESPONSE:
-            return UHFMAN_SINGLE_POLLING_ERR_READ_RESPONSE;
+            return UHFMAN_MULTIPLE_POLLING_ERR_READ_RESPONSE;
         case YPDR200_X27_ERR_ERROR_RESPONSE:
             LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
-            return UHFMAN_SINGLE_POLLING_ERR_ERROR_RESPONSE;
+            return UHFMAN_MULTIPLE_POLLING_ERR_ERROR_RESPONSE;
         case YPDR200_X27_ERR_READ_NOTIFICATION:
-            return UHFMAN_SINGLE_POLLING_ERR_READ_NOTIFICATION;
+            return UHFMAN_MULTIPLE_POLLING_ERR_READ_NOTIFICATION;
         case YPDR200_X27_ERR_UNEXPECTED_FRAME_TYPE:
-            return UHFMAN_SINGLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE;
+            return UHFMAN_MULTIPLE_POLLING_ERR_UNEXPECTED_FRAME_TYPE;
         default:
             LOG_W("Unknown error from ypdr200_x27: %d", rv);
-            return UHFMAN_SINGLE_POLLING_ERR_UNKNOWN;
+            return UHFMAN_MULTIPLE_POLLING_ERR_UNKNOWN;
     }
     #else
-    return UHFMAN_DBG_SINGLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+    return UHFMAN_MULTIPLE_POLLING_ERR_UNKNOWN_DEVICE_MODEL;
+    #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+}
+
+uhfman_err_t uhfman_multiple_polling_stop(uhfman_ctx_t* pCtx) {
+    assert((pCtx->_config.flags & (uint8_t)UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == (uint8_t)UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY);
+    #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
+    ypdr200_resp_err_code_t rerr = 0;
+    int rv = ypdr200_x28(pCtx, &rerr);
+    switch (rv) {
+        case YPDR200_X28_ERR_SUCCESS:
+            return UHFMAN_MULTIPLE_POLLING_STOP_ERR_SUCCESS;
+        case YPDR200_X28_ERR_SEND_COMMAND:
+            return UHFMAN_MULTIPLE_POLLING_STOP_ERR_SEND_COMMAND;
+        case YPDR200_X28_ERR_READ_RESPONSE:
+            return UHFMAN_MULTIPLE_POLLING_STOP_ERR_READ_RESPONSE;
+        case YPDR200_X28_ERR_ERROR_RESPONSE:
+            LOG_W("** Response frame was an error frame containing error code 0x%02X **", (uint8_t)rerr);
+            return UHFMAN_MULTIPLE_POLLING_STOP_ERR_ERROR_RESPONSE;
+        default:
+            LOG_W("Unknown error from ypdr200_x28: %d", rv);
+            return UHFMAN_MULTIPLE_POLLING_STOP_ERR_UNKNOWN;
+    }
+    #else
+    return UHFMAN_MULTIPLE_POLLING_STOP_ERR_UNKNOWN_DEVICE_MODEL;
     #endif // UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
 }
 
@@ -1115,6 +1218,7 @@ uhfman_err_t uhfman_write_tag_mem(uhfman_ctx_t* pCtx,
                                   uint8_t** ppEPC_out,
                                   size_t* pEPC_len_out,
                                   uint8_t* pRespErrCode_out) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     if (pRespErrCode_out != NULL) {
         *pRespErrCode_out = 0U; // assume success frame err code until we receive an error response frame with an error code (we do not won't garbage value in here)
     }
@@ -1214,6 +1318,7 @@ uhfman_err_t uhfman_lock_tag_mem(uhfman_ctx_t* pCtx,
                                  uint8_t** ppEPC_out,
                                  size_t* pEPC_len_out,
                                  uint8_t* pRespErrCode_out) {
+    assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     if (pRespErrCode_out != NULL) {
         *pRespErrCode_out = 0U; // assume success frame err code until we receive an error response frame with an error code (we do not won't garbage value in here)
     }
