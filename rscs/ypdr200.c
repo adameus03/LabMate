@@ -900,6 +900,7 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
     uint64_t start_us = (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
 
     while (1) { // until timeout
+        LOG_D("Waiting for 0x27 notification frame...");
         ypdr200_frame_t frameIn = {};
         err = ypdr200_frame_recv(&frameIn, pCtx, YPDR200_FRAME_CMD_X27, pRespErrCode);
         if (err != YPDR200_FRAME_RECV_ERR_SUCCESS) {
@@ -907,11 +908,29 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
                 LOG_D("Checksum mismatch (ignoring)"); // TODO Can we fix those??
                 //Flush the input buffer
                 //tcflush(pCtx->fd, TCIFLUSH);
+
+                // Check timeout
+                assert(0 == clock_gettime(CLOCK_MONOTONIC, &ts));
+                uint64_t now_us = (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+                uint64_t timeout_elapsed = now_us - start_us;
+                LOG_D("Timeout elapsed: %lu us", timeout_elapsed);
+                if (timeout_elapsed >= timeout_us) {
+                    break;
+                }
                 continue;
             } else if (err == YPDR200_FRAME_RECV_ERR_GOT_ERR_RESPONSE_FRAME) {
                 //return YPDR200_X27_ERR_ERROR_RESPONSE;
                 // TODO add handler callback for error response?
                 LOG_D("Received error response frame for 0x27 command, error code: 0x%02X (ignoring)", (uint8_t)(*pRespErrCode));
+                
+                // Check timeout
+                assert(0 == clock_gettime(CLOCK_MONOTONIC, &ts));
+                uint64_t now_us = (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+                uint64_t timeout_elapsed = now_us - start_us;
+                LOG_D("Timeout elapsed: %lu us", timeout_elapsed);
+                if (timeout_elapsed >= timeout_us) {
+                    break;
+                }
                 continue;
             } else {
                 return YPDR200_X27_ERR_READ_RESPONSE;
@@ -950,7 +969,9 @@ int ypdr200_x27(uhfman_ctx_t* pCtx, ypdr200_x27_req_param_t param, ypdr200_resp_
         // Check timeout
         assert(0 == clock_gettime(CLOCK_MONOTONIC, &ts));
         uint64_t now_us = (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
-        if (now_us - start_us >= timeout_us) {
+        uint64_t timeout_elapsed = now_us - start_us;
+        LOG_D("Timeout elapsed: %lu us", timeout_elapsed);
+        if (timeout_elapsed >= timeout_us) {
             break;
         }
     }

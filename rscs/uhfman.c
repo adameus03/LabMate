@@ -1002,6 +1002,7 @@ static void __uhfman_tag_submit_read(uint8_t* epc, uint8_t rssi, void* pUserData
             }
         }
     } else if (__uhfman_poll_mode == UHFMAN_POLL_MODE_RAW) {
+        assert(__uhfman_tag_anonymous.num_reads < UHFMAN_TAG_PERIOD_NREADS);
         uint16_t tagHandle = UHFMAN_TAG_HANDLE_ANONYMOUS;
         memcpy(__uhfman_tag_anonymous.epc, epc, YPDR200_X22_NTF_PARAM_EPC_LENGTH);
         __uhfman_tag_anonymous.rssi[__uhfman_tag_anonymous.num_reads] = rssi;
@@ -1013,6 +1014,7 @@ static void __uhfman_tag_submit_read(uint8_t* epc, uint8_t rssi, void* pUserData
             __uhfman_poll_handler(tagHandle, pUserData);
         }
     } else {
+        LOG_E("Unknown poll mode: %d", __uhfman_poll_mode);
         assert(0);
     }
 }
@@ -1187,6 +1189,7 @@ uhfman_err_t uhfman_multiple_polling_stop(uhfman_ctx_t* pCtx) {
     int rv = ypdr200_x28(pCtx, &rerr);
     switch (rv) {
         case YPDR200_X28_ERR_SUCCESS:
+            pCtx->_config.flags &= ~UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY;
             return UHFMAN_MULTIPLE_POLLING_STOP_ERR_SUCCESS;
         case YPDR200_X28_ERR_SEND_COMMAND:
             return UHFMAN_MULTIPLE_POLLING_STOP_ERR_SEND_COMMAND;

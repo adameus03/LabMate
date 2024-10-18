@@ -404,7 +404,7 @@ uhfman_err_t uhfman_lock_tag_mem(uhfman_ctx_t* pCtx,
 //TODO adjust UHFMAN_TAG_PERIOD_NREADS
 // TODO make dynamic in the future (replace with dynamic mem allocation) --> more robust especially when using UHFMAN_POLL_MODE_RAW
 /* Affects the stats collecting when using UHFMAN_POLL_MODE_TRACK. When using UHFMAN_POLL_MODE_RAW it should be set big enough to handle most frequent reads in multiple polling. */
-#define UHFMAN_TAG_PERIOD_NREADS /*40*/ /*5*/ 10 /*2*/
+#define UHFMAN_TAG_PERIOD_NREADS 100/*40*/ /*5*/ /*10*/ /*2*/
 // TODO Make UHFMAN_MAX_NUM_TAGS dynamic in the future (replace with dynamic mem allocation)
 #define UHFMAN_MAX_NUM_TAGS 500 
 typedef struct {
