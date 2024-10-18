@@ -1,13 +1,13 @@
 /*
     bash/client software --- database
          |
-    (filesystem)
+    (filesystem interface)
          |
        main (FUSE) <<< we are here
          |
        uhfd (UHF RFID tag devs driver)
         |
-      uhfman (abstracted management for interrogator device)
+      uhfman (abstracted management for interrogator device / HAL)
         |
      ypdr200 (specific interrogator device driver)
 */

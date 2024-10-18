@@ -30,7 +30,7 @@
             //ready [r] - 0/1
             delete [w] - write flags to delete
             embody [w] - write 1
-            measure [w] - write 1 to trigger measurement stored in rssi and read_rate
+            measure [w] - write timeout value to trigger measurement stored in rssi and read_rate
     uhfd
         //max_index [internal]
         //request - [w] only 'c' for create
