@@ -623,11 +623,11 @@ int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_u
         err = uhfman_multiple_polling_stop(&pUHFD->uhfmanCtx);
     }
     uhfman_unset_poll_handler();
-    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
     // update the dev's measurement data
     assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
     pUHFD->da.pDevs[devno].measurement = measurement;
     assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
+    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
     return 0;
 }
 
@@ -699,12 +699,12 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno) {
     uint8_t rssi = 0;
     uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
     uhfman_unset_poll_handler();
-    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
     // no need to stop polling as it is single polling
     // update the dev's rssi
     assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
     pUHFD->da.pDevs[devno].measurement.rssi = rssi;
     assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
+    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
     return 0;
 }
 

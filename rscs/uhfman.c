@@ -133,7 +133,8 @@ static void uhfman_usbserial_set_blocking (int fd, int should_block)
         }
 
         tty.c_cc[VMIN]  = should_block ? 1 : 0;
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+        //tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+        tty.c_cc[VTIME] = 0; // no timeout
 
         if (tcsetattr (fd, TCSANOW, &tty) != 0)
                 LOG_E("error %d setting term attributes", errno);
@@ -247,7 +248,8 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         #ifndef UHFMAN_CH340_PORT_NAME
             #error "UHFMAN_CH340_PORT_NAME is undefined"
         #endif
-        int fd = open(UHFMAN_CH340_PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC | O_EXCL);
+        //int fd = open(UHFMAN_CH340_PORT_NAME, O_RDWR | O_NOCTTY | O_SYNC | O_EXCL);
+        int fd = open(UHFMAN_CH340_PORT_NAME, O_RDWR | O_NOCTTY | O_NONBLOCK | O_EXCL);
         if (fd < 0) {
             LOG_E("Error %d opening %s: %s", errno, UHFMAN_CH340_PORT_NAME, strerror (errno));
             return -1;
@@ -330,6 +332,13 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         tcflush(fd, TCIOFLUSH); // Flush just in case there is any garbage in the buffers
 
         pCtx_out->fd = fd;
+        pCtx_out->pollin_fd.fd = fd;
+        pCtx_out->pollin_fd.events = POLLIN;
+        pCtx_out->pollin_timeout = 100; // 100 ms timeout
+        pCtx_out->pollout_fd.fd = fd;
+        pCtx_out->pollout_fd.events = POLLOUT;
+        pCtx_out->pollout_timeout = 100; // 100 ms timeout
+
         uhfman_ctx_config_init(pCtx_out);
         
         //printf("EXITING FOR NOW\n"); exit(EXIT_SUCCESS);

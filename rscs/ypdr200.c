@@ -225,6 +225,14 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     //actual_size_received = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE);
     while (actual_size_received < YPDR200_FRAME_PROLOG_SIZE) {
+        int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
+        if (poll_rv == -1 || poll_rv == 0) {
+            LOG_W("Error polling for response prolog: poll_rv=%d", poll_rv);
+            return YPDR200_FRAME_RECV_ERR_READ;
+        } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
+            LOG_W("Error polling for response prolog: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
+            return YPDR200_FRAME_RECV_ERR_READ;
+        }
         ssize_t nread = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE - actual_size_received);
         if (nread <= 0) {
             LOG_W("Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d, nread=%d", YPDR200_FRAME_PROLOG_SIZE, actual_size_received, nread);
@@ -271,6 +279,14 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         }
         #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
         while (actual_size_received < paramInLen) {
+            int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
+            if (poll_rv == -1 || poll_rv == 0) {
+                LOG_W("Error polling for param data: poll_rv=%d", poll_rv);
+                return YPDR200_FRAME_RECV_ERR_READ;
+            } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
+                LOG_W("Error polling for param data: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
+                return YPDR200_FRAME_RECV_ERR_READ;
+            }
             ssize_t nread = read(pCtx->fd, pParamIn, paramInLen - actual_size_received);
             if (nread <= 0) {
                 LOG_W("Error reading param data: paramInLen=%d, actual_size_received=%d, nread=%d", paramInLen, actual_size_received, nread);
@@ -315,6 +331,14 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     //actual_size_received = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE);
     while (actual_size_received < YPDR200_FRAME_EPILOG_SIZE) {
+        int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
+        if (poll_rv == -1 || poll_rv == 0) {
+            LOG_W("Error polling for response epilog: poll_rv=%d", poll_rv);
+            return YPDR200_FRAME_RECV_ERR_READ;
+        } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
+            LOG_W("Error polling for response epilog: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
+            return YPDR200_FRAME_RECV_ERR_READ;
+        }
         ssize_t nread = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE - actual_size_received);
         if (nread <= 0) {
             LOG_W("Error reading epilog: YPD200_FRAME_EPILOG_SIZE=%d, actual_size_received=%d, nread=%d", YPDR200_FRAME_EPILOG_SIZE, actual_size_received, nread);
@@ -466,6 +490,14 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
 #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     //actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
     while (actual_size_transmitted < dataOutLen) {
+        int poll_rv = poll(&pCtx->pollout_fd, 1, pCtx->pollout_timeout);
+        if (poll_rv == -1 || poll_rv == 0) {
+            LOG_W("Error polling for frame write: pollout_rv=%d", poll_rv);
+            return YPDR200_FRAME_SEND_ERR_SEND;
+        } else if (!(pCtx->pollout_fd.revents & POLLOUT)) {
+            LOG_W("Error polling for frame write: pCtx->pollout_fd.revents=%d", pCtx->pollout_fd.revents);
+            return YPDR200_FRAME_SEND_ERR_SEND;
+        }
         ssize_t nwritten = write(pCtx->fd, pDataOut, dataOutLen - actual_size_transmitted);
         if (nwritten <= 0) {
             LOG_W("Error sending cmd 0x%02X: dataOutLen=%d, actual_size_transmitted=%d, nwritten=%d", pFrameSnd->prolog.cmd, dataOutLen, actual_size_transmitted, nwritten);

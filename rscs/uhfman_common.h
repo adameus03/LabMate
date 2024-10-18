@@ -2,6 +2,7 @@
 #define UHFMAN_COMMON_H
 
 #include "libusb.h"
+#include <poll.h>
 #include "log.h"
 
 #define UHFMAN_USE_DEBUG_EXTENSIONS 1
@@ -71,6 +72,10 @@ typedef struct {
     libusb_context *context;
     /* For serial port emulation */
     int fd;
+    struct pollfd pollin_fd;
+    struct pollfd pollout_fd;
+    int pollin_timeout;
+    int pollout_timeout;
     
     struct uhfman_config {
         struct {
