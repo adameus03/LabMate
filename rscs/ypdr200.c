@@ -223,15 +223,26 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         return YPDR200_FRAME_RECV_ERR_READ;
     }
     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-    actual_size_received = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE);
+    //actual_size_received = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE);
+    while (actual_size_received < YPDR200_FRAME_PROLOG_SIZE) {
+        ssize_t nread = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE - actual_size_received);
+        if (nread <= 0) {
+            LOG_W("Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d, nread=%d", YPDR200_FRAME_PROLOG_SIZE, actual_size_received, nread);
+            return YPDR200_FRAME_RECV_ERR_READ;
+        }
+        actual_size_received += nread;
+    }
     #endif
     if (actual_size_received != YPDR200_FRAME_PROLOG_SIZE) {
-        LOG_E("Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d", YPDR200_FRAME_PROLOG_SIZE, actual_size_received);
-        LOG_E_TBC("The received incomplete prolog is: ");
-        for (int i = 0; i < actual_size_received; i++) {
-            LOG_E_CTBC("0x%02X ", prologIn.raw[i]);
-        }
-        LOG_E_CFIN("");
+        // LOG_E("Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d", YPDR200_FRAME_PROLOG_SIZE, actual_size_received);
+        // LOG_E_TBC("The received incomplete prolog is: ");
+        // for (int i = 0; i < actual_size_received; i++) {
+        //     LOG_E_CTBC("0x%02X ", prologIn.raw[i]);
+        // }
+        // LOG_E_CFIN("");
+        // return YPDR200_FRAME_RECV_ERR_READ;
+        LOG_W("Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d", YPDR200_FRAME_PROLOG_SIZE, actual_size_received);
+        assert(0);
         return YPDR200_FRAME_RECV_ERR_READ;
     }
 
@@ -268,6 +279,12 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
             }
             actual_size_received += nread;
         }
+        if (actual_size_received != paramInLen) {
+            LOG_W("Error reading param data: paramInLen=%d, actual_size_received=%d", paramInLen, actual_size_received);
+            free(pParamIn);
+            assert(0);
+            return YPDR200_FRAME_RECV_ERR_READ;
+        }
         #endif
         // if (actual_size_received != paramInLen) {
         //     fprintf(stderr, "Error reading param data: paramInLen=%d, actual_size_received=%d\n", paramInLen, actual_size_received);
@@ -296,13 +313,25 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         return YPDR200_FRAME_RECV_ERR_READ;
     }
     #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-    actual_size_received = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE);
+    //actual_size_received = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE);
+    while (actual_size_received < YPDR200_FRAME_EPILOG_SIZE) {
+        ssize_t nread = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE - actual_size_received);
+        if (nread <= 0) {
+            LOG_W("Error reading epilog: YPD200_FRAME_EPILOG_SIZE=%d, actual_size_received=%d, nread=%d", YPDR200_FRAME_EPILOG_SIZE, actual_size_received, nread);
+            if (pParamIn != (uint8_t*)0) {
+                free(pParamIn);
+            }
+            return YPDR200_FRAME_RECV_ERR_READ;
+        }
+        actual_size_received += nread;
+    }
     #endif
     if (actual_size_received != YPDR200_FRAME_EPILOG_SIZE) {
         LOG_E("Error reading epilog: YPD200_FRAME_EPILOG_SIZE=%d, actual_size_received=%d", YPDR200_FRAME_EPILOG_SIZE, actual_size_received);
         if (pParamIn != (uint8_t*)0) {
             free(pParamIn);
         }
+        assert(0);
         return YPDR200_FRAME_RECV_ERR_READ;
     }
 
@@ -435,7 +464,22 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
         return YPDR200_FRAME_SEND_ERR_SEND;
     }
 #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
-    actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
+    //actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
+    while (actual_size_transmitted < dataOutLen) {
+        ssize_t nwritten = write(pCtx->fd, pDataOut, dataOutLen - actual_size_transmitted);
+        if (nwritten <= 0) {
+            LOG_W("Error sending cmd 0x%02X: dataOutLen=%d, actual_size_transmitted=%d, nwritten=%d", pFrameSnd->prolog.cmd, dataOutLen, actual_size_transmitted, nwritten);
+            free(pDataOut);
+            return YPDR200_FRAME_SEND_ERR_SEND;
+        }
+        actual_size_transmitted += nwritten;
+    }
+    if (actual_size_transmitted != dataOutLen) {
+        LOG_W("Error sending cmd 0x%02X: dataOutLen=%d, actual_size_transmitted=%d", pFrameSnd->prolog.cmd, dataOutLen, actual_size_transmitted);
+        free(pDataOut);
+        assert(0);
+        return YPDR200_FRAME_SEND_ERR_SEND;
+    }
 #else
     #error "Unsupported device interface"
 #endif
