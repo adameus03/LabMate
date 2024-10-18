@@ -23,7 +23,7 @@ bash/client software --- database <<< external to RSCS itself
 ```
 ## How it works
 - Check issue https://github.com/adameus03/LabMate/issues/13 for available control files.
-- To initialize a device you can navigate to `/mnt/rscs` and use `MYSID=$(cat uhfd/sid); echo -n $MYSID > uhfd/mkdev; cd "uhf$(cat uhfd/result/$MYSID/value)"`, which will place you in the directory of the newly created device. Next write required values to the `epc`, `access_passwd` and `kill_passwd` files. You can then write a `1` to `./driver/embody`, which will basically transfer the provided data into the nearby physical tag present in the field.
+- To initialize a tag you can navigate to `/mnt/rscs` and use `MYSID=$(cat uhfd/sid); echo -n $MYSID > uhfd/mkdev; cd "uhf$(cat uhfd/result/$MYSID/value)"`, which will place you in the directory of the newly created device. Next write required values to the `epc`, `access_passwd` and `kill_passwd` files. You can then write a `1` to `./driver/embody`, which will basically transfer the provided data into the nearby physical tag present in the field. We assume that an unembodied tag has a zero access password.
 - If the tag was already embodied, then you need to initialize it with this information by additionaly writing `echo -n 02 > ./flags`
 - To read latest measurement values, read from the `rssi` and `read_rate` files. In order to trigger a measurement, there are 2 ways: (a) trigger a full measurement by writing a microseconds timeout integer value to `./driver/embody` or (b) write a `-1` to the same file to trigger a quick measurement (rssi only, it tries to access the tag only once) (please use `echo -n`)  
 - Full documentation needs to be written yet
