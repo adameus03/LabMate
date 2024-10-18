@@ -617,7 +617,11 @@ int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_u
     uhfd_dev_m_t measurement = {0};
     uhfman_multiple_polling(&pUHFD->uhfmanCtx, timeout_us, (void*)&measurement);
     // Need to stop polling as it is multiple polling
-    uhfman_multiple_polling_stop(&pUHFD->uhfmanCtx);
+    err = uhfman_multiple_polling_stop(&pUHFD->uhfmanCtx);
+    while (UHFMAN_ERR_SUCCESS != err) {
+        LOG_W("uhfd_measure_dev: uhfman_multiple_polling_stop failed with error %d, will retry until success...", err);
+        err = uhfman_multiple_polling_stop(&pUHFD->uhfmanCtx);
+    }
     uhfman_unset_poll_handler();
     assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
     // update the dev's measurement data
