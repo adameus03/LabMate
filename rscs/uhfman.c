@@ -302,6 +302,8 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         // config.c_cc[VTIME] = 0; // No timeout
         config.c_cflag |= CRTSCTS;
 
+        uhfman_usbserial_set_blocking(fd, 0); // set no blocking
+
         ///<Print all termios attributes in binary for debugging>
         LOG_V("Termios attributes (binary): ");
         LOG_V_TBC("c_iflag: "); uhfman_debug_print_bits(&config.c_iflag, sizeof(config.c_iflag)); LOG_V_CFIN("");
