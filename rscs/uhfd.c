@@ -548,7 +548,7 @@ static void uhfd_uhfman_poll_handler(uint16_t handle, void* pUserData) {
 }
 
 //int uhfd_measure_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno, uhfd_dev_m_t* pMeasurement) {
-int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_us) {
+int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_us, float tx_power) {
     LOG_I("uhfd_measure_dev requested for devno %lu", devno);
     // Schedule:
     // 0. Obtain tag EPC
@@ -577,7 +577,13 @@ int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_u
     uhfman_query_target_t query_target = UHFMAN_QUERY_TARGET_A;
     uint8_t query_q = 0x00;
     uhfman_select_mode_t select_mode = UHFMAN_SELECT_MODE_ALWAYS;
-    float txPower = 26.0f; // for now 26dBm, but we can make setting it to max float to automatically use the maximum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
+    //float txPower = 26.0f; // for now 26dBm, but we can make setting it to max float to automatically use the maximum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
+    float txPower = tx_power;
+    if (txPower < 15.0f) {
+        LOG_W("uhfd_measure_dev: provided tx_power is less than 15.0dBm");
+    } else if (txPower > 26.0f) {
+        LOG_W("uhfd_measure_dev: provided tx_power is greater than 26.0dBm");
+    }
 
     assert(TRUE == p_mutex_lock(pUHFD->pUhfmanCtxMutex));
     LOG_D("uhfd_measure_dev: Setting select parameters");
@@ -631,7 +637,7 @@ int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_u
     return 0;
 }
 
-int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno) {
+int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_power) {
     LOG_I("uhfd_quick_measure_rssi requested for devno %lu", devno);
     // Schedule:
     // 0. Obtain tag EPC
@@ -659,7 +665,13 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno) {
     uhfman_query_target_t query_target = UHFMAN_QUERY_TARGET_A;
     uint8_t query_q = 0x00;
     uhfman_select_mode_t select_mode = UHFMAN_SELECT_MODE_ALWAYS;
-    float txPower = 26.0f; // for now 26dBm, but we can make setting it to max float to automatically use the maximum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
+    //float txPower = 26.0f; // for now 26dBm, but we can make setting it to max float to automatically use the maximum power for specific interrogator hardware (in the future) (uhfman should handle this actually as it is a HAL)
+    float txPower = tx_power;
+    if (txPower < 15.0f) {
+        LOG_W("uhfd_measure_dev: provided tx_power is less than 15.0dBm");
+    } else if (txPower > 26.0f) {
+        LOG_W("uhfd_measure_dev: provided tx_power is greater than 26.0dBm");
+    }
 
     assert(TRUE == p_mutex_lock(pUHFD->pUhfmanCtxMutex));
     LOG_D("uhfd_quick_measure_dev_rssi: Setting select parameters");

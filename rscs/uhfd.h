@@ -166,8 +166,8 @@ int uhfd_delete_dev(uhfd_t* pUHFD, unsigned long devno, uint8_t flags);
 
 int uhfd_embody_dev(uhfd_t* pUHFD, unsigned long devno);
 
-int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_us); // DONE remove pMeasurement (but not its type)
+int uhfd_measure_dev(uhfd_t* pUHFD, unsigned long devno, unsigned long timeout_us, float tx_power); // DONE remove pMeasurement (but not its type)
 
-int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno);
+int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_power);
 
 int uhfd_deinit(uhfd_t* pUHFD);

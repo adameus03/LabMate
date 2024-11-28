@@ -926,22 +926,26 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 		char str_val[30];
 		memcpy(str_val, buffer, size);
 		str_val[size] = '\0';
-		long val; // us timeout for full measurement or -1 for quick measurement
-		int n = sscanf(str_val, "%ld", &val);
-		if (n != 1) {
+		long tm_val; // us timeout for full measurement or -1 for quick measurement
+		float tx_p_val = 26.0f; // optional tx power adjustment (new power value in dBm)
+		int n = sscanf(str_val, "%ld %f", &tm_val, &tx_p_val);
+		if (n < 1) {
 			LOG_E("Write %s: invalid value", path);
 			free(pDevCopy);
 			return -EINVAL;
+		} else if (n == 2) {
+			LOG_D("Write %s: tx_p_val=%f", path, tx_p_val);
 		}
-		if (val < -1) {
+		assert (n == 1 || n == 2);
+		if (tm_val < -1) {
 			LOG_E("Write %s: invalid value", path);
 			free(pDevCopy);
 			return -EINVAL;
 		}
 		assert(pDevCopy->flags & UHFD_DEV_FLAG_EMBODIED);//TODO or remove it if neccessary here and deeper in the code to enable testing for duplicate tag EPCs ?
-		if (val == -1) {
+		if (tm_val == -1) {
 			// Request a quick measurement
-			rv = uhfd_quick_measure_dev_rssi(&__main_globals.uhfd, pDevCopy->devno);
+			rv = uhfd_quick_measure_dev_rssi(&__main_globals.uhfd, pDevCopy->devno, tx_p_val);
 			if (rv != 0) {
 				LOG_W("write: failed quick measurement");
 				free(pDevCopy);
@@ -949,7 +953,7 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 			}
 		} else {
 			// Request a full measurement
-			rv = uhfd_measure_dev(&__main_globals.uhfd, pDevCopy->devno, val);
+			rv = uhfd_measure_dev(&__main_globals.uhfd, pDevCopy->devno, tm_val, tx_p_val);
 			if (rv != 0) {
 				LOG_W("write: failed measurement");
 				free(pDevCopy);

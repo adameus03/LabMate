@@ -863,7 +863,7 @@ static int uhfman_config_tx_power_cache_cmp(uhfman_ctx_t* pCtx, float txPower) {
     if ((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_TX_POWER_INITIALIZED) == 0) {
         return 1;
     }
-    return (pCtx->_config.txPower != txPower) ? 0 : 1;
+    return (pCtx->_config.txPower != txPower) ? 1 : 0;
 }
 
 uhfman_err_t uhfman_set_transmit_power(uhfman_ctx_t* pCtx, float txPower) {
