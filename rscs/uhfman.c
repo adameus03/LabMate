@@ -1194,6 +1194,7 @@ uhfman_err_t uhfman_multiple_polling(uhfman_ctx_t* pCtx, unsigned long timeout_u
 }
 
 uhfman_err_t uhfman_multiple_polling_stop(uhfman_ctx_t* pCtx) {
+    LOG_D("Stopping multiple polling, pCtx->_config.flags: 0x%02X", pCtx->_config.flags);
     assert((pCtx->_config.flags & (uint8_t)UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == (uint8_t)UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
     ypdr200_resp_err_code_t rerr = 0;
