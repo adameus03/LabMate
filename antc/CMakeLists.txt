@@ -27,14 +27,12 @@ pkg_check_modules(FUSE REQUIRED fuse3)
 message(STATUS "FUSE version is: ${FUSE_VERSION}")
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/plibsys)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libgpiod)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/plibsys/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libgpiod/include)
 # Add FUSE include directories
 include_directories(${FUSE_INCLUDE_DIRS})
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
 )
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys libgpiod)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${FUSE_LIBRARIES})
