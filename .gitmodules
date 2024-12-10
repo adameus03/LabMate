@@ -1,6 +1,3 @@
-[submodule "qps/libqrencode"]
-	path = qps/libqrencode
-	url = https://github.com/adameus03/libqrencode
 [submodule "plibsys"]
 	path = plibsys
 	url = https://github.com/adameus03/plibsys
