@@ -26,4 +26,3 @@ while read -r line; do
     # Generate sound for 0.1 second at the calculated frequency
     sox -n -q -t alsa default synth 0.1 sine "$frequency" vol 0.01;
 done
-~          

@@ -7,4 +7,3 @@ echo -n 04030201 > kill_passwd;
 echo -n 434343434343434343434343 > epc;
 echo -n 02 > flags;
 cd -;
-~                
