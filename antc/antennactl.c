@@ -66,6 +66,7 @@ void antennactl_init(antennactl_t* pActl) {
     exit(EXIT_FAILURE);
   }
 #if (ANTENNACTL_HW_ARCH == ANTENNACTL_HW_ARCH_HMC349_DUAL)
+  pActl->w.hw.pHmc349 = hmc349_dev_new();
   hmc349_dev_init(pActl->w.hw.pHmc349);
 #endif
 
@@ -83,6 +84,7 @@ void antennactl_deinit(antennactl_t* pActl) {
   }
 #if (ANTENNACTL_HW_ARCH == ANTENNACTL_HW_ARCH_HMC349_DUAL)
   hmc349_dev_deinit(pActl->w.hw.pHmc349);
+  hmc349_dev_free(pActl->w.hw.pHmc349);
 #endif
 
   if (pActl->w.l.pHwMutex) { // defensive; TODO check if this is necessary
@@ -92,4 +94,21 @@ void antennactl_deinit(antennactl_t* pActl) {
   }
 
   LOG_I("antennactl_deinit: deinitialized");
+}
+
+antennactl_t* antennactl_new() {
+  antennactl_t* pActl = (antennactl_t*)malloc(sizeof(antennactl_t));
+  if (!pActl) {
+    LOG_F("antennactl_new: Failed to allocate memory for antennactl_t");
+    exit(EXIT_FAILURE);
+  }
+  pActl->target = ANTENNACTL_TARGET_T0;
+}
+
+void antennactl_free(antennactl_t* pActl) {
+  if (!pActl) {
+    LOG_W("antennactl_free: pActl is NULL");
+    return;
+  }
+  free(pActl);
 }

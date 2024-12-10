@@ -32,4 +32,15 @@ void antennactl_init(antennactl_t* pActl);
  */
 void antennactl_deinit(antennactl_t* pActl);
 
+/**
+ * @brief Allocate resources for antennactl main struct
+ */
+antennactl_t* antennactl_new();
+
+/**
+ * @brief Free resources allocated by `antennactl_new`
+ */
+void antennactl_free(antennactl_t* pActl);
+
+
 #endif // ANTENNACTL_H

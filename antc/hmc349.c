@@ -56,6 +56,10 @@ void hmc349_dev_init(hmc349_dev_t* pDev) {
     LOG_F("hmc349_dev_init: pDev is NULL");
     exit(EXIT_FAILURE);
   }
+
+  const char* libgpiod_version = gpiod_version_string();
+  LOG_D("hmc349_dev_init: libgpiod version: %s", libgpiod_version);
+
   pDev->w.chip = gpiod_chip_open(HMC349_GPIOD_CHIP);
   if (!pDev->w.chip) {
     LOG_F("hmc349_dev_init: Failed to open GPIO chip [%s] (errno: %d)", HMC349_GPIOD_CHIP, errno);
@@ -100,4 +104,24 @@ void hmc349_dev_deinit(hmc349_dev_t* pDev) {
   }
   
   LOG_D("hmc349_dev_deinit: Deinitialized hmc349 device with GPIO chip %s, line %d, consumer name %s, default value %d", HMC349_GPIOD_CHIP, HMC349_GPIOD_CHIP_LINE, HMC349_GPIOD_LINE_CONSUMER_NAME, LOW);
+}
+
+hmc349_dev_t* hmc349_dev_new() {
+  hmc349_dev_t* pDev = (hmc349_dev_t*)malloc(sizeof(hmc349_dev_t));
+  if (!pDev) {
+    LOG_F("hmc349_dev_new: Failed to allocate memory for hmc349 device");
+    exit(EXIT_FAILURE);
+  }
+  pDev->vctl = LOW;
+  pDev->w.chip = NULL;
+  pDev->w.line = NULL;
+  return pDev;
+}
+
+void hmc349_dev_free(hmc349_dev_t* pDev) {
+  if (!pDev) {
+    LOG_W("hmc349_dev_free: pDev is NULL");
+    return;
+  }
+  free(pDev);
 }
