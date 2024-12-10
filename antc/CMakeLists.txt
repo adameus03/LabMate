@@ -38,6 +38,7 @@ include_directories(${GPIOD_INCLUDE_DIRS})
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/hmc349.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/antennactl.c
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)

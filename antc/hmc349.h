@@ -1,6 +1,6 @@
-typedef struct hmc349_dev hmc349_dev_t;
+typedef struct hmc349_dev hmc349_dev_t; // opaque type for hmc349 device
 
-typedef enum {
+typedef enum hmc349_outp {
   HMC349_OUTP_RF1,
   HMC349_OUTP_RF2
 } hmc349_outp_t;
