@@ -251,7 +251,7 @@ int main(int argc, char **argv)
         h2o_access_log_register(pathconf, logfh);
 
     pathconf = h2o_config_register_path(hostconf, "/", 0);
-    h2o_file_register(pathconf, "doc_root", NULL, NULL, 0);
+    h2o_file_register(pathconf, "htdocs", NULL, NULL, 0);
     if (logfh != NULL)
         h2o_access_log_register(pathconf, logfh);
 
