@@ -99,7 +99,7 @@ void antennactl_deinit(antennactl_t* pActl) {
 antennactl_t* antennactl_new() {
   antennactl_t* pActl = (antennactl_t*)malloc(sizeof(antennactl_t));
   if (!pActl) {
-    LOG_F("antennactl_new: Failed to allocate memory for antennactl_t");
+    LOG_F("antennactl_new: Failed to allocate memory for antennactl");
     exit(EXIT_FAILURE);
   }
   pActl->target = ANTENNACTL_TARGET_T0;

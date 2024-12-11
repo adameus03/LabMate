@@ -5,11 +5,16 @@
 
 #define ANTENNACTL_HW_ARCH_HMC349_DUAL 1
 
+#define ANTENNACTL_TARGET_DEFAULT HMC349_GPIOD_CHIP_LINE_DEFAULT_VAL
+
 typedef struct antennactl antennactl_t; // opaque type for antennactl main struct
 
 typedef enum antennactl_target {
-  ANTENNACTL_TARGET_T0,
-  ANTENNACTL_TARGET_T1
+  ANTENNACTL_TARGET_TDEFAULT=ANTENNACTL_TARGET_DEFAULT,
+#if ANTENNACTL_HW_ARCH == ANTENNACTL_HW_ARCH_HMC349_DUAL
+  ANTENNACTL_TARGET_T0=0,
+  ANTENNACTL_TARGET_T1=1
+#endif
 } antennactl_target_t;
 
 /**
