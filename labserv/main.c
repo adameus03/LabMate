@@ -32,9 +32,8 @@
 #include "h2o/http2.h"
 #include "h2o/memcached.h"
 
-//#define USE_HTTPS 1
-#define USE_HTTPS 0
-#define USE_MEMCACHED 0
+#include "config.h"
+#include "lsapi.h"
 
 static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *))
 {
@@ -42,52 +41,6 @@ static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *pa
     h2o_handler_t *handler = h2o_create_handler(pathconf, sizeof(*handler));
     handler->on_req = on_req;
     return pathconf;
-}
-
-static int chunked_test(h2o_handler_t *self, h2o_req_t *req)
-{
-    static h2o_generator_t generator = {NULL, NULL};
-
-    if (!h2o_memis(req->method.base, req->method.len, H2O_STRLIT("GET")))
-        return -1;
-
-    h2o_iovec_t body = h2o_strdup(&req->pool, "hello world\n", SIZE_MAX);
-    req->res.status = 200;
-    req->res.reason = "OK";
-    h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("text/plain"));
-    h2o_start_response(req, &generator);
-    h2o_send(req, &body, 1, 1);
-
-    return 0;
-}
-
-static int reproxy_test(h2o_handler_t *self, h2o_req_t *req)
-{
-    if (!h2o_memis(req->method.base, req->method.len, H2O_STRLIT("GET")))
-        return -1;
-
-    req->res.status = 200;
-    req->res.reason = "OK";
-    h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_X_REPROXY_URL, NULL, H2O_STRLIT("http://www.ietf.org/"));
-    h2o_send_inline(req, H2O_STRLIT("you should never see this!\n"));
-
-    return 0;
-}
-
-static int post_test(h2o_handler_t *self, h2o_req_t *req)
-{
-    if (h2o_memis(req->method.base, req->method.len, H2O_STRLIT("POST")) &&
-        h2o_memis(req->path_normalized.base, req->path_normalized.len, H2O_STRLIT("/post-test/"))) {
-        static h2o_generator_t generator = {NULL, NULL};
-        req->res.status = 200;
-        req->res.reason = "OK";
-        h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("text/plain; charset=utf-8"));
-        h2o_start_response(req, &generator);
-        h2o_send(req, &req->entity, 1, 1);
-        return 0;
-    }
-
-    return -1;
 }
 
 static h2o_globalconf_t config;
@@ -124,7 +77,7 @@ static int create_listener(void)
     int r;
 
     uv_tcp_init(ctx.loop, &listener);
-    uv_ip4_addr("127.0.0.1", 7890, &addr);
+    uv_ip4_addr(LABSERV_IPV4_ADDR, LABSERV_IP_PORT, &addr);
     if ((r = uv_tcp_bind(&listener, (struct sockaddr *)&addr, 0)) != 0) {
         fprintf(stderr, "uv_tcp_bind:%s\n", uv_strerror(r));
         goto Error;
@@ -164,7 +117,7 @@ static int create_listener(void)
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(0x7f000001);
-    addr.sin_port = htons(7890);
+    addr.sin_port = htons(LABSERV_IP_PORT);
 
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1 ||
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_flag, sizeof(reuseaddr_flag)) != 0 ||
@@ -189,9 +142,9 @@ static int setup_ssl(const char *cert_file, const char *key_file, const char *ci
     accept_ctx.ssl_ctx = SSL_CTX_new(SSLv23_server_method());
     SSL_CTX_set_options(accept_ctx.ssl_ctx, SSL_OP_NO_SSLv2);
 
-    if (USE_MEMCACHED) {
+    if (LABSERV_USE_MEMCACHED) {
         accept_ctx.libmemcached_receiver = &libmemcached_receiver;
-        h2o_accept_setup_memcached_ssl_resumption(h2o_memcached_create_context("127.0.0.1", 11211, 0, 1, "h2o:ssl-resumption:"),
+        h2o_accept_setup_memcached_ssl_resumption(h2o_memcached_create_context(LABSERV_IPV4_ADDR, 11211, 0, 1, "h2o:ssl-resumption:"),
                                                   86400);
         h2o_socket_ssl_async_resumption_setup_ctx(accept_ctx.ssl_ctx);
     }
@@ -237,16 +190,7 @@ int main(int argc, char **argv)
     h2o_config_init(&config);
     hostconf = h2o_config_register_host(&config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
 
-    pathconf = register_handler(hostconf, "/post-test", post_test);
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
-
-    pathconf = register_handler(hostconf, "/chunked-test", chunked_test);
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
-
-    pathconf = register_handler(hostconf, "/reproxy-test", reproxy_test);
-    h2o_reproxy_register(pathconf);
+    pathconf = register_handler(hostconf, "/api", lsapi_endpoint_main);
     if (logfh != NULL)
         h2o_access_log_register(pathconf, logfh);
 
@@ -262,10 +206,10 @@ int main(int argc, char **argv)
 #else
     h2o_context_init(&ctx, h2o_evloop_create(), &config);
 #endif
-    if (USE_MEMCACHED)
+    if (LABSERV_USE_MEMCACHED)
         h2o_multithread_register_receiver(ctx.queue, &libmemcached_receiver, h2o_memcached_receiver);
 
-    if (USE_HTTPS && setup_ssl("examples/h2o/server.crt", "examples/h2o/server.key",
+    if (LABSERV_USE_HTTPS && setup_ssl("examples/h2o/server.crt", "examples/h2o/server.key",
                                "DEFAULT:!MD5:!DSS:!DES:!RC4:!RC2:!SEED:!IDEA:!NULL:!ADH:!EXP:!SRP:!PSK") != 0)
         goto Error;
 
@@ -273,7 +217,7 @@ int main(int argc, char **argv)
     accept_ctx.hosts = config.hosts;
 
     if (create_listener() != 0) {
-        fprintf(stderr, "failed to listen to 127.0.0.1:7890:%s\n", strerror(errno));
+        fprintf(stderr, "failed to listen to %s:%d:%s\n", LABSERV_IPV4_ADDR, LABSERV_IP_PORT, strerror(errno));
         goto Error;
     }
 

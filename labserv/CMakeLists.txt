@@ -36,6 +36,7 @@ include_directories(${UV_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIRS} ${H2O_INCLUDE_DIR
 
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/lsapi.c
 )
 
 #target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)
