@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>LabMate</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+  <!-- STYLE -->
+  <style>
+    ul {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #333333;
+    }
+
+    li {
+      float: left;
+    }
+
+    li a, li span {
+      display: block;
+      color: white;
+      text-align: center;
+      padding: 16px;
+      text-decoration: none;
+      cursor: grab;
+    }
+
+    li a:hover, li span:hover {
+      background-color: #111111;
+    }
+
+    img {
+      height: 5vh;
+    }
+
+    #plugged-component-object {
+      position: relative;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #main-container {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+
+  <!-- ELEMENTS -->
+  <div id='main-container'>
+    <ul>
+      <li><img src='https://v2024.ddns.net/output-onlinepngtools.png'></li>
+      <li><a href="logged-common.html?c=acts">Reagents</a></li>
+      <li><a href="logged-common.html?c=about">About</a></li>
+      <li><span onclick="logout()">Sign out</span></li>
+    </ul>
+
+    <object id='plugged-component-object' type='text/html' width="600" height="400">
+      Your browser does not support the &lt;object&gt; element.
+      </object>
+  </div>
+
+  <!-- SCRIPT -->
+  <script type="text/javascript">
+    function loginCheck() {
+      // check for session_key in localStorage
+      if (!localStorage.getItem('session_key')) {
+        alert('You are not logged in. Redirecting to login page');
+        window.location.href = 'login.html';
+      }
+    }
+
+    function logout() {
+      let username = '';
+      let session_key = '';
+      try {
+        username = localStorage.getItem('username');
+        session_key = localStorage.getItem('session_key');
+      } catch (e) {
+        alert('Failed to retrieve data from local storage: ' + e);
+        return;
+      }
+
+      fetch('https://labmate.v2024.pl/api/session', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json', // Sending JSON
+        },
+        body: JSON.stringify({ username: username, session_key: session_key })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Response:', data);
+        let respObj = data;
+        if (respObj.status === 'success') {
+          try {
+            localStorage.removeItem('session_key');
+          } catch (e) {
+            alert('Failed to remove data from local storage: ' + e);
+            return;
+          }
+          alert('You are now signed out. Redirecting to login page');
+          window.location.href = 'login.html';
+        } else {
+          alert('Failed to sign out. ' + respObj.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to sign out for unexpected reason');
+      });
+    }
+
+    function loadComponent() {
+      let component = document.getElementById('plugged-component-object');
+      let urlParams = new URLSearchParams(window.location.search);
+      let componentName = urlParams.get('c');
+      switch (componentName) {
+        case 'chat':
+          component.data = 'chat.html';
+          break;
+        case 'acts':
+          component.data = 'acts.html';
+          break;
+        case 'act-edit':
+          component.data = 'act-edit.html';
+          break;
+        case 'about':
+          component.data = 'about.html';
+          break;
+        default:
+          alert('Unknown component. Bye bye');
+          window.location.href = 'logged-common.html?c=chat'
+          break;
+      }
+    }
+    window.onload = function() {
+      loginCheck();
+      loadComponent();
+    }
+  </script>
+</body>
+
+</html>

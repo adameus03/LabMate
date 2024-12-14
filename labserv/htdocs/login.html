@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>LabMate Login</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+  <style>
+    .login-container {
+      display: table-cell;
+      vertical-align: middle;
+      height: 15vh;
+      width: 100vw;
+      border: 1px solid red;
+
+      position: absolute;
+      top: 45vh;
+      left: 0%;
+    }
+
+    .credentials-container {
+      padding: 1vw;
+      background-color: green;
+    }
+
+    .form-btn {
+      padding: 0.5vw;
+    }
+
+    .buttons-container {
+      background-color: blue;
+    }
+
+    .username-container {
+      background-color: red;
+    }
+
+    .password-container {
+      background-color: magenta;
+    }
+  </style>
+
+  <div class='login-container'>
+    <div class='credentials-container'>
+      <div class='username-container'>
+        <label for='name'>Username:</label>
+        <input name='username' type='text' placeholder='Username' />
+      </div>
+      <div class='password-container'>
+        <label for='password'>Password :</label>
+        <input name='password' type='password' placeholder='Password' />
+      </div>
+    </div>
+    <div class='buttons-container'>
+      <input type='submit' value='Login' class='form-btn' onclick="login()"/>
+      <a href="signup.html">
+        <button class='form-btn'>Sign up instead</button>
+      </a>
+
+    </div>
+  </div>
+
+  <script>
+    function login() {
+      fetch('https://labmate.v2024.pl/api/session', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json', // Sending JSON
+        },
+        body: JSON.stringify({ username: document.getElementsByName('username')[0].value, password: document.getElementsByName('password')[0].value })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Response:', data);
+        let respObj = data;
+        if (respObj.status === 'success') {
+          if (respObj.session_key) {
+            // Save session_key & username in local storage
+            try {
+              localStorage.setItem('session_key', respObj.session_key);
+              localStorage.setItem('username', document.getElementsByName('username')[0].value);
+            } catch (e) {
+              alert('Failed to save data to local storage: ' + e);
+              return;
+            }
+            alert('You should visit QualityDU more often!');
+            window.location.href = 'logged-common.html?c=chat';
+          } else {
+            alert('Unexpected error: missing session_key in server response');
+          }
+        } else {
+          alert('Failed to login. Please check your credentials or try again');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to login for unexpected reason');
+      });
+    }
+  </script>
+</body>
+
+</html>
