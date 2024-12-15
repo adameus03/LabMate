@@ -22,11 +22,27 @@ RUN cmake -DWITH_MRUBY=OFF -DBUILD_SHARED_LIBS=ON -S .. -B .
 RUN make
 RUN make install
 
+RUN apk add asciidoc
+WORKDIR /opt
+RUN git clone -b future https://github.com/rg3/libbcrypt.git
+WORKDIR /opt/libbcrypt
+RUN make
+RUN make install
+WORKDIR /usr/local/lib
+RUN ln -s ../lib64/libcrypt.a libcrypt.a
+RUN ln -s ../lib64/libcrypt.so libcrypt.so
+RUN ln -s ../lib64/libcrypt.so.1 libcrypt.so.1
+RUN ln -s ../lib64/libcrypt.so.1.0.0 libcrypt.so.1.0.0
+WORKDIR /usr/local/lib/pkgconfig
+RUN ln -s ../../lib64/pkgconfig/libbcrypt.pc libbcrypt.pc
+
 WORKDIR /opt/labmate
 COPY *.h *.c CMakeLists.txt ./
 COPY htdocs/ ./htdocs/
 WORKDIR /opt/labmate/build
 RUN cmake -S .. -B .
 RUN make
+
+WORKDIR /opt/labmate
 
 EXPOSE $port
