@@ -29,10 +29,10 @@ WORKDIR /opt/libbcrypt
 RUN make
 RUN make install
 WORKDIR /usr/local/lib
-RUN ln -s ../lib64/libcrypt.a libcrypt.a
-RUN ln -s ../lib64/libcrypt.so libcrypt.so
-RUN ln -s ../lib64/libcrypt.so.1 libcrypt.so.1
-RUN ln -s ../lib64/libcrypt.so.1.0.0 libcrypt.so.1.0.0
+RUN ln -s ../lib64/libbcrypt.a libbcrypt.a
+RUN ln -s ../lib64/libbcrypt.so libbcrypt.so
+RUN ln -s ../lib64/libbcrypt.so.1 libbcrypt.so.1
+RUN ln -s ../lib64/libbcrypt.so.1.0.0 libbcrypt.so.1.0.0
 WORKDIR /usr/local/lib/pkgconfig
 RUN ln -s ../../lib64/pkgconfig/libbcrypt.pc libbcrypt.pc
 
@@ -44,5 +44,8 @@ RUN cmake -S .. -B .
 RUN make
 
 WORKDIR /opt/labmate
+COPY sql/ ./sql/
 
 EXPOSE $port
+
+CMD ["./build/labserv"]

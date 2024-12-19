@@ -13,12 +13,13 @@ CREATE TABLE IF NOT EXISTS public.users (
 	karma int4 DEFAULT 0 NOT NULL,
 	email varchar NOT NULL,
 	email_verified bool DEFAULT false NOT NULL,
-	email_verification_token varchar NOT NULL,
+	email_verification_token_hash varchar NOT NULL,
 	sesskey_hash varchar NULL,
 	last_usr_chng_date date NULL,
 	sesskey_salt varchar NULL,
-	passwd_salt varchar NULL,
+	passwd_salt varchar NOT NULL,
+	email_verification_token_salt varchar NOT NULL,
 	CONSTRAINT users_pk PRIMARY KEY (user_id),
 	CONSTRAINT users_unique UNIQUE (username),
-	CONSTRAINT users_unique_1 UNIQUE (email_verification_token)
+	CONSTRAINT users_unique_1 UNIQUE (email)
 );

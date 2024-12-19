@@ -35,11 +35,13 @@
 #include "config.h"
 #include "lsapi.h"
 
-static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *))
+static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *), void* pUserData)
 {
     h2o_pathconf_t *pathconf = h2o_config_register_path(hostconf, path, 0);
-    h2o_handler_t *handler = h2o_create_handler(pathconf, sizeof(*handler));
-    handler->on_req = on_req;
+    h2o_handler_t* pHandler = h2o_create_handler(pathconf, sizeof(*pHandler) + sizeof(void*));
+
+    *((void**)(pHandler + 1)) = pUserData;
+    pHandler->on_req = on_req;
     return pathconf;
 }
 
@@ -181,8 +183,11 @@ static int setup_ssl(const char *cert_file, const char *key_file, const char *ci
 
 int main(int argc, char **argv)
 {
+    lsapi_t* pLsapi = lsapi_new();
+    lsapi_init(pLsapi);
+
     h2o_hostconf_t *hostconf;
-    h2o_access_log_filehandle_t *logfh = h2o_access_log_open_handle("/dev/stdout", NULL, H2O_LOGCONF_ESCAPE_APACHE);
+    h2o_access_log_filehandle_t *logfh = h2o_access_log_open_handle(LABSERV_H2O_ACCESS_LOG_FILE_PATH, NULL, H2O_LOGCONF_ESCAPE_APACHE);
     h2o_pathconf_t *pathconf;
 
     signal(SIGPIPE, SIG_IGN);
@@ -190,7 +195,7 @@ int main(int argc, char **argv)
     h2o_config_init(&config);
     hostconf = h2o_config_register_host(&config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
 
-    pathconf = register_handler(hostconf, "/api", lsapi_endpoint_main);
+    pathconf = register_handler(hostconf, "/api/user", lsapi_endpoint_user, (void*)pLsapi);
     if (logfh != NULL)
         h2o_access_log_register(pathconf, logfh);
 
@@ -229,5 +234,7 @@ int main(int argc, char **argv)
 #endif
 
 Error:
+    lsapi_deinit(pLsapi);
+    lsapi_free(pLsapi);
     return 1;
 }

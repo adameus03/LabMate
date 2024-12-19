@@ -1,8 +1,37 @@
+/**
+ * LSAPI - Labserv API for HTTP backend endpoints
+ */
+
 #ifndef LSAPI_H
 #define LSAPI_H
 
 #include <h2o.h>
 
-int lsapi_endpoint_main(h2o_handler_t *self, h2o_req_t *req);
+typedef struct lsapi lsapi_t;
+
+/**
+ * @brief Create a new LSAPI instance
+ */
+lsapi_t* lsapi_new();
+
+/**
+ * @brief Free resource allocation caused by `lsapi_new`
+ */
+void lsapi_free(lsapi_t* pLsapi);
+
+/**
+ * @brief Initialize LSAPI
+ */
+void lsapi_init(lsapi_t* pLsapi);
+
+/**
+ * @brief Free resource allocation caused by `lsapi_init`
+ */
+void lsapi_deinit(lsapi_t* pLsapi);
+
+/**
+ * @brief Handle LSAPI user endpoint
+ */
+int lsapi_endpoint_user(h2o_handler_t* pHandlerSelf, h2o_req_t* pReq);
 
 #endif //LSAPI_H
