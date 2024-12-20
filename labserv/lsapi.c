@@ -38,8 +38,9 @@ void lsapi_deinit(lsapi_t* pLsapi) {
 /**
  * @brief Trick function to obtain lsapi_t* using h2o_handler_t*
  */
-static lsapi_t* __lsapi_self_from_h2o_handler(h2o_handler_t* pSelf) {
-    return (lsapi_t*)*(void**)(pSelf + 1);
+static lsapi_t* __lsapi_self_from_h2o_handler(h2o_handler_t* pH2oHandler) {
+    assert(pH2oHandler != NULL);
+    return (lsapi_t*)*(void**)(pH2oHandler + 1);
 }
 
 #define __LSAPI_EMAIL_VERIF_TOKEN_LEN 32
@@ -76,6 +77,7 @@ static char* __lsapi_generate_token() {
 }
 
 static void lsapi_email_send(char* verification_token) {
+    assert(verification_token != NULL);
     LOG_I("lsapi_email_handler: Dummy email handler");
     char* token = malloc(strlen(verification_token) + 1);
     if (token == NULL) {
@@ -87,61 +89,101 @@ static void lsapi_email_send(char* verification_token) {
     free(token);
 }
 
-static int __lsapi_endpoint_reject(h2o_req_t *pReq, const int status, const char* reason, const char* errMessage) {    
+static int __Lsapi_endpoint_resp_short(h2o_req_t *pReq, 
+                                       const int httpStatus, 
+                                       const char* httpReason, 
+                                       const char* jsonStatus, 
+                                       const char* jsonMessage) {
+    assert(pReq != NULL);
+    assert(httpReason != NULL);
+    assert(jsonStatus != NULL);
+    assert(jsonMessage != NULL);
     static h2o_generator_t generator = {NULL, NULL};
-    pReq->res.status = status;
-    pReq->res.reason = reason;
+    pReq->res.status = httpStatus;
+    pReq->res.reason = httpReason;
     h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
     h2o_start_response(pReq, &generator);
 
-    const char* errStatus = "error";
-    yyjson_mut_doc* pJsonErrResp = yyjson_mut_doc_new(NULL);
-    yyjson_mut_val* pRootErrResp = yyjson_mut_obj(pJsonErrResp);
-    yyjson_mut_doc_set_root(pJsonErrResp, pRootErrResp);
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pJsonRespRoot = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pJsonRespRoot);
 
-    yyjson_mut_obj_add_str(pJsonErrResp, pRootErrResp, "status", errStatus);
-    yyjson_mut_obj_add_str(pJsonErrResp, pRootErrResp, "message", errMessage);
-    const char* respErrText = yyjson_mut_write(pJsonErrResp, 0, NULL);
-    assert(respErrText != NULL);
-    h2o_iovec_t errBody = h2o_strdup(&pReq->pool, respErrText, SIZE_MAX);
-    h2o_send(pReq, &errBody, 1, 1);
-    free((void*)respErrText);
-    yyjson_mut_doc_free(pJsonErrResp);
+    yyjson_mut_obj_add_str(pJsonResp, pJsonRespRoot, "status", jsonStatus);
+    yyjson_mut_obj_add_str(pJsonResp, pJsonRespRoot, "message", jsonMessage);
+    const char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
     return 0;
 }
 
+static int __lsapi_endpoint_error(h2o_req_t *pReq, const int status, const char* reason, const char* errMessage) {    
+    // assert(pReq != NULL);
+    // assert(reason != NULL);
+    // assert(errMessage != NULL);
+    // static h2o_generator_t generator = {NULL, NULL};
+    // pReq->res.status = status;
+    // pReq->res.reason = reason;
+    // h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    // h2o_start_response(pReq, &generator);
+
+    // const char* errStatus = "error";
+    // yyjson_mut_doc* pJsonErrResp = yyjson_mut_doc_new(NULL);
+    // yyjson_mut_val* pRootErrResp = yyjson_mut_obj(pJsonErrResp);
+    // yyjson_mut_doc_set_root(pJsonErrResp, pRootErrResp);
+
+    // yyjson_mut_obj_add_str(pJsonErrResp, pRootErrResp, "status", errStatus);
+    // yyjson_mut_obj_add_str(pJsonErrResp, pRootErrResp, "message", errMessage);
+    // const char* respErrText = yyjson_mut_write(pJsonErrResp, 0, NULL);
+    // assert(respErrText != NULL);
+    // h2o_iovec_t errBody = h2o_strdup(&pReq->pool, respErrText, SIZE_MAX);
+    // h2o_send(pReq, &errBody, 1, 1);
+    // free((void*)respErrText);
+    // yyjson_mut_doc_free(pJsonErrResp);
+    // return 0;
+    return __Lsapi_endpoint_resp_short(pReq, status, reason, "error", errMessage);
+}
+
+static int __lsapi_endpoint_success(h2o_req_t *pReq, const int status, const char* reason, const char* message) {
+    return __Lsapi_endpoint_resp_short(pReq, status, reason, "success", message);
+}
+
 // curl -X POST -d '{"username":"abc","email":"abc@example.com","password":"test","first_name":"test","last_name":"test"}' http://localhost:7890/api/user
-int lsapi_endpoint_user(h2o_handler_t* pHandlerSelf, h2o_req_t* pReq)
+int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
 {
-    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pHandlerSelf);
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
         yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
         if (pJson == NULL) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Invalid JSON");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
         } 
         yyjson_val* pRoot = yyjson_doc_get_root(pJson);
         if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Missing JSON root object");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
         }
         yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
         if (pUsername == NULL || !yyjson_is_str(pUsername)) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Missing or invalid username");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
         }
         yyjson_val* pEmail = yyjson_obj_get(pRoot, "email");
         if (pEmail == NULL || !yyjson_is_str(pEmail)) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Missing or invalid email");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid email");
         }
         yyjson_val* pPassword = yyjson_obj_get(pRoot, "password");
         if (pPassword == NULL || !yyjson_is_str(pPassword)) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Missing or invalid password");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid password");
         }
         yyjson_val* pFirstName = yyjson_obj_get(pRoot, "first_name");
         if (pFirstName == NULL || !yyjson_is_str(pFirstName)) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Missing or invalid first name");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid first name");
         }
         yyjson_val* pLastName = yyjson_obj_get(pRoot, "last_name");
         if (pLastName == NULL || !yyjson_is_str(pLastName)) {
-            return __lsapi_endpoint_reject(pReq, 400, "Bad Request", "Missing or invalid last name");
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid last name");
         }
         
         const char* username = yyjson_get_str(pUsername);
@@ -194,9 +236,10 @@ int lsapi_endpoint_user(h2o_handler_t* pHandlerSelf, h2o_req_t* pReq)
         }
 
         // insert user
+        assert(pLsapi->pDb != NULL);
         if (0 != db_user_insert_basic(pLsapi->pDb, username, ip, first_name, last_name, email, pwd_hash, pwd_salt, email_verif_token_hash, email_verif_token_salt)) {
             // TODO check for other errors?
-            return __lsapi_endpoint_reject(pReq, 409, "Conflict", "Username/email already exists");
+            return __lsapi_endpoint_error(pReq, 409, "Conflict", "Username/email already exists");
         }
 
         db_user_t user;
@@ -244,7 +287,18 @@ int lsapi_endpoint_user(h2o_handler_t* pHandlerSelf, h2o_req_t* pReq)
         lsapi_email_send(email_verif_token);
         free(email_verif_token);
         return 0;
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+int lsapi_endpoint_service_status(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+
+    if (!h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
 
-    return -1;
+    return __lsapi_endpoint_success(pReq, 200, "OK", "Service is running");
 }

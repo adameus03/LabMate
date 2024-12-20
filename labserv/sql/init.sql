@@ -23,3 +23,8 @@ CREATE TABLE IF NOT EXISTS public.users (
 	CONSTRAINT users_unique UNIQUE (username),
 	CONSTRAINT users_unique_1 UNIQUE (email)
 );
+
+-- CREATE OR REPLACE FUNCTION get_user(user_id int4 DEFAULT NULL::int4, username varchar DEFAULT NULL::character varying, email varchar DEFAULT NULL::character varying)
+-- 	RETURNS public.users AS 
+-- $$
+
