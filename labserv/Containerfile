@@ -14,6 +14,7 @@ RUN apk add zlib zlib-dev
 # In the future it is possible to switch to newer (post Dec 10, 2019) version of h2o and then perform the h2o build with wslay available - then 
 #RUN apk add wslay wslay-dev
 
+# BUILD AND INSTALL H2O
 WORKDIR /opt
 RUN git clone --depth 1 --branch v2.2.5 https://github.com/h2o/h2o.git
 RUN mkdir h2o/build
@@ -22,6 +23,7 @@ RUN cmake -DWITH_MRUBY=OFF -DBUILD_SHARED_LIBS=ON -S .. -B .
 RUN make
 RUN make install
 
+# BUILD AND INSTALL LIBBCRYPT
 RUN apk add asciidoc
 WORKDIR /opt
 RUN git clone -b future https://github.com/rg3/libbcrypt.git
@@ -36,16 +38,27 @@ RUN ln -s ../lib64/libbcrypt.so.1.0.0 libbcrypt.so.1.0.0
 WORKDIR /usr/local/lib/pkgconfig
 RUN ln -s ../../lib64/pkgconfig/libbcrypt.pc libbcrypt.pc
 
-WORKDIR /opt/labmate
-COPY *.h *.c CMakeLists.txt ./
-COPY htdocs/ ./htdocs/
-WORKDIR /opt/labmate/build
+# BUILD AND INSTALL PLIBSYS
+WORKDIR /opt
+RUN git clone --depth 1 --branch 0.0.5 https://github.com/saprykin/plibsys.git
+RUN mkdir plibsys/build
+WORKDIR /opt/plibsys/build
 RUN cmake -S .. -B .
 RUN make
+RUN make install
 
-WORKDIR /opt/labmate
-COPY sql/ ./sql/
+# # BUILD AND INSTALL *US* (labserv aka LabMate)
+# WORKDIR /opt/labmate
+# COPY *.h *.c CMakeLists.txt ./
+# COPY htdocs/ ./htdocs/
+# WORKDIR /opt/labmate/build
+# RUN cmake -S .. -B .
+# RUN make
 
-EXPOSE $port
+# # COPY SQL SCRIPTS
+# WORKDIR /opt/labmate
+# COPY sql/ ./sql/
 
-CMD ["./build/labserv"]
+# # START
+# EXPOSE $port
+# CMD ["./build/labserv"]

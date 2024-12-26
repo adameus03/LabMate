@@ -11,9 +11,12 @@
 #define LABSERV_DB_CONNINFO "postgresql://lm_u_a6sd78as7d6f78:8730fehoypd9ugcoa(&#*OuDId7&AT*WP8p9yp&W*DU&Gsd;oij;coduwe;yiouwdhfe@labmate.v2024.pl/labmate"
 #define LABSERV_DB_INIT_SCRIPT_PATH "sql/init.sql"
 
+/* Redis configuration */
+#define LABSERV_REDIS_IP "127.0.0.1"
+#define LABSERV_REDIS_PORT 6381
+
 /* Logging configuration */
 #include "log.h"
 #define LOG_LEVEL LOG_VERBOSE
-
 
 #endif // LABSERV_CONFIG_H

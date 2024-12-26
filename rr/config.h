@@ -1,0 +1,2 @@
+#define RR_REDIS_IP "127.0.0.1"
+#define RR_REDIS_PORT 6381

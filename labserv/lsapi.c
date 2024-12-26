@@ -99,7 +99,8 @@ static int __Lsapi_endpoint_resp_short(h2o_req_t *pReq,
     assert(jsonStatus != NULL);
     assert(jsonMessage != NULL);
     static h2o_generator_t generator = {NULL, NULL};
-    pReq->res.status = httpStatus;
+    //pReq->res.status = httpStatus;
+    pReq->res.status = 200; //TODO remove this, however using a non-200 status code for some reason delays the response and we don't know why, so it needs to be resolved first
     pReq->res.reason = httpReason;
     h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
     h2o_start_response(pReq, &generator);
@@ -296,9 +297,18 @@ int lsapi_endpoint_service_status(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
 
+    //return __lsapi_endpoint_success(pReq, 200, "OK", "Service is running");
+
     if (!h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        //return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
+
+    // //test timeout
+    // for (int i=0; i<5; i++){
+    //     LOG_V("lsapi_endpoint_service_status: Sleeping for 1 second (iteration %d of 5)", i+1);
+    //     sleep(1);
+    // }
 
     return __lsapi_endpoint_success(pReq, 200, "OK", "Service is running");
 }

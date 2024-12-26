@@ -31,17 +31,53 @@
 #include "h2o/http1.h"
 #include "h2o/http2.h"
 #include "h2o/memcached.h"
+#include <plibsys/plibsys.h>
 
 #include "config.h"
 #include "lsapi.h"
 
+struct main_endpoint_handler_spawn_params {
+    h2o_handler_t* pH2oHandler;
+    h2o_req_t* pReq;
+};
+
+static struct main_endpoint_handler_spawn_params* main_endpoint_handler_spawn_params_new(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    struct main_endpoint_handler_spawn_params* pParams = (struct main_endpoint_handler_spawn_params*)malloc(sizeof(struct main_endpoint_handler_spawn_params));
+    pParams->pH2oHandler = pH2oHandler;
+    pParams->pReq = pReq;
+    return pParams;
+}
+
+static void main_endpoint_handler_spawn_params_free(struct main_endpoint_handler_spawn_params* pParams) {
+    assert(pParams != NULL);
+    free(pParams);
+}
+
+static void main_endpoint_handler_spawn_handler(void* pUserData) {
+    struct main_endpoint_handler_spawn_params* pParams = (struct main_endpoint_handler_spawn_params*)pUserData;
+    int (*on_req)(h2o_handler_t *, h2o_req_t *) = NULL;
+    on_req = *((void**)(pParams->pH2oHandler + 2));
+    on_req(pParams->pH2oHandler, pParams->pReq);
+    main_endpoint_handler_spawn_params_free(pParams);
+}
+
+static int main_endpoint_handler_spawn(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    uv_thread_t uvThreadId;
+    struct main_endpoint_handler_spawn_params* pParams = main_endpoint_handler_spawn_params_new(pH2oHandler, pReq);
+    uv_thread_create(&uvThreadId, main_endpoint_handler_spawn_handler, (void*)pParams);
+    //main_endpoint_handler_spawn_handler((void*)pParams);
+    //p_uthread_create(main_endpoint_handler_spawn_handler, (void*)pParams, FALSE, NULL);
+}
+
 static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *), void* pUserData)
 {
     h2o_pathconf_t *pathconf = h2o_config_register_path(hostconf, path, 0);
-    h2o_handler_t* pHandler = h2o_create_handler(pathconf, sizeof(*pHandler) + sizeof(void*));
+    h2o_handler_t* pHandler = h2o_create_handler(pathconf, sizeof(*pHandler) + 2 * sizeof(void*));
 
     *((void**)(pHandler + 1)) = pUserData;
-    pHandler->on_req = on_req;
+    *((void**)(pHandler + 2)) = on_req;
+    //pHandler->on_req = on_req;
+    pHandler->on_req = main_endpoint_handler_spawn;
     return pathconf;
 }
 
@@ -183,6 +219,7 @@ static int setup_ssl(const char *cert_file, const char *key_file, const char *ci
 
 int main(int argc, char **argv)
 {
+    p_libsys_init();
     lsapi_t* pLsapi = lsapi_new();
     lsapi_init(pLsapi);
 
@@ -238,5 +275,6 @@ int main(int argc, char **argv)
 Error:
     lsapi_deinit(pLsapi);
     lsapi_free(pLsapi);
+    p_libsys_shutdown();
     return 1;
 }
