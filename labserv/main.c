@@ -71,8 +71,12 @@ static int main_endpoint_handler_spawn(h2o_handler_t* pH2oHandler, h2o_req_t* pR
 
 static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *), void* pUserData)
 {
+    assert(sizeof(h2o_handler_t) > sizeof(void*));
+    assert(sizeof(h2o_handler_t) % sizeof(void*) == 0); //defensive?
+
     h2o_pathconf_t *pathconf = h2o_config_register_path(hostconf, path, 0);
-    h2o_handler_t* pHandler = h2o_create_handler(pathconf, sizeof(*pHandler) + 2 * sizeof(void*));
+    //h2o_handler_t* pHandler = h2o_create_handler(pathconf, sizeof(h2o_handler_t) + 2 * sizeof(void*));
+    h2o_handler_t* pHandler = h2o_create_handler(pathconf, 3 * sizeof(h2o_handler_t)); // `3 * sizeof(h2o_handler_t)` not `sizeof(h2o_handler_t) + 2 * sizeof(void*)` to avoid memory bug (it worked with glibc, but segfaulted with musl libc)
 
     *((void**)(pHandler + 1)) = pUserData;
     *((void**)(pHandler + 2)) = on_req;

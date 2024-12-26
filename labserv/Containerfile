@@ -46,19 +46,25 @@ WORKDIR /opt/plibsys/build
 RUN cmake -S .. -B .
 RUN make
 RUN make install
+RUN echo -e "Name: plibsys\n\
+Description: portable system programming C library\n\
+Version: 0.0.5\n\
+Cflags: -I/usr/local/include/plibsys\n\
+Libs: -L/usr/local/lib -lplibsys\
+" > /usr/local/lib/pkgconfig/plibsys.pc
 
-# # BUILD AND INSTALL *US* (labserv aka LabMate)
-# WORKDIR /opt/labmate
-# COPY *.h *.c CMakeLists.txt ./
-# COPY htdocs/ ./htdocs/
-# WORKDIR /opt/labmate/build
-# RUN cmake -S .. -B .
-# RUN make
+# BUILD AND INSTALL *US* (labserv aka LabMate)
+WORKDIR /opt/labmate
+COPY *.h *.c CMakeLists.txt ./
+COPY htdocs/ ./htdocs/
+WORKDIR /opt/labmate/build
+RUN cmake -S .. -B .
+RUN make
 
-# # COPY SQL SCRIPTS
-# WORKDIR /opt/labmate
-# COPY sql/ ./sql/
+# COPY SQL SCRIPTS
+WORKDIR /opt/labmate
+COPY sql/ ./sql/
 
-# # START
-# EXPOSE $port
-# CMD ["./build/labserv"]
+# START
+EXPOSE $port
+CMD ["./build/labserv"]
