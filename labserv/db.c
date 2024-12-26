@@ -229,9 +229,9 @@ static void __db_connection_return_to_pool(db_connection_t* pConn, db_connection
 
   assert(TRUE == p_mutex_unlock(pConn->pMutex));
   p_atomic_int_dec_and_test(&pPool->num_locked_connections);
-  __db_connection_free_cpy(pConn); 
   //db_connection_t* __relPtr = (db_connection_t*)(pConn - pPool->pConnections);
   LOG_V("__db_connection_return_to_pool: Connection %d returned to pool. pPool->num_locked_connections = atomic: %d, actual: %d", pConn->conn_id, num_locked_connections_atomic-1, p_atomic_int_get(&pPool->num_locked_connections));
+  __db_connection_free_cpy(pConn); 
   pConn = NULL; // We won't use it anymore in this function
 
   // If the pool is at 1/DB_CONNECTION_POOL_SHRINK_TRIGGER_FACTOR capacity, we shrink it

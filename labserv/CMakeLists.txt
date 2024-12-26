@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #optional leak detection
 option(FSANITIZE_LA  "Enable leak detection and address sanitizer" OFF)
-if(FSANITIZE_LEAK)
+if(FSANITIZE_LA)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize=leak")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=leak")
     #add_compile_options(-fsanitize=address)
@@ -16,6 +16,15 @@ if(FSANITIZE_LEAK)
     message(STATUS "Address sanitizer and leak detection enabled")
 else()
     message(STATUS "Address sanitizer and leak detection disabled")
+endif()
+
+#optional static build
+option(STATIC_BUILD "Build static binary" OFF)
+if(STATIC_BUILD)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+    message(STATUS "Static build enabled")
+else()
+    message(STATUS "Static build disabled")
 endif()
 
 include (TestBigEndian)
