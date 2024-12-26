@@ -9,51 +9,33 @@
 #define LOG_VERBOSE  (6)
 
 #include <stdio.h>
-#include <string.h>
-#include <time.h>
+#include <unistd.h>
 
 #define LOG_LEVEL LOG_VERBOSE
 
-static inline void log_timestamp(FILE* stream) {
-    char buff[20];
-    struct tm *sTm;
+//PMutex* __log_global_pMutex = NULL;
 
-    time_t now = time (0);
-    sTm = gmtime (&now);
+/**
+ * @warning First initialize plibsys, because this function uses plibsys' PMutex
+ */
+void log_global_init();
 
-    strftime (buff, sizeof(buff), "%Y-%m-%d %H:%M:%S", sTm);
-    fprintf(stream, "%s ", buff);
-}
+void log_global_deinit();
 
-static inline void log_level_str(int level, FILE* stream) {
-    switch (level) {
-        case LOG_FATAL:
-            fprintf(stream, "[FATAL] ");
-            break;
-        case LOG_ERR:
-            fprintf(stream, "[ERROR] ");
-            break;
-        case LOG_WARN:
-            fprintf(stream, "[WARN] ");
-            break;
-        case LOG_INFO:
-            fprintf(stream, "[INFO] ");
-            break;
-        case LOG_DBG:
-            fprintf(stream, "[DEBUG] ");
-            break;
-        case LOG_VERBOSE:
-            fprintf(stream, "[VERBOSE] ");
-            break;
-        default:
-            fprintf(stream, "[UNKNOWN LOG LEVEL] ");
-            break;
-    }
-}
+void log_begin();
+
+void log_end();
+
+void log_timestamp(FILE* stream);
+
+void log_level_str(int level, FILE* stream);
 
 #define LOG(level, stream, is_continuation, should_break_line, ...) do {  \
                             if (level <= LOG_LEVEL) { \
                                 if (!is_continuation) { \
+                                    log_begin(); \
+                                    fflush(stream); \
+                                    fsync(fileno(stream)); \
                                     log_level_str(level, stream); \
                                     log_timestamp(stream); \
                                     fprintf(stream," (%s:%d): ", __FILE__, __LINE__); \
@@ -61,9 +43,16 @@ static inline void log_level_str(int level, FILE* stream) {
                                 fprintf(stream, __VA_ARGS__); \
                                 if (should_break_line) { \
                                     fprintf(stream, "\n"); \
+                                    fflush(stream); \
+                                    fsync(fileno(stream)); \
+                                    log_end(); \
                                 } \
                             } \
                         } while (0)
+
+//void log_log(int level, FILE* stream, int is_continuation, int should_break_line, ...);
+
+//#define LOG(level, stream, is_continuation, should_break_line, ...) log_log(level, stream, is_continuation, should_break_line, __VA_ARGS__)
 
 #define LOG_F(...) LOG(LOG_FATAL, stderr, 0, 1, __VA_ARGS__)
 #define LOG_E(...) LOG(LOG_ERR, stderr, 0, 1, __VA_ARGS__)

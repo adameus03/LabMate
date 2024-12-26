@@ -57,6 +57,7 @@ add_executable(${CMAKE_PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lsapi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/db.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/log.c
 )
 
 #target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)

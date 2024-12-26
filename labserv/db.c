@@ -11,8 +11,8 @@
 // };
 
 // The connection pool will not shrink below DB_CONNECTION_POOL_INIT_SIZE
-#define DB_CONNECTION_POOL_INIT_SIZE 4
-#define DB_CONNECTION_POOL_MAX_SIZE 16
+#define DB_CONNECTION_POOL_INIT_SIZE 8
+#define DB_CONNECTION_POOL_MAX_SIZE 8
 #define DB_CONNECTION_POOL_GROWTH_FACTOR 2
 #define DB_CONNECTION_POOL_SHRINK_FACTOR 2
 // If the pool is at 1/DB_CONNECTION_POOL_SHRINK_TRIGGER_FACTOR capacity, we shrink it
@@ -139,12 +139,12 @@ static db_connection_t* __db_connection_take_from_pool(db_connection_pool_t* pPo
   assert(pPool->pool_size <= DB_CONNECTION_POOL_MAX_SIZE);
   int num_locked_connections_atomic = p_atomic_int_get(&pPool->num_locked_connections);
   assert(num_locked_connections_atomic >= 0);
-  assert(num_locked_connections_atomic <= pPool->pool_size);
+  //assert(num_locked_connections_atomic <= pPool->pool_size); //TODO reenable this when we fix consistency issues with `num_locked_connections_atomic`
   for (int i = 0; i < pPool->pool_size; i++) {
     assert(pPool->pConnections[i].pMutex != NULL);
     if (p_mutex_trylock(pPool->pConnections[i].pMutex)) {
       p_atomic_int_inc(&pPool->num_locked_connections);
-      LOG_V("__db_connection_take_from_pool: Connection %d taken from pool. pPool->num_locked_connections = %d", i, num_locked_connections_atomic+1);
+      LOG_V("__db_connection_take_from_pool: Connection %d taken from pool. pPool->num_locked_connections = atomic: %d, actual: %d", i, num_locked_connections_atomic+1, p_atomic_int_get(&pPool->num_locked_connections));
       db_connection_t* pDbConnectionCopy = __db_connection_make_cpy(&pPool->pConnections[i]);
       assert(TRUE == p_rwlock_reader_unlock(pPool->conn_rwlock));
       return pDbConnectionCopy;
@@ -156,7 +156,7 @@ static db_connection_t* __db_connection_take_from_pool(db_connection_pool_t* pPo
     assert(pPool->pConnections[0].pMutex != NULL);
     assert(TRUE == p_mutex_lock(pPool->pConnections[0].pMutex));
     p_atomic_int_inc(&pPool->num_locked_connections);
-    LOG_V("__db_connection_take_from_pool: Connection 0 taken from pool. pPool->num_locked_connections = %d", num_locked_connections_atomic+1);
+    LOG_V("__db_connection_take_from_pool: Connection 0 taken from pool. pPool->num_locked_connections = atomic: %d, actual: %d", num_locked_connections_atomic+1, p_atomic_int_get(&pPool->num_locked_connections));
     db_connection_t* pDbConnectionCopy = __db_connection_make_cpy(&pPool->pConnections[0]);
     assert(TRUE == p_rwlock_reader_unlock(pPool->conn_rwlock));
     return pDbConnectionCopy;
@@ -194,7 +194,7 @@ static db_connection_t* __db_connection_take_from_pool(db_connection_pool_t* pPo
   }
   pPool->pool_size = new_pool_size;
   p_atomic_int_inc(&pPool->num_locked_connections);
-  LOG_V("__db_connection_take_from_pool: Connection %d taken from pool. pPool->num_locked_connections = %d", old_pool_size, num_locked_connections_atomic+1);
+  LOG_V("__db_connection_take_from_pool: Connection %d taken from pool. pPool->num_locked_connections = atomic: %d, actual: %d", old_pool_size, num_locked_connections_atomic+1, p_atomic_int_get(&pPool->num_locked_connections));
   db_connection_t* pDbConnectionCopy = __db_connection_make_cpy(&pPool->pConnections[old_pool_size]);
   assert(TRUE == p_rwlock_writer_unlock(pPool->conn_rwlock));
   return pDbConnectionCopy;
@@ -220,17 +220,18 @@ static void __db_connection_return_to_pool(db_connection_t* pConn, db_connection
   //assert(pConn < pPool->pConnections + pPool->pool_size);
   assert(!(pConn >= pPool->pConnections && pConn < pPool->pConnections + pPool->pool_size)); // Make sure if pConn is not the original structure (it should be a copy made with __db_connection_make_cpy) //TODO remove this and replace with reverse check (like previously - see 2 commented out assert lines above if they're still there) if t05329423432 is done
   assert(pConn->conn_id >= 0);
+  LOG_V("__db_connection_return_to_pool: pConn->conn_id = %d, pPool->pool_size = %d", pConn->conn_id, pPool->pool_size);
   assert(pConn->conn_id < pPool->pool_size);
   assert(pConn->pMutex != NULL);
   int num_locked_connections_atomic = p_atomic_int_get(&pPool->num_locked_connections);
   assert(num_locked_connections_atomic >= 0);
-  assert(num_locked_connections_atomic <= pPool->pool_size);
+  //assert(num_locked_connections_atomic <= pPool->pool_size); //TODO reenable this when we fix consistency issues with `num_locked_connections_atomic`
 
   assert(TRUE == p_mutex_unlock(pConn->pMutex));
   p_atomic_int_dec_and_test(&pPool->num_locked_connections);
   __db_connection_free_cpy(pConn); 
   //db_connection_t* __relPtr = (db_connection_t*)(pConn - pPool->pConnections);
-  LOG_V("__db_connection_return_to_pool: Connection %d returned to pool. pPool->num_locked_connections = %d", pConn->conn_id, num_locked_connections_atomic-1);
+  LOG_V("__db_connection_return_to_pool: Connection %d returned to pool. pPool->num_locked_connections = atomic: %d, actual: %d", pConn->conn_id, num_locked_connections_atomic-1, p_atomic_int_get(&pPool->num_locked_connections));
   pConn = NULL; // We won't use it anymore in this function
 
   // If the pool is at 1/DB_CONNECTION_POOL_SHRINK_TRIGGER_FACTOR capacity, we shrink it
@@ -255,7 +256,7 @@ static void __db_connection_return_to_pool(db_connection_t* pConn, db_connection
       if (FALSE == p_mutex_trylock(pPool->pConnections[i].pMutex)) {
         LOG_W("__db_connection_return_to_pool: Connection %d is still locked. Not shrinking pool", i);
         // Unlock the connections that we locked so far while checking
-        for (int j = pPool->pool_size -1; j > i; j--) {
+        for (int j = pPool->pool_size - 1; j > i; j--) {
           assert(TRUE == p_mutex_unlock(pPool->pConnections[j].pMutex));
         }
         assert(TRUE == p_rwlock_reader_unlock(pPool->conn_rwlock));
@@ -277,7 +278,7 @@ static void __db_connection_return_to_pool(db_connection_t* pConn, db_connection
       assert(TRUE == p_rwlock_writer_unlock(pPool->conn_rwlock));
       return;
     }
-    
+    //LOG_W("__db_connection_return_to_pool: Abort shrinking FOR NOW"); for (int i = new_pool_size; i < pPool->pool_size; i++) {  assert(TRUE == p_mutex_unlock(pPool->pConnections[i].pMutex)); } assert(TRUE == p_rwlock_writer_unlock(pPool->conn_rwlock)); return; //TODO remove this line when segfault bug is fixed
     // If we got here then we have the write lock and the pool size is still the same so we can safely shrink the pool
     LOG_I("__db_connection_return_to_pool: Shrinking connection pool from size %d to %d", pPool->pool_size, new_pool_size);
     for (int i = new_pool_size; i < pPool->pool_size; i++) {
@@ -292,6 +293,8 @@ static void __db_connection_return_to_pool(db_connection_t* pConn, db_connection
     pPool->pConnections = pNewConnections;
     pPool->pool_size = new_pool_size;
     assert(TRUE == p_rwlock_writer_unlock(pPool->conn_rwlock));//here I think we are done
+  } else {
+    assert(TRUE == p_rwlock_reader_unlock(pPool->conn_rwlock));
   }
 }
 

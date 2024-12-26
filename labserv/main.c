@@ -220,6 +220,7 @@ static int setup_ssl(const char *cert_file, const char *key_file, const char *ci
 int main(int argc, char **argv)
 {
     p_libsys_init();
+    log_global_init();
     lsapi_t* pLsapi = lsapi_new();
     lsapi_init(pLsapi);
 
@@ -275,6 +276,7 @@ int main(int argc, char **argv)
 Error:
     lsapi_deinit(pLsapi);
     lsapi_free(pLsapi);
+    log_global_deinit();
     p_libsys_shutdown();
     return 1;
 }
