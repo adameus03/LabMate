@@ -434,6 +434,34 @@ int db_user_insert_basic(db_t* pDb,
   return 0;
 }
 
+/**
+ * @brief Deep clone a db_user_t structure
+ */
+static db_user_t db_user_clone(db_user_t dbUser) {
+  return (db_user_t) {
+    .user_id = dbUser.user_id,
+    .passwd_hash = p_strdup(dbUser.passwd_hash),
+    .role = dbUser.role,
+    .ip_addr = p_strdup(dbUser.ip_addr),
+    .registration_date = p_strdup(dbUser.registration_date),
+    .last_login_date = p_strdup(dbUser.last_login_date),
+    .username = p_strdup(dbUser.username),
+    .first_name = p_strdup(dbUser.first_name),
+    .last_name = p_strdup(dbUser.last_name),
+    .bio = p_strdup(dbUser.bio),
+    .num_requests = dbUser.num_requests,
+    .karma = dbUser.karma,
+    .email = p_strdup(dbUser.email),
+    .is_email_verified = dbUser.is_email_verified,
+    .email_verification_token_hash = p_strdup(dbUser.email_verification_token_hash),
+    .sesskey_hash = p_strdup(dbUser.sesskey_hash),
+    .last_usr_chng_date = p_strdup(dbUser.last_usr_chng_date),
+    .sesskey_salt = p_strdup(dbUser.sesskey_salt),
+    .passwd_salt = p_strdup(dbUser.passwd_salt),
+    .email_verification_token_salt = p_strdup(dbUser.email_verification_token_salt)
+  };
+}
+
 static int db_user_get_by_x(db_t* pDb,
                             const char* pQuery,
                             const char** pParams,
@@ -473,26 +501,29 @@ static int db_user_get_by_x(db_t* pDb,
     exit(EXIT_FAILURE);
   }
 
-  pUser_out->user_id = atoi(PQgetvalue(pResult, 0, 0));
-  pUser_out->passwd_hash = PQgetvalue(pResult, 0, 1);
-  pUser_out->role = atoi(PQgetvalue(pResult, 0, 2));
-  pUser_out->ip_addr = PQgetvalue(pResult, 0, 3);
-  pUser_out->registration_date = PQgetvalue(pResult, 0, 4);
-  pUser_out->last_login_date = PQgetvalue(pResult, 0, 5);
-  pUser_out->username = PQgetvalue(pResult, 0, 6);
-  pUser_out->first_name = PQgetvalue(pResult, 0, 7);
-  pUser_out->last_name = PQgetvalue(pResult, 0, 8);
-  pUser_out->bio = PQgetvalue(pResult, 0, 9);
-  pUser_out->num_requests = atoi(PQgetvalue(pResult, 0, 10));
-  pUser_out->karma = atoi(PQgetvalue(pResult, 0, 11));
-  pUser_out->email = PQgetvalue(pResult, 0, 12);
-  pUser_out->is_email_verified = atoi(PQgetvalue(pResult, 0, 13));
-  pUser_out->email_verification_token_hash = PQgetvalue(pResult, 0, 14);
-  pUser_out->sesskey_hash = PQgetvalue(pResult, 0, 15);
-  pUser_out->last_usr_chng_date = PQgetvalue(pResult, 0, 16);
-  pUser_out->sesskey_salt = PQgetvalue(pResult, 0, 17);
-  pUser_out->passwd_salt = PQgetvalue(pResult, 0, 18);
-  pUser_out->email_verification_token_salt = PQgetvalue(pResult, 0, 19);
+  db_user_t user;
+  user.user_id = atoi(PQgetvalue(pResult, 0, 0));
+  user.passwd_hash = PQgetvalue(pResult, 0, 1);
+  user.role = atoi(PQgetvalue(pResult, 0, 2));
+  user.ip_addr = PQgetvalue(pResult, 0, 3);
+  user.registration_date = PQgetvalue(pResult, 0, 4);
+  user.last_login_date = PQgetvalue(pResult, 0, 5);
+  user.username = PQgetvalue(pResult, 0, 6);
+  user.first_name = PQgetvalue(pResult, 0, 7);
+  user.last_name = PQgetvalue(pResult, 0, 8);
+  user.bio = PQgetvalue(pResult, 0, 9);
+  user.num_requests = atoi(PQgetvalue(pResult, 0, 10));
+  user.karma = atoi(PQgetvalue(pResult, 0, 11));
+  user.email = PQgetvalue(pResult, 0, 12);
+  user.is_email_verified = atoi(PQgetvalue(pResult, 0, 13));
+  user.email_verification_token_hash = PQgetvalue(pResult, 0, 14);
+  user.sesskey_hash = PQgetvalue(pResult, 0, 15);
+  user.last_usr_chng_date = PQgetvalue(pResult, 0, 16);
+  user.sesskey_salt = PQgetvalue(pResult, 0, 17);
+  user.passwd_salt = PQgetvalue(pResult, 0, 18);
+  user.email_verification_token_salt = PQgetvalue(pResult, 0, 19);
+  
+  *pUser_out = db_user_clone(user);
 
   PQclear(pResult);
   __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);

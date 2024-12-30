@@ -1,6 +1,9 @@
 #include "lsapi.h"
 #include <yyjson.h>
 #include <bcrypt/bcrypt.h>
+#include <hiredis/hiredis.h>
+#include <ctype.h>
+#include "config.h"
 #include "log.h"
 #include "db.h"
 
@@ -76,23 +79,35 @@ static char* __lsapi_generate_token() {
     return token;
 }
 
-static void lsapi_email_send(char* verification_token) {//TODO FIXME
-    assert(verification_token != NULL);
-    LOG_I("lsapi_email_handler: Dummy email handler");
-    char* token = malloc(strlen(verification_token) + 1);
-    if (token == NULL) {
-        LOG_E("lsapi_email_handler: Failed to allocate memory for token");
-        exit(EXIT_FAILURE);
-    }
-    strcpy(token, verification_token);
-    // TODO spawn a new thread to send email
-    free(token);
-}
+#define __LSAPI_REDIS_IP LABSERV_REDIS_IP
+#define __LSAPI_REDIS_PORT LABSERV_REDIS_PORT
 
-static void lsapi_email_send_verification_token(const char* username, const char* verification_token) {//TODO
+static void __lsapi_email_push_verification_token(const char* email, const char* username, const char* verification_token) {//TODO
+    assert(email != NULL);
     assert(username != NULL);
     assert(verification_token != NULL);
-    LOG_I("lsapi_email_send_verification_token: Sending email to %s with verification token %s", username, verification_token);
+    redisContext* pRedisContext = redisConnect(__LSAPI_REDIS_IP, __LSAPI_REDIS_PORT);
+    if (pRedisContext == NULL || pRedisContext->err) {
+        if (pRedisContext) {
+            LOG_E("__lsapi_email_push_verification_token: Failed to connect to Redis: %s", pRedisContext->errstr);
+            redisFree(pRedisContext);
+        } else {
+            LOG_E("__lsapi_email_push_verification_token: Failed to connect to Redis: can't allocate redis context");
+        }
+        LOG_W("__lsapi_email_push_verification_token: Failed to push email request for %s (%s) with verification token %s. Not retrying", username, email, verification_token);
+        return;
+    }
+    redisReply* pReply = redisCommand(pRedisContext, "RPUSH regmail_mq %s|%s|%s", email, username, verification_token);
+    if (pReply == NULL) {
+        LOG_E("__lsapi_email_push_verification_token: Failed to push email request for %s (%s) with verification token %s - redisCommand returned NULL. Not retrying", username, email, verification_token);
+        redisFree(pRedisContext);
+        return;
+    }
+    assert(pReply->type == REDIS_REPLY_INTEGER);
+
+    LOG_I("__lsapi_email_push_verification_token: Pushed email request for %s (%s) with verification token %s. Num queued items: %d", username, email, verification_token, pReply->integer);
+    freeReplyObject(pReply);
+    redisFree(pRedisContext);
 }
 
 static int __Lsapi_endpoint_resp_short(h2o_req_t *pReq, 
@@ -303,16 +318,16 @@ int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
         // add user object to root
         yyjson_mut_obj_add_val(pJsonResp, pRootResp, "user", pUser);
         
-        const char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+        char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
         assert(respText != NULL);
         h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
         h2o_send(pReq, &body, 1, 1);
 
+        __lsapi_email_push_verification_token(email, username, email_verif_token);
+
         free((void*)respText);
         yyjson_doc_free(pJson);
         yyjson_mut_doc_free(pJsonResp);
-
-        lsapi_email_send_verification_token(username, email_verif_token);
         free(email_verif_token);
         return 0;
     } else {

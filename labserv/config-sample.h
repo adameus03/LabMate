@@ -17,7 +17,7 @@
 
 /* Redis configuration */
 #define LABSERV_REDIS_IP "127.0.0.1"
-#define LABSERV_REDIS_PORT 6381
+#define LABSERV_REDIS_PORT 6379
 
 /* Logging configuration */
 #include "log.h"
