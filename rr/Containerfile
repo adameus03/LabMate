@@ -1,0 +1,38 @@
+FROM alpine:latest
+ARG port=7890
+RUN mkdir -p /opt/labmate-rr
+
+# install build tools
+RUN apk add cmake make gcc g++ pkgconfig
+#install RR dependencies
+RUN apk add hiredis hiredis-dev libcurl curl-dev
+#install the git version control system for cloning plibsys
+RUN apk add git
+
+# BUILD AND INSTALL PLIBSYS
+WORKDIR /opt
+RUN git clone --depth 1 --branch 0.0.5 https://github.com/saprykin/plibsys.git
+RUN mkdir plibsys/build
+WORKDIR /opt/plibsys/build
+RUN cmake -S .. -B .
+RUN make
+RUN make install
+RUN mkdir /usr/local/lib/pkgconfig
+RUN echo -e "Name: plibsys\n\
+Description: portable system programming C library\n\
+Version: 0.0.5\n\
+Cflags: -I/usr/local/include/plibsys\n\
+Libs: -L/usr/local/lib -lplibsys\
+" > /usr/local/lib/pkgconfig/plibsys.pc
+
+# BUILD AND INSTALL *US* (rr aka LabMate-rr)
+WORKDIR /opt/labmate-rr
+COPY *.h *.c CMakeLists.txt ./
+WORKDIR /opt/labmate-rr/build
+RUN cmake -S .. -B .
+RUN make
+
+# START
+WORKDIR /opt/labmate-rr
+EXPOSE $port
+CMD ["./build/rr"]

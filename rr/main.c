@@ -29,6 +29,7 @@
 #include <plibsys/plibsys.h>
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 #include "log.h"
 #include "mailer.h"
 #include "config.h"
@@ -178,7 +179,7 @@ static void* main_registration_consumer_run(void* pArg) {
     }
     LOG_D("main_registration_consumer_run: pReply->type = %d", pReply->type);
     assert(pReply->type == REDIS_REPLY_ARRAY);
-    LOG_D("main_registration_consumer_run: pReply->elements = %d", pReply->elements);
+    LOG_D("main_registration_consumer_run: pReply->elements = %d", (int)(pReply->elements));
     assert(pReply->elements == 2);
     assert(pReply->element[0]->type == REDIS_REPLY_STRING);
     assert(pReply->element[1]->type == REDIS_REPLY_STRING);

@@ -105,7 +105,7 @@ static void __lsapi_email_push_verification_token(const char* email, const char*
     }
     assert(pReply->type == REDIS_REPLY_INTEGER);
 
-    LOG_I("__lsapi_email_push_verification_token: Pushed email request for %s (%s) with verification token %s. Num queued items: %d", username, email, verification_token, pReply->integer);
+    LOG_I("__lsapi_email_push_verification_token: Pushed email request for %s (%s) with verification token %s. Num queued items: %d", username, email, verification_token, (int)(pReply->integer));
     freeReplyObject(pReply);
     redisFree(pRedisContext);
 }

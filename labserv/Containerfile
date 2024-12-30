@@ -5,7 +5,7 @@ RUN mkdir -p /opt/labmate
 # install build tools
 RUN apk add cmake make gcc g++ pkgconfig
 #install LabMate dependencies
-RUN apk add libuv libuv-dev openssl openssl-dev yyjson yyjson-dev libpq libpq-dev
+RUN apk add libuv libuv-dev openssl openssl-dev yyjson yyjson-dev libpq libpq-dev hiredis hiredis-dev
 #install the git version control system for cloning h2o
 RUN apk add git
 #install missing h2o dependencies
