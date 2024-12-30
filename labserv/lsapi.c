@@ -76,7 +76,7 @@ static char* __lsapi_generate_token() {
     return token;
 }
 
-static void lsapi_email_send(char* verification_token) {
+static void lsapi_email_send(char* verification_token) {//TODO FIXME
     assert(verification_token != NULL);
     LOG_I("lsapi_email_handler: Dummy email handler");
     char* token = malloc(strlen(verification_token) + 1);
@@ -87,6 +87,12 @@ static void lsapi_email_send(char* verification_token) {
     strcpy(token, verification_token);
     // TODO spawn a new thread to send email
     free(token);
+}
+
+static void lsapi_email_send_verification_token(const char* username, const char* verification_token) {//TODO
+    assert(username != NULL);
+    assert(verification_token != NULL);
+    LOG_I("lsapi_email_send_verification_token: Sending email to %s with verification token %s", username, verification_token);
 }
 
 static int __Lsapi_endpoint_resp_short(h2o_req_t *pReq, 
@@ -151,6 +157,22 @@ static int __lsapi_endpoint_success(h2o_req_t *pReq, const int status, const cha
     return __Lsapi_endpoint_resp_short(pReq, status, reason, "success", message);
 }
 
+static int __lsapi_username_check(const char* username) {
+    if (username == NULL) {
+        return 0;
+    }
+    size_t len = strlen(username);
+    if (len < 3 || len > 32) {
+        return 0;
+    }
+    for (size_t i = 0; i < len; i++) {
+        if (!isalnum(username[i]) && username[i] != '_') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 // curl -X POST -d '{"username":"abc","email":"abc@example.com","password":"test","first_name":"test","last_name":"test"}' http://localhost:7890/api/user
 int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
 {
@@ -194,6 +216,11 @@ int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
         const char* password = yyjson_get_str(pPassword);
         
         assert(username != NULL && first_name != NULL && last_name != NULL && email != NULL && password != NULL);
+
+        if (!__lsapi_username_check(username)) {
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid username (required 3-32 characters, alphanumeric and underscores only)");
+        }
+
         // hash password
         char pwd_salt[BCRYPT_HASHSIZE];
         char pwd_hash[BCRYPT_HASHSIZE];
@@ -285,7 +312,7 @@ int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
         yyjson_doc_free(pJson);
         yyjson_mut_doc_free(pJsonResp);
 
-        lsapi_email_send(email_verif_token);
+        lsapi_email_send_verification_token(username, email_verif_token);
         free(email_verif_token);
         return 0;
     } else {

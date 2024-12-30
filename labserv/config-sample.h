@@ -1,3 +1,7 @@
+/*
+  IMPORTANT: This is a sample configuration file. Before building the project, you should copy this file to config.h and modify it to suit your needs.
+*/
+
 #ifndef LABSERV_CONFIG_H
 #define LABSERV_CONFIG_H
 
@@ -8,7 +12,7 @@
 #define LABSERV_H2O_ACCESS_LOG_FILE_PATH "/dev/stdout"
 
 /* Database configuration */
-#define LABSERV_DB_CONNINFO "postgresql://lm_u_a6sd78as7d6f78:8730fehoypd9ugcoa(&#*OuDId7&AT*WP8p9yp&W*DU&Gsd;oij;coduwe;yiouwdhfe@labmate.v2024.pl/labmate"
+#define LABSERV_DB_CONNINFO "postgresql://user:password@example.com/labmate"
 #define LABSERV_DB_INIT_SCRIPT_PATH "sql/init.sql"
 
 /* Redis configuration */
