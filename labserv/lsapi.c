@@ -657,3 +657,9 @@ int lsapi_endpoint_service_status(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
 
     return __lsapi_endpoint_success(pReq, 200, "OK", "Service is running");
 }
+
+int lsapi_endpoint_session(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}

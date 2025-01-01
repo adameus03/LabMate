@@ -237,9 +237,13 @@ int main(int argc, char **argv)
     h2o_config_init(&config);
     hostconf = h2o_config_register_host(&config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
     
+    /***************************/
+    /* Endpoint registrations */
+    /*************************/
     pathconf = register_handler(hostconf, "/api/user", lsapi_endpoint_user, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/email-verify", lsapi_endpoint_email_verify, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/service-status", lsapi_endpoint_service_status, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/session", lsapi_endpoint_session, (void*)pLsapi);
     
     if (logfh != NULL)
         h2o_access_log_register(pathconf, logfh);
