@@ -188,148 +188,310 @@ static int __lsapi_username_check(const char* username) {
     return 1;
 }
 
-// curl -X POST -d '{"username":"abc","email":"abc@example.com","password":"test","first_name":"test","last_name":"test"}' http://localhost:7890/api/user
+static int __lsapi_endpoint_user_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    } 
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pEmail = yyjson_obj_get(pRoot, "email");
+    if (pEmail == NULL || !yyjson_is_str(pEmail)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid email");
+    }
+    yyjson_val* pPassword = yyjson_obj_get(pRoot, "password");
+    if (pPassword == NULL || !yyjson_is_str(pPassword)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid password");
+    }
+    yyjson_val* pFirstName = yyjson_obj_get(pRoot, "first_name");
+    if (pFirstName == NULL || !yyjson_is_str(pFirstName)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid first name");
+    }
+    yyjson_val* pLastName = yyjson_obj_get(pRoot, "last_name");
+    if (pLastName == NULL || !yyjson_is_str(pLastName)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid last name");
+    }
+    
+    const char* username = yyjson_get_str(pUsername);
+    const char* first_name = yyjson_get_str(pFirstName);
+    const char* last_name = yyjson_get_str(pLastName);
+    const char* email = yyjson_get_str(pEmail);
+    const char* password = yyjson_get_str(pPassword);
+    
+    assert(username != NULL && first_name != NULL && last_name != NULL && email != NULL && password != NULL);
+
+    if (!__lsapi_username_check(username)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid username (required 3-32 characters, alphanumeric and underscores only)");
+    }
+
+    // hash password
+    char pwd_salt[BCRYPT_HASHSIZE];
+    char pwd_hash[BCRYPT_HASHSIZE];
+    assert(0 == bcrypt_gensalt(12, pwd_salt));
+    assert(0 == bcrypt_hashpw(password, pwd_salt, pwd_hash));
+
+    
+    // generate email verification token
+    //unsigned char email_verif_token[__LSAPI_EMAIL_VERIF_TOKEN_LEN];
+    //randombytes_buf(email_verif_token, __LSAPI_EMAIL_VERIF_TOKEN_LEN);
+    //sodium_bin2base64(email_verif_token, __LSAPI_EMAIL_VERIF_TOKEN_LEN, email_verif_token, __LSAPI_EMAIL_VERIF_TOKEN_LEN, sodium_base64_VARIANT_ORIGINAL);
+    char* email_verif_token = __lsapi_generate_token();
+    if (email_verif_token == NULL) {
+        // pReq->res.status = 500;
+        // pReq->res.reason = "Internal Server Error";
+        // h2o_send_inline(pReq, H2O_STRLIT("Internal Server Error"));
+        // yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to generate email verification token. Poor server");
+        //return 0;
+    }
+
+    //hash email verification token
+    char email_verif_token_hash[BCRYPT_HASHSIZE];
+    char email_verif_token_salt[BCRYPT_HASHSIZE];
+    assert(0 == bcrypt_gensalt(12, email_verif_token_salt));
+    assert(0 == bcrypt_hashpw(email_verif_token, email_verif_token_salt, email_verif_token_hash));
+
+    struct sockaddr sa;
+    pReq->conn->callbacks->get_peername(pReq->conn, &sa);
+#define __LSAPI_IP_LEN INET6_ADDRSTRLEN > INET_ADDRSTRLEN ? INET6_ADDRSTRLEN : INET_ADDRSTRLEN
+    char ip[__LSAPI_IP_LEN];
+    memset(ip, 0, __LSAPI_IP_LEN);
+    switch(sa.sa_family) {
+        case AF_INET:
+            inet_ntop(AF_INET, &((struct sockaddr_in*)&sa)->sin_addr, ip, INET_ADDRSTRLEN);
+            break;
+        case AF_INET6:
+            inet_ntop(AF_INET6, &((struct sockaddr_in6*)&sa)->sin6_addr, ip, INET6_ADDRSTRLEN);
+            break;
+        default:
+            break;
+    }
+
+    // insert user
+    assert(pLsapi->pDb != NULL);
+    if (0 != db_user_insert_basic(pLsapi->pDb, username, ip, first_name, last_name, email, pwd_hash, pwd_salt, email_verif_token_hash, email_verif_token_salt)) {
+        // TODO check for other errors?
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 409, "Conflict", "Username/email already exists");
+    }
+
+    // get user data from database so that we can use it for the http response
+    db_user_t user;
+    if (0 != db_user_get_by_username(pLsapi->pDb, username, &user)) {
+        // pReq->res.status = 500; // Internal Server Error
+        // pReq->res.reason = "Internal Server Error";
+        // h2o_send_inline(pReq, H2O_STRLIT("Internal Server Error"));
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        //return 0;
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+    
+    const char* status = "success";
+    const char* message = "User created successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add public user data as sub-object
+    yyjson_mut_val* pUser = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_int(pJsonResp, pUser, "user_id", user.user_id);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "username", user.username);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "first_name", user.first_name);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "last_name", user.last_name);
+    // add user object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "user", pUser);
+    
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    __lsapi_email_push_verification_token(email, username, email_verif_token);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    free(email_verif_token);
+    return 0;
+}
+
+static int __lsapi_endpoint_user_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    if (pReq->query_at == SIZE_MAX) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing query string");
+    }
+    char* queryStr = pReq->path.base + pReq->query_at + 1;
+    size_t queryStrLen = pReq->path.len - pReq->query_at - 1;
+    LOG_D("__lsapi_endpoint_user_get: queryStrLen = %lu", queryStrLen);
+    LOG_D("__lsapi_endpoint_user_get: queryStr = %.*s", (int)queryStrLen, queryStr);
+
+    const char* userIdParamName = "user_id";
+    size_t userIdParamNameLen = strlen(userIdParamName);
+    if (queryStrLen < 1) {
+        LOG_D("__lsapi_endpoint_user_get: Empty query string (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Empty query string");
+    } else if (queryStrLen < userIdParamNameLen + 2) { // user_id=d is the shortest possible query string (where d is a decimal digit)
+        LOG_D("__lsapi_endpoint_user_get: Query string too short (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Query string too short");
+    }
+    char* userIdParamNameAddr = strstr(queryStr, userIdParamName);
+    if (userIdParamNameAddr == NULL) {
+        LOG_D("__lsapi_endpoint_user_get: Missing user_id parameter in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing user_id parameter in query string");
+    } else if (userIdParamNameAddr != queryStr) {
+        LOG_D("__lsapi_endpoint_user_get: user_id parameter not at the beginning of query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "user_id parameter not at the beginning of query string");
+    }
+    char* userIdParamNVSeparatorAddr = userIdParamNameAddr + userIdParamNameLen;
+    if (*userIdParamNVSeparatorAddr != '=') {
+        LOG_D("__lsapi_endpoint_user_get: Missing = after user_id in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing = after user_id in query string");
+    }
+    char* userIdParamValue = userIdParamNVSeparatorAddr + 1;
+    size_t userIdParamValueLen = queryStr + queryStrLen - userIdParamValue;
+    assert(userIdParamValueLen >= 1);
+    for (size_t i = 0; i < userIdParamValueLen; i++) {
+        if (!isdigit(userIdParamValue[i])) {
+            LOG_D("__lsapi_endpoint_user_get: Invalid user_id value in query string (non-digit character at position %lu in string %.*s)", i, (int)userIdParamValueLen, userIdParamValue);
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid user_id value in query string");
+        }
+    }
+    char* userIdParamValueNt = (char*)malloc(userIdParamValueLen + 1);
+    if (userIdParamValueNt == NULL) {
+        LOG_E("__lsapi_endpoint_user_get: Failed to allocate memory for userIdParamValueNt");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(userIdParamValueNt, userIdParamValue, userIdParamValueLen);
+    userIdParamValueNt[userIdParamValueLen] = '\0';
+    int userId = atoi(userIdParamValueNt);
+    LOG_V("__lsapi_endpoint_user_get: userId = %d", userId);
+    assert(userId >= 0);
+    
+    // get user data from database so that we can use it for the http response
+    db_user_t user; //TODO extract repeated code (with __lsapi_endpoint_user_post) to a separate function in the sake of DRY
+    int rv = db_user_get_by_id(pLsapi->pDb, userIdParamValueNt, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            // pReq->res.status = 500; // Internal Server Error
+            // pReq->res.reason = "Internal Server Error";
+            // h2o_send_inline(pReq, H2O_STRLIT("Internal Server Error"));
+            // return 0;
+            LOG_E("__lsapi_endpoint_user_get: Failed to get user data from database (db_user_get_by_id returned %d)", rv);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    // TODO: Streamline these
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "User data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add public user data as sub-object
+    yyjson_mut_val* pUser = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_int(pJsonResp, pUser, "user_id", user.user_id);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "username", user.username);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "first_name", user.first_name);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "last_name", user.last_name);
+    // add user object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "user", pUser);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free(userIdParamValueNt);
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+static int __lsapi_endpoint_user_patch(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    LOG_F("__lsapi_endpoint_user_patch: Not implemented"); //TODO Implement when session management is ready
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+// curl -X PUT -d '{"username":"abc","email":"abc@example.com","password":"test","first_name":"test","last_name":"test"}' http://localhost:7890/api/user
 int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
 {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
-    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
-        yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
-        if (pJson == NULL) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
-        } 
-        yyjson_val* pRoot = yyjson_doc_get_root(pJson);
-        if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
-        }
-        yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
-        if (pUsername == NULL || !yyjson_is_str(pUsername)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
-        }
-        yyjson_val* pEmail = yyjson_obj_get(pRoot, "email");
-        if (pEmail == NULL || !yyjson_is_str(pEmail)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid email");
-        }
-        yyjson_val* pPassword = yyjson_obj_get(pRoot, "password");
-        if (pPassword == NULL || !yyjson_is_str(pPassword)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid password");
-        }
-        yyjson_val* pFirstName = yyjson_obj_get(pRoot, "first_name");
-        if (pFirstName == NULL || !yyjson_is_str(pFirstName)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid first name");
-        }
-        yyjson_val* pLastName = yyjson_obj_get(pRoot, "last_name");
-        if (pLastName == NULL || !yyjson_is_str(pLastName)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid last name");
-        }
-        
-        const char* username = yyjson_get_str(pUsername);
-        const char* first_name = yyjson_get_str(pFirstName);
-        const char* last_name = yyjson_get_str(pLastName);
-        const char* email = yyjson_get_str(pEmail);
-        const char* password = yyjson_get_str(pPassword);
-        
-        assert(username != NULL && first_name != NULL && last_name != NULL && email != NULL && password != NULL);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
+        return __lsapi_endpoint_user_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_user_get(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PATCH"))) {
+        return __lsapi_endpoint_user_patch(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
 
-        if (!__lsapi_username_check(username)) {
-            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid username (required 3-32 characters, alphanumeric and underscores only)");
-        }
+int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    //TODO DRY with __lsapi_endpoint_user_get
+    if (pReq->query_at == SIZE_MAX) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing query string");
+    }
+    char* queryStr = pReq->path.base + pReq->query_at + 1;
+    size_t queryStrLen = pReq->path.len - pReq->query_at - 1;
+    LOG_F("__lsapi_endpoint_email_verify_get: Not implemented"); //TODO
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
 
-        // hash password
-        char pwd_salt[BCRYPT_HASHSIZE];
-        char pwd_hash[BCRYPT_HASHSIZE];
-        assert(0 == bcrypt_gensalt(12, pwd_salt));
-        assert(0 == bcrypt_hashpw(password, pwd_salt, pwd_hash));
-
-        
-        // generate email verification token
-        //unsigned char email_verif_token[__LSAPI_EMAIL_VERIF_TOKEN_LEN];
-        //randombytes_buf(email_verif_token, __LSAPI_EMAIL_VERIF_TOKEN_LEN);
-        //sodium_bin2base64(email_verif_token, __LSAPI_EMAIL_VERIF_TOKEN_LEN, email_verif_token, __LSAPI_EMAIL_VERIF_TOKEN_LEN, sodium_base64_VARIANT_ORIGINAL);
-        char* email_verif_token = __lsapi_generate_token();
-        if (email_verif_token == NULL) {
-            pReq->res.status = 500;
-            pReq->res.reason = "Internal Server Error";
-            h2o_send_inline(pReq, H2O_STRLIT("Internal Server Error"));
-            yyjson_doc_free(pJson);
-            return 0;
-        }
-
-        //hash email verification token
-        char email_verif_token_hash[BCRYPT_HASHSIZE];
-        char email_verif_token_salt[BCRYPT_HASHSIZE];
-        assert(0 == bcrypt_gensalt(12, email_verif_token_salt));
-        assert(0 == bcrypt_hashpw(email_verif_token, email_verif_token_salt, email_verif_token_hash));
-
-        struct sockaddr sa;
-        pReq->conn->callbacks->get_peername(pReq->conn, &sa);
-#define __LSAPI_IP_LEN INET6_ADDRSTRLEN > INET_ADDRSTRLEN ? INET6_ADDRSTRLEN : INET_ADDRSTRLEN
-        char ip[__LSAPI_IP_LEN];
-        memset(ip, 0, __LSAPI_IP_LEN);
-        switch(sa.sa_family) {
-            case AF_INET:
-                inet_ntop(AF_INET, &((struct sockaddr_in*)&sa)->sin_addr, ip, INET_ADDRSTRLEN);
-                break;
-            case AF_INET6:
-                inet_ntop(AF_INET6, &((struct sockaddr_in6*)&sa)->sin6_addr, ip, INET6_ADDRSTRLEN);
-                break;
-            default:
-                break;
-        }
-
-        // insert user
-        assert(pLsapi->pDb != NULL);
-        if (0 != db_user_insert_basic(pLsapi->pDb, username, ip, first_name, last_name, email, pwd_hash, pwd_salt, email_verif_token_hash, email_verif_token_salt)) {
-            // TODO check for other errors?
-            return __lsapi_endpoint_error(pReq, 409, "Conflict", "Username/email already exists");
-        }
-
-        db_user_t user;
-        if (0 != db_user_get_by_username(pLsapi->pDb, username, &user)) {
-            pReq->res.status = 500; // Internal Server Error
-            pReq->res.reason = "Internal Server Error";
-            h2o_send_inline(pReq, H2O_STRLIT("Internal Server Error"));
-            yyjson_doc_free(pJson);
-            return 0;
-        }
-
-        static h2o_generator_t generator = {NULL, NULL};
-        pReq->res.status = 200;
-        pReq->res.reason = "OK";
-        h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
-        h2o_start_response(pReq, &generator);
-        
-        const char* status = "success";
-        const char* message = "User created successfully";
-
-        // create json response
-        yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
-        yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
-        yyjson_mut_doc_set_root(pJsonResp, pRootResp);
-        yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
-        yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
-        // add public user data as sub-object
-        yyjson_mut_val* pUser = yyjson_mut_obj(pJsonResp);
-        yyjson_mut_obj_add_int(pJsonResp, pUser, "user_id", user.user_id);
-        yyjson_mut_obj_add_str(pJsonResp, pUser, "username", user.username);
-        yyjson_mut_obj_add_str(pJsonResp, pUser, "first_name", user.first_name);
-        yyjson_mut_obj_add_str(pJsonResp, pUser, "last_name", user.last_name);
-        // add user object to root
-        yyjson_mut_obj_add_val(pJsonResp, pRootResp, "user", pUser);
-        
-        char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
-        assert(respText != NULL);
-        h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
-        h2o_send(pReq, &body, 1, 1);
-
-        __lsapi_email_push_verification_token(email, username, email_verif_token);
-
-        free((void*)respText);
-        yyjson_doc_free(pJson);
-        yyjson_mut_doc_free(pJsonResp);
-        free(email_verif_token);
-        return 0;
+// Request syntax: GET /api/email-verify?token=<token>&username=<username>
+int lsapi_endpoint_email_verify(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (!h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_email_verify_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }

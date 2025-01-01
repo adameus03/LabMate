@@ -238,6 +238,7 @@ int main(int argc, char **argv)
     hostconf = h2o_config_register_host(&config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
     
     pathconf = register_handler(hostconf, "/api/user", lsapi_endpoint_user, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/email-verify", lsapi_endpoint_email_verify, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/service-status", lsapi_endpoint_service_status, (void*)pLsapi);
     
     if (logfh != NULL)

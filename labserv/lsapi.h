@@ -35,6 +35,11 @@ void lsapi_deinit(lsapi_t* pLsapi);
 int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
 /**
+ * @brief Handle LSAPI email verification endpoint
+ */
+int lsapi_endpoint_email_verify(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
  * @brief Handle LSAPI service status endpoint
  */
 int lsapi_endpoint_service_status(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
