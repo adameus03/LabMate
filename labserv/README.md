@@ -62,6 +62,7 @@ $ cmake -DFSANITIZE_LA=ON -S .. -B .
 $ make
 ```
 For more options, you can check CMakeLists.txt file in the root directory of rr.
+###
 Note: beware that you need to have a postgreSQL server running and a database created for labserv to connect to. Same applies to Redis. You need to setup the constants in `config.h` as needed. You can use `config-sample.h` as a template for configuration.
 
 ###

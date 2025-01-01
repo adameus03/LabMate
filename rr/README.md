@@ -61,6 +61,7 @@ $ cmake -DFSANITIZE_LA=ON -S .. -B .
 $ make
 ```
 For more options, you can check CMakeLists.txt file in the root directory of rr.
+###
 Note: beware that you need to have a Redis server running so that rr can `BLPOP` from its message queues. You thus need to setup the constants in `config.h` as needed. You can use `config-sample.h` as a template for configuration.
 
 ###
