@@ -65,7 +65,7 @@ static char* __lsapi_generate_token() {
         return NULL;
     }
     token[__LSAPI_EMAIL_VERIF_TOKEN_LEN] = '\0';
-    size_t result = fread(token, 1, 32, f);
+    size_t result = fread(token, 1, __LSAPI_EMAIL_VERIF_TOKEN_LEN, f);
     if (result != __LSAPI_EMAIL_VERIF_TOKEN_LEN) {
         LOG_E("__lsapi_generate_token: Failure when reading /dev/urandom (fread returned %lu while expecting %d)", result, __LSAPI_EMAIL_VERIF_TOKEN_LEN);
         free(token);
@@ -74,8 +74,10 @@ static char* __lsapi_generate_token() {
     }
     fclose(f);
     for (int i = 0; i < __LSAPI_EMAIL_VERIF_TOKEN_LEN; i++) {
-        token[i] = 'a' + (token[i] % 26);
+        token[i] = 'a' + (((unsigned char)token[i]) % 26U);
+        assert(token[i] >= 'a' && token[i] <= 'z');
     }
+    token[__LSAPI_EMAIL_VERIF_TOKEN_LEN] = '\0';
     return token;
 }
 
@@ -245,7 +247,6 @@ static int __lsapi_endpoint_user_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     char pwd_hash[BCRYPT_HASHSIZE];
     assert(0 == bcrypt_gensalt(12, pwd_salt));
     assert(0 == bcrypt_hashpw(password, pwd_salt, pwd_hash));
-
     
     // generate email verification token
     //unsigned char email_verif_token[__LSAPI_EMAIL_VERIF_TOKEN_LEN];
@@ -266,6 +267,12 @@ static int __lsapi_endpoint_user_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     char email_verif_token_salt[BCRYPT_HASHSIZE];
     assert(0 == bcrypt_gensalt(12, email_verif_token_salt));
     assert(0 == bcrypt_hashpw(email_verif_token, email_verif_token_salt, email_verif_token_hash));
+    
+    assert(email_verif_token_hash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(email_verif_token_salt[(BCRYPT_HASHSIZE - 4)/2 - 1] == '\0');
+    assert(strlen(email_verif_token_hash) == BCRYPT_HASHSIZE - 4);
+    assert(strlen(email_verif_token_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+    LOG_V("__lsapi_endpoint_user_put: email_verif_token: %s, email_verif_token_hash: %s, email_verif_token_salt: %s", email_verif_token, email_verif_token_hash, email_verif_token_salt);
 
     struct sockaddr sa;
     pReq->conn->callbacks->get_peername(pReq->conn, &sa);
@@ -471,6 +478,7 @@ int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
     }
 }
 
+// Request syntax: GET /api/email-verify?token=<token>&username=<username>
 int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -481,16 +489,149 @@ int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req_t* pRe
     }
     char* queryStr = pReq->path.base + pReq->query_at + 1;
     size_t queryStrLen = pReq->path.len - pReq->query_at - 1;
-    LOG_F("__lsapi_endpoint_email_verify_get: Not implemented"); //TODO
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+    LOG_D("__lsapi_endpoint_email_verify_get: queryStrLen = %lu", queryStrLen);
+    LOG_D("__lsapi_endpoint_email_verify_get: queryStr = %.*s", (int)queryStrLen, queryStr);
+
+    //TODO Replace with regex if there are benefits
+    const char* tokenParamName = "token";
+    size_t tokenParamNameLen = strlen(tokenParamName);
+    const char* usernameParamName = "username";
+    size_t usernameParamNameLen = strlen(usernameParamName);
+    if (queryStrLen < 1) {
+        LOG_D("__lsapi_endpoint_email_verify_get: Empty query string (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Empty query string");
+    } else if (queryStrLen < tokenParamNameLen + usernameParamNameLen + 5) { // token=x&username=y is the shortest possible query string (where x and y are characters)
+        LOG_D("__lsapi_endpoint_email_verify_get: Query string too short (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Query string too short");
+    }
+    char* tokenParamNameAddr = strstr(queryStr, tokenParamName);
+    if (tokenParamNameAddr == NULL) {
+        LOG_D("__lsapi_endpoint_email_verify_get: Missing token parameter in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing token parameter in query string");
+    } else if (tokenParamNameAddr != queryStr) {
+        LOG_D("__lsapi_endpoint_email_verify_get: token parameter not at the beginning of query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "token parameter not at the beginning of query string");
+    }
+    char* tokenParamNVSeparatorAddr = tokenParamNameAddr + tokenParamNameLen;
+    if (*tokenParamNVSeparatorAddr != '=') {
+        LOG_D("__lsapi_endpoint_email_verify_get: Missing = after token in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing = after token in query string");
+    }
+    char* tokenParamValue = tokenParamNVSeparatorAddr + 1;
+    char* tokenUsernameSeparatorAddr = strchr(tokenParamValue, '&');
+    if (tokenUsernameSeparatorAddr == NULL) {
+        LOG_D("__lsapi_endpoint_email_verify_get: Missing & after token in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing & after token in query string");
+    }
+    size_t tokenParamValueLen = tokenUsernameSeparatorAddr - tokenParamValue;
+    if (tokenParamValueLen < 1) { // example: curl -X GET 'http://localhost:7890/api/email-verify?token=&swefrebterfqwgefrgr'
+        LOG_D("__lsapi_endpoint_email_verify_get: Empty token parameter value in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Empty token parameter value in query string");
+    }
+
+    char* usernameParamNameAddr = strstr(tokenUsernameSeparatorAddr, usernameParamName);
+    if (usernameParamNameAddr == NULL) {
+        LOG_D("__lsapi_endpoint_email_verify_get: Missing username parameter in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing username parameter in query string");
+    } else if (usernameParamNameAddr != tokenUsernameSeparatorAddr + 1) {
+        LOG_D("__lsapi_endpoint_email_verify_get: username parameter not after & in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "username parameter not after & in query string");
+    }
+    char* usernameParamNVSeparatorAddr = usernameParamNameAddr + usernameParamNameLen;
+    if (*usernameParamNVSeparatorAddr != '=') {
+        LOG_D("__lsapi_endpoint_email_verify_get: Missing = after username in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing = after username in query string");
+    }
+    char* usernameParamValue = usernameParamNVSeparatorAddr + 1;
+    if (NULL != strchr(usernameParamValue, '&')) {
+        LOG_D("__lsapi_endpoint_email_verify_get: Extra & after username in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Extra & after username in query string");
+    }
+    size_t usernameParamValueLen = queryStr + queryStrLen - usernameParamValue;
+    if (usernameParamValueLen < 1) { //Shouldn't happen like in the token case as extra & detection would be triggered, however we are defensive
+        LOG_D("__lsapi_endpoint_email_verify_get: Empty username parameter value in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Empty username parameter value in query string");
+    }
+
+    char* tokenParamValueNt = (char*)malloc(tokenParamValueLen + 1);
+    if (tokenParamValueNt == NULL) {
+        LOG_E("__lsapi_endpoint_email_verify_get: Failed to allocate memory for tokenParamValueNt");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(tokenParamValueNt, tokenParamValue, tokenParamValueLen);
+    tokenParamValueNt[tokenParamValueLen] = '\0';
+    char* usernameParamValueNt = (char*)malloc(usernameParamValueLen + 1);
+    if (usernameParamValueNt == NULL) {
+        LOG_E("__lsapi_endpoint_email_verify_get: Failed to allocate memory for usernameParamValueNt");
+        free(tokenParamValueNt);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(usernameParamValueNt, usernameParamValue, usernameParamValueLen);
+    usernameParamValueNt[usernameParamValueLen] = '\0';
+
+    // get user data from database so that we can verify the token
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, usernameParamValueNt, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            free(tokenParamValueNt);
+            free(usernameParamValueNt);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            free(tokenParamValueNt);
+            free(usernameParamValueNt);
+            LOG_E("__lsapi_endpoint_email_verify_get: Failed to get user data from database (db_user_get_by_username returned %d)", rv);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+    assert(user.email_verification_token_hash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(user.email_verification_token_salt[(BCRYPT_HASHSIZE - 4)/2 - 1] == '\0');
+    assert(strlen(user.email_verification_token_hash) == BCRYPT_HASHSIZE - 4);
+    assert(strlen(user.email_verification_token_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+    
+    // verify token
+    char userProvidedTokenHash[BCRYPT_HASHSIZE];
+    assert(user.email_verification_token_hash != NULL);
+    assert(user.email_verification_token_salt != NULL);
+    assert(0 == bcrypt_hashpw(tokenParamValueNt, user.email_verification_token_salt, userProvidedTokenHash)); //TODO What about bcrypt_checkpw? (I don't know why it doesn't accept salt as additional argument like `bcrypt_hashpw` - we'd need to figure that out)
+
+    assert(userProvidedTokenHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedTokenHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_email_verify_get: tokenParamValueNt: %s", tokenParamValueNt);
+    LOG_V("__lsapi_endpoint_email_verify_get: userProvidedTokenHash: %s, user.email_verification_token_hash: %s, user.email_verification_token_salt: %s", userProvidedTokenHash, user.email_verification_token_hash, user.email_verification_token_salt);
+
+    //if (0 != memcmp(userProvidedTokenHash, user.email_verification_token_hash, BCRYPT_HASHSIZE)) {
+    if (0 != strcmp(userProvidedTokenHash, user.email_verification_token_hash)) {
+        free(tokenParamValueNt);
+        free(usernameParamValueNt);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid token");
+    }
+
+    // Mark user as email-verified
+    if (0 != db_user_set_email_verified(pLsapi->pDb, user.username)) {
+        free(tokenParamValueNt);
+        free(usernameParamValueNt);
+        LOG_E("__lsapi_endpoint_email_verify_get: Failed to update user data in database while trying to mark user as email-verified");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to update user data in database");
+    }
+
+    free(tokenParamValueNt);
+    free(usernameParamValueNt);
+
+    //Redirect to email-verification.html (which automatically redirects to login.html after a timeout)
+    pReq->res.status = 303;
+    pReq->res.reason = "See Other";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_LOCATION, NULL, H2O_STRLIT("/email-verification.html"));
+    h2o_send_inline(pReq, H2O_STRLIT("Redirecting to email-verification.html"));
+
+    return 0;
 }
 
-// Request syntax: GET /api/email-verify?token=<token>&username=<username>
 int lsapi_endpoint_email_verify(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
-    if (!h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
         return __lsapi_endpoint_email_verify_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");

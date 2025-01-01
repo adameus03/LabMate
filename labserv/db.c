@@ -423,7 +423,7 @@ int db_user_insert_basic(db_t* pDb,
   db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
   PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 9, NULL, pParams, NULL, NULL, 0);
   if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
-    LOG_E("db_user_insert: Failed to insert user: %s", PQerrorMessage(pDbConnection->pConn));
+    LOG_E("db_user_insert: Failed to insert user (username \"%s\"): %s", username, PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     return -1;
@@ -562,4 +562,22 @@ int db_user_get_by_id(db_t* pDb,
   
   const char* pParams[1] = {user_id_in};
   return db_user_get_by_x(pDb, pQuery, pParams, 1, pUser_out);
+}
+
+int db_user_set_email_verified(db_t* pDb, const char* username) {
+  assert(pDb != NULL);
+  assert(username != NULL);
+  const char* pQuery = "UPDATE public.users SET email_verified = true WHERE username = $1";
+  const char* pParams[1] = {username};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_user_set_email_verified: Failed to set email_verified for username \"%s\": %s", username, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
 }

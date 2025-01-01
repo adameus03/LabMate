@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>LabMate Email Verification</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+    }
+  </style>
+
+  <h1>Verification succeeded</h1>
+  <h4>You will be redirected to login page in 5 seconds</h4>
+  <p><i>Thank you for registering with LabMate</i></p>
+  <small>If you are not redirected, click <a href='login.html'>here</a></small>
+
+  <script>
+    window.onload = function() {
+      setTimeout(() => {
+        window.location.href = 'login.html';
+      }, 5000);
+    }
+  </script>
+</body>
+
+</html>

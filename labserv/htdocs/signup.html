@@ -45,12 +45,18 @@
     .email-container {
       background-color: orange;
     }
+    .first-name-container {
+      background-color: yellow;
+    }
+    .last-name-container {
+      background-color: cyan;
+    }
   </style>
 
   <div class='signup-container'>
     <div class='credentials-container'>
       <div class='username-container'>
-        <label for='name'>Username:</label>
+        <label for='username'>Username:</label>
         <input name='username' type='text' placeholder='Username' />
       </div>
       <div class='password-container'>
@@ -60,6 +66,14 @@
       <div class='email-container'>
         <label for='email'>Email&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</label>
         <input name='email' type='email' placeholder='University email address' />
+      </div>
+      <div class='first-name-container'>
+        <label for='first-name'>First name:</label>
+        <input name='first-name' type='text' placeholder='First name' />
+      </div>
+      <div class='last-name-container'>
+        <label for='last-name'>Last name:</label>
+        <input name='last-name' type='text' placeholder='Last name' />
       </div>
     </div>
     <div class='buttons-container'>
@@ -73,14 +87,16 @@
   <script>
     function signup() {
       fetch('/api/user', {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json', // Sending JSON
         },
         body: JSON.stringify({ 
           username: document.getElementsByName('username')[0].value, 
           password: document.getElementsByName('password')[0].value, 
-          email: document.getElementsByName('email')[0].value 
+          email: document.getElementsByName('email')[0].value,
+          first_name: document.getElementsByName('first-name')[0].value,
+          last_name: document.getElementsByName('last-name')[0].value
         }) 
       })
       .then(response => response.json())
@@ -91,7 +107,7 @@
           alert("You've signed up successfully. Verify your email and login to continue");
           window.location.href = 'login.html';
         } else {
-          alert('Failed to sign up because the server could not process your data or the username is already taken');
+          alert('Failed to sign up: ' + respObj.message);
         }
       })
       .catch(error => {

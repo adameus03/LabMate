@@ -68,6 +68,8 @@ int db_user_get_by_email(db_t* pDb,
 int db_user_get_by_id(db_t* pDb, 
                       const char* user_id_in,
                       db_user_t* pUser_out);
+
+int db_user_set_email_verified(db_t* pDb, const char* username);
                             
 
 #endif // DB_H
