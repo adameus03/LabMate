@@ -133,7 +133,7 @@ static char* main_registration_generate_email_body_from_req_str(const char* req_
   const char* emailBodyUname = "&username=";
   //const char* emailBodyHere = "'>here</a> to verify your email address. <br><br> By proceeding, you agree to the below terms and conditions:<br><br>1. You will not use this service to post any material which is knowingly false and/or defamatory, inaccurate, abusive, vulgar, hateful, harassing, obscene, profane, sexually oriented, threatening, invasive of a person's privacy, or otherwise violative of any law.<br>2. You will not use this service to promote any illegal activities.<br>3. You will not use this service to post any copyrighted material unless the copyright is owned by you.<br><br>";
   //const char* emailBodyHere = "\" to verify your email address. <br><br> By proceeding, you agree to the <i>terms and conditions</i> of LabMate.<br><br>";
-  const char* emailBodyHere = "\">here</a> to verify your email address. <br><br> By proceeding, you agree to the <a href=\"" REGISTRATION_BASE_URL "/terms-and-conditions\">Terms and Conditions</a> of LabMate.<br><br>";
+  const char* emailBodyHere = "\">here</a> to verify your email address. <br><br> By proceeding, you agree to the <a href=\"" REGISTRATION_BASE_URL "/terms-and-conditions.html\">Terms and Conditions</a> of LabMate.<br><br>";
   //const char* emailBodyHere = "'>here</a> to verify your email address. <br><br> By proceeding, you agree to the <i>terms and conditions</i> of LabMate.<br><br>";
   //const char* emailBodyHere = "to verify your email address. <br><br> By proceeding, you agree to the <i>terms and conditions</i> of LabMate.<br><br>";
   const char* emailBodyBestRegards = "Best regards,<br>The LabMate Team";

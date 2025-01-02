@@ -515,7 +515,7 @@ static int db_user_get_by_x(db_t* pDb,
   user.num_requests = atoi(PQgetvalue(pResult, 0, 10));
   user.karma = atoi(PQgetvalue(pResult, 0, 11));
   user.email = PQgetvalue(pResult, 0, 12);
-  user.is_email_verified = atoi(PQgetvalue(pResult, 0, 13));
+  user.is_email_verified = PQgetvalue(pResult, 0, 13)[0] == 't' ? TRUE : FALSE;
   user.email_verification_token_hash = PQgetvalue(pResult, 0, 14);
   user.sesskey_hash = PQgetvalue(pResult, 0, 15);
   user.last_usr_chng_date = PQgetvalue(pResult, 0, 16);
@@ -573,6 +573,44 @@ int db_user_set_email_verified(db_t* pDb, const char* username) {
   PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
   if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
     LOG_E("db_user_set_email_verified: Failed to set email_verified for username \"%s\": %s", username, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+int db_user_set_session(db_t* pDb, const char* username, const char* sesskey_hash, const char* sesskey_salt) {
+  assert(pDb != NULL);
+  assert(username != NULL);
+  assert(sesskey_hash != NULL);
+  assert(sesskey_salt != NULL);
+  const char* pQuery = "UPDATE public.users SET sesskey_hash = $1, sesskey_salt = $2 WHERE username = $3";
+  const char* pParams[3] = {sesskey_hash, sesskey_salt, username};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_user_set_session: Failed to set session for username \"%s\": %s", username, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+int db_user_unset_session(db_t* pDb, const char* username) {
+  assert(pDb != NULL);
+  assert(username != NULL);
+  const char* pQuery = "UPDATE public.users SET sesskey_hash = NULL, sesskey_salt = NULL WHERE username = $1";
+  const char* pParams[1] = {username};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_user_unset_session: Failed to unset session for username \"%s\": %s", username, PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     return -1;

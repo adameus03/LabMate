@@ -658,8 +658,231 @@ int lsapi_endpoint_service_status(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     return __lsapi_endpoint_success(pReq, 200, "OK", "Service is running");
 }
 
+// curl -X PUT -d '{"username":"abc","password":"test"}' http://localhost:7890/api/session
+int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    } 
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pPassword = yyjson_obj_get(pRoot, "password");
+    if (pPassword == NULL || !yyjson_is_str(pPassword)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid password");
+    }
+    
+    const char* username = yyjson_get_str(pUsername);
+    const char* password = yyjson_get_str(pPassword);
+    assert(username != NULL && password != NULL);
+
+    // get user data from database so that we can verify the password
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    // verify password
+    char userProvidedPwdHash[BCRYPT_HASHSIZE];
+    assert(user.passwd_hash != NULL);
+    assert(user.passwd_salt != NULL);
+    assert(0 == bcrypt_hashpw(password, user.passwd_salt, userProvidedPwdHash));
+    assert(userProvidedPwdHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedPwdHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_session_put: user-provided password: %s", password);
+    LOG_V("__lsapi_endpoint_session_put: userProvidedPwdHash: %s, user.passwd_hash: %s, user.passwd_salt: %s", userProvidedPwdHash, user.passwd_hash, user.passwd_salt);
+
+    if (0 != strcmp(userProvidedPwdHash, user.passwd_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid password");
+    }
+    // If user is not email-verified, we don't allow login
+    if (!user.is_email_verified) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Email not verified");
+    }
+
+    // generate session token
+    char* session_token = __lsapi_generate_token();
+    if (session_token == NULL) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to generate session token. Poor server");
+    }
+
+    //hash session token
+    char session_token_hash[BCRYPT_HASHSIZE];
+    char session_token_salt[BCRYPT_HASHSIZE];
+    assert(0 == bcrypt_gensalt(12, session_token_salt));
+    assert(0 == bcrypt_hashpw(session_token, session_token_salt, session_token_hash));
+
+    assert(session_token_hash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(session_token_salt[(BCRYPT_HASHSIZE - 4)/2 - 1] == '\0');
+    assert(strlen(session_token_hash) == BCRYPT_HASHSIZE - 4);
+    assert(strlen(session_token_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+    LOG_V("__lsapi_endpoint_session_put: session_token: %s, session_token_hash: %s, session_token_salt: %s", session_token, session_token_hash, session_token_salt);
+
+    // set session credentials in database
+    if (0 != db_user_set_session(pLsapi->pDb, username, session_token_hash, session_token_salt)) {
+        free(session_token);
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set session credentials in database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Session created successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add public user data as sub-object
+    yyjson_mut_val* pUser = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_int(pJsonResp, pUser, "user_id", user.user_id);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "username", user.username);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "first_name", user.first_name);
+    yyjson_mut_obj_add_str(pJsonResp, pUser, "last_name", user.last_name);
+    // add user object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "user", pUser);
+    // add session key
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "session_key", session_token);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    free(session_token);
+    return 0;
+}
+
+// curl -X DELETE -d '{"username":"abc", "session_key":"woedimioduoid"}' http://localhost:7890/api/session
+int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pSessionKey = yyjson_obj_get(pRoot, "session_key");
+    if (pSessionKey == NULL || !yyjson_is_str(pSessionKey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid session_key");
+    }
+
+    const char* username = yyjson_get_str(pUsername);
+    const char* session_key = yyjson_get_str(pSessionKey);
+    assert(username != NULL && session_key != NULL);
+
+    // get user data from database so that we can verify the session key
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    // verify session key
+    char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
+    assert(user.sesskey_hash != NULL);
+    assert(user.sesskey_salt != NULL);
+    assert(0 == bcrypt_hashpw(session_key, user.sesskey_salt, userProvidedSessionKeyHash));
+    assert(userProvidedSessionKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedSessionKeyHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_session_delete: user-provided session_key: %s", session_key);
+    LOG_V("__lsapi_endpoint_session_delete: userProvidedSessionKeyHash: %s, user.sesskey_hash: %s, user.sesskey_salt: %s", userProvidedSessionKeyHash, user.sesskey_hash, user.sesskey_salt);
+
+    if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
+    }
+
+    // delete session credentials in database
+    if (0 != db_user_unset_session(pLsapi->pDb, username)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to delete session credentials in database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Session deleted successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
 int lsapi_endpoint_session(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
+        return __lsapi_endpoint_session_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("DELETE"))) {
+        return __lsapi_endpoint_session_delete(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
 }

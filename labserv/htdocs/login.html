@@ -86,13 +86,15 @@
               alert('Failed to save data to local storage: ' + e);
               return;
             }
-            alert('You should visit QualityDU more often!');
-            window.location.href = 'logged-common.html?c=chat';
+            alert('You should visit LabMate more often!');
+            //window.location.href = 'logged-common.html?c=chat';
+            window.location.href = 'logged-common.html?c=about';
           } else {
             alert('Unexpected error: missing session_key in server response');
           }
         } else {
-          alert('Failed to login. Please check your credentials or try again');
+          //alert('Failed to login. Please check your credentials or try again');
+          alert('Failed to log in: ' + respObj.message);
         }
       })
       .catch(error => {

@@ -70,6 +70,10 @@ int db_user_get_by_id(db_t* pDb,
                       db_user_t* pUser_out);
 
 int db_user_set_email_verified(db_t* pDb, const char* username);
+
+int db_user_set_session(db_t* pDb, const char* username, const char* sesskey_hash, const char* sesskey_salt);
+
+int db_user_unset_session(db_t* pDb, const char* username);
                             
 
 #endif // DB_H
