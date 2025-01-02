@@ -63,6 +63,7 @@
       <li><a href="logged-common.html?c=inventory">Inventory</a></li>
       <li><a href="logged-common.html?c=reagents">Reagents</a></li>
       <li><a href="logged-common.html?c=about">About</a></li>
+      <li><a href="logged-common.html?c=profile">Profile</a></li>
       <li><a href="logged-common.html?c=chat">Chat</a></li>
       <li><span onclick="logout()">Sign out</span></li>
     </ul>
@@ -130,6 +131,9 @@
       switch (componentName) {
         case 'chat':
           component.data = 'chat.html';
+          break;
+        case 'profile':
+          component.data = 'profile.html';
           break;
         // case 'acts':
         //   component.data = 'acts.html';
