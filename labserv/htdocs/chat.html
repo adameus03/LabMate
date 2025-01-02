@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>LabMate Chat</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+  <style>
+    @media all and (min-aspect-ratio: 1/1) {
+
+      /* style na pc */
+      #chat_box {
+        position: absolute;
+        left: 5vw;
+        top: 5vh;
+        width: 90vw;
+        height: 95vh;
+        background-color: #000;
+        border: solid #09f;
+      }
+
+      #message_input {
+        position: relative;
+        border-radius: 1vw;
+        width: 20vw;
+        height: 3vw;
+        left: 1vw;
+        overflow: auto;
+        resize: none;
+        background: linear-gradient(#ddd, #999);
+        font-weight: bold;
+        margin-right: 0.5vw;
+        padding-left: 0.5vw;
+        padding-top: 0.5vw;
+      }
+
+      #message_send_button {
+        /* margin: auto;
+        float: right;
+        width: 5vw;
+        background: radial-gradient(white, magenta);
+        font-weight: bold;
+        border-radius: 1vw;
+        margin-left: 0.5vw; */
+        
+        float: right;
+        width: 15vw;
+        background: radial-gradient(white, magenta);
+        font-weight: bold;
+        border-radius: 1vw;
+        /*margin-right: 0.5vw;*/
+      }
+    }
+
+    @media all and (max-aspect-ratio: 1/1) {
+
+      /* style na telefon */
+      #chat_box {
+        position: absolute;
+        left: 1vw;
+        top: 5vh;
+        width: 98vw;
+        height: 90vh;
+        background-color: #000;
+        border: solid #09f;
+      }
+
+      #message_input {
+        position: relative;
+        border-radius: 1vw;
+        width: 60vw;
+        height: 3vw;
+        left: 1vw;
+        overflow: auto;
+        resize: none;
+        background: linear-gradient(#ddd, #999);
+        font-weight: bold;
+        margin-right: 0.5vw;
+        padding-left: 0.5vw;
+        padding-top: 0.5vw;
+      }
+
+      #message_send_button {
+        margin: auto;
+        float: right;
+        width: 30vw;
+        background: radial-gradient(white, magenta);
+        font-weight: bold;
+        border-radius: 1vw;
+        /*margin-left: 0.5vw;*/
+      }
+    }
+
+    body {
+      background-color: #909;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .heading {
+      color: #fff;
+      text-align: center;
+    }
+
+    .messages_container {
+      overflow-y: auto;
+      max-height: 50vh;
+    }
+
+    .msg_wrapper {
+      height: 100%;
+      overflow: auto;
+      margin: 1vw;
+    }
+
+    .my_message {
+      display: inline-block;
+      background-color: blue;
+      border-radius: 1vw;
+      width: 60vw;
+      padding: 1vh;
+      float: right;
+      color: #777;
+      font-weight: bold;
+      font-size: 2vh;
+      background: linear-gradient(blue, green);
+    }
+
+    .remote_message {
+      display: inline-block;
+      background-color: red;
+      border-radius: 1vw;
+      width: 60vw;
+      font-weight: bold;
+      color: #000;
+      padding: 1vh;
+      font-size: 2vh;
+      background: linear-gradient(red, green);
+    }
+
+    #msg_composer_box {
+      /*margin: 1vw;
+      width: 100vw;*/
+      display: flex;
+      align-items: center;
+      gap: 1vw;
+      padding: 1vw;
+      width: calc(100vw - 2vw); /* Ensure it doesn't exceed the screen width */
+      box-sizing: border-box; /* Includes padding in width calculation */
+    }
+    
+
+    .remote_profile_photo {
+      display: box;
+      vertical-align: middle;
+      height: 4vh;
+      border: 2px solid #000;
+      box-shadow: 0 0 1vw 1vw rgba(0, 0, 0, 0.8);
+      border-radius: 1vw;
+      margin-right: 0.3vw;
+    }
+
+    .my_profile_photo {
+      display: box;
+      vertical-align: middle;
+      height: 4vh;
+      float: right;
+      border-radius: 1vw;
+      margin-left: 0.3vw;
+    }
+
+    @keyframes twinkle {
+      from {
+        filter: brightness(100%);
+      }
+
+      to {
+        filter: brightness(60%);
+      }
+    }
+  </style>
+
+  <div id='chat_box'>
+    <h1 class='heading'>LabMate Messaging</h1>
+    <div class='messages_container'>
+      <div class='msg_wrapper'>
+        <img class='remote_profile_photo'
+          src='http://pendulum.epizy.com/kingdoms/profile_photos/Guest12.jpg'></img><span
+          class='remote_message'>Hi</span>
+      </div>
+      <div class='msg_wrapper'>
+        <img class='remote_profile_photo'
+          src='http://pendulum.epizy.com/kingdoms/profile_photos/Guest12.jpg'></img><span class='remote_message'>How are
+          you</span>
+      </div>
+      <div class='msg_wrapper'>
+        <img class='my_profile_photo' src='http://pendulum.epizy.com/kingdoms/profile_photos/Amade.jpg'></img><span
+          class='my_message'>I'm fine thx</span>
+      </div>
+      <div class='msg_wrapper'>
+        <img class='remote_profile_photo'
+          src='http://pendulum.epizy.com/kingdoms/profile_photos/Guest12.jpg'></img><span class='remote_message'>You're
+          welcome!</span>
+      </div>
+      <div class='msg_wrapper'>
+        <img class='my_profile_photo' src='http://pendulum.epizy.com/kingdoms/profile_photos/Amade.jpg'></img><span
+          class='my_message'>Lorem ipsum dolor sit amet consequatur filit. </span>
+      </div>
+      <div class='msg_wrapper'>
+        <img class='my_profile_photo' src='http://pendulum.epizy.com/kingdoms/profile_photos/Amade.jpg'></img><span
+          class='my_message'>I'm Once again asking you to fix this. Let's spam more and more & more & more.
+          Enough.</span>
+      </div>
+    </div>
+    <div id='msg_composer_box'><textarea id='message_input' placeholder='Type message'></textarea><button
+        id='message_send_button'>Send</button></div>
+  </div>
+</body>
+
+</html>
