@@ -83,7 +83,16 @@
   </div>
 
   <script>
-
+    function __parentCheck() {
+      if (window.self == window.parent) {
+        alert('You tinkered with the website, so now it won\'t work. Bye bye');
+        window.location.href = 'logged-common.html?c=chat';
+        return;
+      }
+    }
+    window.onload = function() {
+      __parentCheck();
+    }
   </script>
 </body>
 

@@ -7,5 +7,17 @@
   </head>
   <body>
     Note: This is a placeholder for the user profile page. This page will be updated with the user's information
+    <script>
+      function __parentCheck() {
+        if (window.self == window.parent) {
+          alert('You tinkered with the website, so now it won\'t work. Bye bye');
+          window.location.href = 'logged-common.html?c=chat';
+          return;
+        }
+      }
+      window.onload = function() {
+        __parentCheck();
+      }
+    </script>
   </body>
 </html>

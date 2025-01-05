@@ -218,6 +218,19 @@
     <div id='msg_composer_box'><textarea id='message_input' placeholder='Type message'></textarea><button
         id='message_send_button'>Send</button></div>
   </div>
+
+  <script>
+    function __parentCheck() {
+      if (window.self == window.parent) {
+        alert('You tinkered with the website, so now it won\'t work. Bye bye');
+        window.location.href = 'logged-common.html?c=inventory';
+        return;
+      }
+    }
+    window.onload = function() {
+      __parentCheck();
+    }
+  </script>
 </body>
 
 </html>
