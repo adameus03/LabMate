@@ -93,6 +93,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UV REQUIRED libuv)
 pkg_check_modules(OPENSSL REQUIRED openssl)
+pkg_check_modules(WSLAY REQUIRED libwslay)
 pkg_check_modules(H2O REQUIRED libh2o)
 pkg_check_modules(YYJSON REQUIRED yyjson)
 pkg_check_modules(PQ REQUIRED libpq)
@@ -102,6 +103,7 @@ pkg_check_modules(HIREDIS REQUIRED hiredis)
 
 message(STATUS "libuv version is: ${UV_VERSION}")
 message(STATUS "openssl version is: ${OPENSSL_VERSION}")
+message(STATUS "libwslay version is: ${WSLAY_VERSION}")
 message(STATUS "libh2o version is: ${H2O_VERSION}")
 message(STATUS "yyjson version is: ${YYJSON_VERSION}")
 message(STATUS "libpq version is: ${PQ_VERSION}")
@@ -112,7 +114,7 @@ message(STATUS "hiredis version is:  ${HIREDIS_VERSION}")
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/plibsys)
 #include_directories(${CMAKE_CURRENT_SOURCE_DIR}/plibsys/src)
 
-include_directories(${UV_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIRS} ${H2O_INCLUDE_DIRS} ${YYJSON_INCLUDE_DIRS} ${PQ_INCLUDE_DIRS} ${BCRYPT_INCLUDE_DIRS} ${PLIBSYS_INCLUDE_DIRS} ${HIREDIS_INCLUDE_DIRS})
+include_directories(${UV_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIRS} ${WSLAY_INCLUDE_DIRS} ${H2O_INCLUDE_DIRS} ${YYJSON_INCLUDE_DIRS} ${PQ_INCLUDE_DIRS} ${BCRYPT_INCLUDE_DIRS} ${PLIBSYS_INCLUDE_DIRS} ${HIREDIS_INCLUDE_DIRS})
 
 add_executable(${CMAKE_PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
@@ -122,4 +124,4 @@ add_executable(${CMAKE_PROJECT_NAME}
 )
 
 #target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${UV_LIBRARIES} ${OPENSSL_LIBRARIES} ${H2O_LIBRARIES} ${YYJSON_LIBRARIES} ${PQ_LIBRARIES} ${BCRYPT_LIBRARIES} ${PLIBSYS_LIBRARIES} ${HIREDIS_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${UV_LIBRARIES} ${OPENSSL_LIBRARIES} ${WSLAY_LIBRARIES} ${H2O_LIBRARIES} ${YYJSON_LIBRARIES} ${PQ_LIBRARIES} ${BCRYPT_LIBRARIES} ${PLIBSYS_LIBRARIES} ${HIREDIS_LIBRARIES})

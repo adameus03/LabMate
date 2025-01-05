@@ -3,6 +3,7 @@
 #include <bcrypt/bcrypt.h>
 #include <hiredis/hiredis.h>
 #include <ctype.h>
+#include <h2o/websocket.h>
 #include "config.h"
 #include "log.h"
 #include "db.h"
@@ -885,4 +886,34 @@ int lsapi_endpoint_session(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
+}
+
+// TODO replace with actual implementation (As it's a simple echo endpoint for now)
+static void __lsapi_endpoint_ws_on_msg(h2o_websocket_conn_t* pWsConn, const struct wslay_event_on_msg_recv_arg* pArg) {
+    assert(pWsConn != NULL);
+    if (pArg == NULL) {
+        h2o_websocket_close(pWsConn);
+        return;
+    }
+    if (!wslay_is_ctrl_frame(pArg->opcode)) {
+        struct wslay_event_msg msgarg = {pArg->opcode, pArg->msg, pArg->msg_length};
+        wslay_event_queue_msg(pWsConn->ws_ctx, &msgarg);
+    }   
+}
+
+int lsapi_endpoint_ws(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    const char* client_key = NULL;
+    int rv = h2o_is_websocket_handshake(pReq, &client_key);
+    if (rv != 0) {
+        LOG_W("lsapi_endpoint_ws: h2o_is_websocket_handshake failed with rv = %d", rv);
+        return -1;
+    }
+    if (client_key == NULL) { // Prevent crash when endpoint is accessed in a wrong way
+        LOG_W("lsapi_endpoint_ws: client_key is NULL");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing client key");
+    }
+    h2o_upgrade_to_websocket(pReq, client_key, NULL, __lsapi_endpoint_ws_on_msg);
+    return 0;
 }
