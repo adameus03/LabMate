@@ -54,4 +54,9 @@ int lsapi_endpoint_session(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
  */
 int lsapi_endpoint_ws(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
+/**
+ * @brief Handle LSAPI INVentory Measurement ADD endpoint
+ */
+int lsapi_endpoint_invm_add(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
 #endif //LSAPI_H

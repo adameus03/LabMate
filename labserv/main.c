@@ -245,6 +245,7 @@ int main(int argc, char **argv)
     pathconf = register_handler(hostconf, "/api/service-status", lsapi_endpoint_service_status, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/session", lsapi_endpoint_session, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/ws", lsapi_endpoint_ws, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/invm-add", lsapi_endpoint_invm_add, (void*)pLsapi);
     
     if (logfh != NULL)
         h2o_access_log_register(pathconf, logfh);

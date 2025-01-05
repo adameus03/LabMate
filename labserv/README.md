@@ -63,7 +63,9 @@ $ make
 ```
 For more options, you can check CMakeLists.txt file in the root directory of rr.
 ###
-Note: beware that you need to have a postgreSQL server running and a database created for labserv to connect to. Same applies to Redis. You need to setup the constants in `config.h` as needed. You can use `config-sample.h` as a template for configuration.
+Note 1: beware that you need to have a postgreSQL server running and a database created for labserv to connect to. Same applies to Redis. You need to setup the constants in `config.h` as needed. You can use `config-sample.h` as a template for configuration.
+Note 2: the project uses TimescaleDB extension for postgreSQL. You need to have it installed on your postgreSQL server. You can refer to the official timescale docs for installation instructions (For GNU/Linux installation, see [this link](https://docs.timescale.com/self-hosted/latest/install/installation-linux/)).
+```
 
 ###
 ### If you want to run as container (podman) - for quick deployment and development purposes on various OS platforms

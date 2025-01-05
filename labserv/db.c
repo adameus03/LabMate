@@ -50,7 +50,17 @@ static void __db_connection_init(db_connection_t* pDbConnection, int conn_id) {
   // Libpq docs say that this is needed to "set always-secure search path, so malicious users can't take control"
   PGresult* pResult = PQexec(pDbConnection->pConn, "SELECT pg_catalog.set_config('search_path', '', false)");
   if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
-    LOG_E("__db_connection_init: search_path configuration failed: %s", PQerrorMessage(pDbConnection->pConn));
+    LOG_E("__db_connection_init: search_path part 1 configuration failed: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    PQfinish(pDbConnection->pConn);
+    exit(EXIT_FAILURE);
+  }
+  PQclear(pResult);
+
+  // Set search path to include public and timescaledb schemas (it was really hard to guess why create_hypertable was not found in the timescaledb extension)
+  pResult = PQexec(pDbConnection->pConn, "SELECT pg_catalog.set_config('search_path', 'public, timescaledb', false)");
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("__db_connection_init: search_path part 2 configuration failed: %s", PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
     PQfinish(pDbConnection->pConn);
     exit(EXIT_FAILURE);

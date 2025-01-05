@@ -917,3 +917,10 @@ int lsapi_endpoint_ws(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     h2o_upgrade_to_websocket(pReq, client_key, NULL, __lsapi_endpoint_ws_on_msg);
     return 0;
 }
+
+int lsapi_endpoint_invm_add(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}

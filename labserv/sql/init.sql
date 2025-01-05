@@ -28,3 +28,116 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- 	RETURNS public.users AS 
 -- $$
 
+CREATE TABLE IF NOT EXISTS public.reagent_types(
+	reagent_type_id serial4 NOT NULL,
+	name varchar NOT NULL,
+	CONSTRAINT reagent_types_pk PRIMARY KEY (reagent_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.reagents(
+	reagent_id serial4 NOT NULL,
+	name varchar NOT NULL,
+	reagent_type_id int4 NOT NULL,
+	CONSTRAINT reagents_pk PRIMARY KEY (reagent_id),
+	CONSTRAINT reagent_type_id_fk FOREIGN KEY (reagent_type_id) REFERENCES public.reagent_types(reagent_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.faculties(
+	faculty_id serial4 NOT NULL,
+	name varchar NOT NULL,
+	email_domain varchar NOT NULL,
+	CONSTRAINT faculties_pk PRIMARY KEY (faculty_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.labs(
+	lab_id serial4 NOT NULL,
+	name varchar NOT NULL,
+	faculty_id int4 NOT NULL,
+	CONSTRAINT labs_pk PRIMARY KEY (lab_id),
+	CONSTRAINT faculty_id_fk FOREIGN KEY (faculty_id) REFERENCES public.faculties(faculty_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory(
+	inventory_id serial4 NOT NULL,
+	reagent_id int4 NOT NULL,
+	date_added date NOT NULL,
+	date_expire date NULL,
+	lab_id int4 NOT NULL,
+	epc varchar NOT NULL,
+	CONSTRAINT inventory_pk PRIMARY KEY (inventory_id),
+	CONSTRAINT inventory_unique UNIQUE (epc),
+	CONSTRAINT reagent_id_fk FOREIGN KEY (reagent_id) REFERENCES public.reagents(reagent_id),
+	CONSTRAINT lab_id_fk FOREIGN KEY (lab_id) REFERENCES public.labs(lab_id)
+);
+
+-- Inventory measurements
+CREATE TABLE IF NOT EXISTS public.invm(
+	"time" TIMESTAMPTZ NOT NULL,
+	inventory_id int4 NOT NULL,
+	signal_strength int4 NULL,
+	read_rate int4 NULL,
+	FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
+);
+
+-- Make the TimescaleDB extension available
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+-- Commit changes, so that we can create the hypertable
+COMMIT;
+
+--Check if the TimescaleDB extension is available
+DO $$
+BEGIN
+  -- Check if TimescaleDB is available
+  IF NOT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb') THEN
+    RAISE EXCEPTION 'TimescaleDB extension is not available!';
+	ELSE
+		RAISE NOTICE 'TimescaleDB extension is available';
+  END IF;
+END;
+$$;
+
+-- Make sure the create_hypertable function is available
+do $$
+begin
+	if not exists (
+        select * from pg_proc where proname = 'create_hypertable'
+    ) then
+        raise exception 'WHERE IS create_hypertable ???';
+    else
+        raise notice 'we have create_hypertable';
+    END IF;
+end;
+$$;
+
+-- Make sure we can access namespace _timescaledb_functions
+do $$
+begin
+	if not exists (
+		SELECT oid FROM pg_namespace WHERE nspname = '_timescaledb_functions'
+	) then
+		raise exception 'WHERE IS _timescaledb_functions ???';
+	else
+		raise notice 'we have _timescaledb_functions';
+	END IF;
+end;
+$$;
+
+-- Create a hypertable for invm (time-series data with TimescaleDB)
+DO $$
+begin
+  -- Check if the invm table is already a hypertable
+  IF NOT EXISTS (
+    SELECT 1 
+    FROM timescaledb_information.hypertables 
+  	WHERE hypertable_name = 'invm'
+  ) THEN
+    -- Create the hypertable when we are sure it wasn't already created
+		RAISE NOTICE 'Creating hypertable invm';
+    PERFORM create_hypertable('invm', 'time');
+		RAISE NOTICE 'Hypertable invm created';
+	ELSE
+	 	RAISE NOTICE 'Hypertable invm already exists, not creating it again';
+  END IF;
+END;
+$$;
