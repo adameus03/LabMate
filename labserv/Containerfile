@@ -10,9 +10,8 @@ RUN apk add libuv libuv-dev openssl openssl-dev yyjson yyjson-dev libpq libpq-de
 RUN apk add git
 #install missing h2o dependencies
 RUN apk add zlib zlib-dev
-# ATTENTION: We don't install wslay as that will cause with our currently used h2o version [2.2.5] to produce a shared object with missing wslay symbols/code segments (see https://github.com/h2o/h2o/issues/2105 and https://github.com/h2o/h2o/pull/2196)
-# In the future it is possible to switch to newer (post Dec 10, 2019) version of h2o and then perform the h2o build with wslay available - then 
-#RUN apk add wslay wslay-dev
+#websocket support
+RUN apk add wslay wslay-dev
 
 # BUILD AND INSTALL H2O
 WORKDIR /opt
