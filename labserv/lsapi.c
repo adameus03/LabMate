@@ -918,7 +918,53 @@ int lsapi_endpoint_ws(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     return 0;
 }
 
-int lsapi_endpoint_invm_add(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_invm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (!h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+    return __lsapi_endpoint_invm_put(pH2oHandler, pReq, pLsapi);
+}
+
+int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_reagtype(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     //TODO Implement

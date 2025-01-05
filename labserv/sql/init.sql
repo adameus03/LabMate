@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS public.reagent_types(
 CREATE TABLE IF NOT EXISTS public.reagents(
 	reagent_id serial4 NOT NULL,
 	name varchar NOT NULL,
+	vendor varchar NULL,
 	reagent_type_id int4 NOT NULL,
 	CONSTRAINT reagents_pk PRIMARY KEY (reagent_id),
 	CONSTRAINT reagent_type_id_fk FOREIGN KEY (reagent_type_id) REFERENCES public.reagent_types(reagent_type_id)

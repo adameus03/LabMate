@@ -55,8 +55,33 @@ int lsapi_endpoint_session(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 int lsapi_endpoint_ws(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
 /**
- * @brief Handle LSAPI INVentory Measurement ADD endpoint
+ * @brief Handle LSAPI INVentory Measurement endpoint
  */
-int lsapi_endpoint_invm_add(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+int lsapi_endpoint_invm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
+ * @brief Handle LSAPI inventory endpoint
+ */
+int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
+ * @brief Handle LSAPI lab endpoint
+ */
+int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
+ * @brief Handle LSAPI reagent endpoint
+ */
+int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
+ * @brief Handle LSAPI reagent type endpoint
+ */
+int lsapi_endpoint_reagtype(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
+ * @brief Handle LSAPI faculty endpoint
+ */
+int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
 #endif //LSAPI_H

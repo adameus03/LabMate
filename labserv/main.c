@@ -245,7 +245,12 @@ int main(int argc, char **argv)
     pathconf = register_handler(hostconf, "/api/service-status", lsapi_endpoint_service_status, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/session", lsapi_endpoint_session, (void*)pLsapi);
     pathconf = register_handler(hostconf, "/api/ws", lsapi_endpoint_ws, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/invm-add", lsapi_endpoint_invm_add, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/invm", lsapi_endpoint_invm, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/inventory", lsapi_endpoint_inventory, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/lab", lsapi_endpoint_lab, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/reagent", lsapi_endpoint_reagent, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/reagtype", lsapi_endpoint_reagtype, (void*)pLsapi);
+    pathconf = register_handler(hostconf, "/api/faculty", lsapi_endpoint_faculty, (void*)pLsapi);
     
     if (logfh != NULL)
         h2o_access_log_register(pathconf, logfh);
