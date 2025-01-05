@@ -69,7 +69,7 @@ static int main_endpoint_handler_spawn(h2o_handler_t* pH2oHandler, h2o_req_t* pR
     //p_uthread_create(main_endpoint_handler_spawn_handler, (void*)pParams, FALSE, NULL);
 }
 
-static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *), void* pUserData)
+static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *), void* pUserData, h2o_access_log_filehandle_t* pLogFh)
 {
     assert(sizeof(h2o_handler_t) > sizeof(void*));
     assert(sizeof(h2o_handler_t) % sizeof(void*) == 0); //defensive?
@@ -82,6 +82,10 @@ static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *pa
     *((void**)(pHandler + 2)) = on_req;
     //pHandler->on_req = on_req;
     pHandler->on_req = main_endpoint_handler_spawn;
+
+    if (pLogFh != NULL) {
+        h2o_access_log_register(pathconf, pLogFh);
+    }
     return pathconf;
 }
 
@@ -240,20 +244,17 @@ int main(int argc, char **argv)
     /***************************/
     /* Endpoint registrations */
     /*************************/
-    pathconf = register_handler(hostconf, "/api/user", lsapi_endpoint_user, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/email-verify", lsapi_endpoint_email_verify, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/service-status", lsapi_endpoint_service_status, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/session", lsapi_endpoint_session, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/ws", lsapi_endpoint_ws, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/invm", lsapi_endpoint_invm, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/inventory", lsapi_endpoint_inventory, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/lab", lsapi_endpoint_lab, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/reagent", lsapi_endpoint_reagent, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/reagtype", lsapi_endpoint_reagtype, (void*)pLsapi);
-    pathconf = register_handler(hostconf, "/api/faculty", lsapi_endpoint_faculty, (void*)pLsapi);
-    
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
+    pathconf = register_handler(hostconf, "/api/user", lsapi_endpoint_user, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/email-verify", lsapi_endpoint_email_verify, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/service-status", lsapi_endpoint_service_status, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/session", lsapi_endpoint_session, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/ws", lsapi_endpoint_ws, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/invm", lsapi_endpoint_invm, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/inventory", lsapi_endpoint_inventory, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/lab", lsapi_endpoint_lab, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/reagent", lsapi_endpoint_reagent, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/reagtype", lsapi_endpoint_reagtype, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/faculty", lsapi_endpoint_faculty, (void*)pLsapi, logfh);
 
     pathconf = h2o_config_register_path(hostconf, "/", 0);
     h2o_file_register(pathconf, "htdocs", NULL, NULL, 0);
