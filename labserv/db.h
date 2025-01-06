@@ -52,14 +52,14 @@ typedef struct db_reagent {
   char* vendor;
 } db_reagent_t;
 
-typedef struct db_inventory {
+typedef struct db_inventory_item {
   int inventory_id;
   int reagent_id;
   char* date_added;
   char* date_expire;
   int lab_id;
   char* epc;
-} db_inventory_t;
+} db_inventory_item_t;
 
 typedef struct db_antenna {
   int antenna_id;
@@ -129,6 +129,54 @@ int db_user_set_email_verified(db_t* pDb, const char* username);
 int db_user_set_session(db_t* pDb, const char* username, const char* sesskey_hash, const char* sesskey_salt);
 
 int db_user_unset_session(db_t* pDb, const char* username);
-                            
+
+int db_reagent_type_insert(db_t* pDb, const char* name);
+
+int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_type_t* pReagentType_out);
+
+int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id);
+
+int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pReagent_out);
+
+int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain);
+
+int db_faculty_get_by_id(db_t* pDb, const char* faculty_id_in, db_faculty_t* pFaculty_out);
+
+int db_lab_insert(db_t* pDb, 
+                  const char* name, 
+                  const char* bearer_token_hash, 
+                  const char* bearer_token_salt, 
+                  const char* faculty_id);
+
+int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out);
+
+int db_inventory_insert(db_t* pDb, 
+                        const char* reagent_id, 
+                        const char* date_added, 
+                        const char* date_expire, 
+                        const char* lab_id, 
+                        const char* epc);
+
+int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_item_t* pInventoryItem_out);
+
+int db_antenna_insert(db_t* pDb, 
+                      const char* name, 
+                      const char* info, 
+                      const char* k, 
+                      const char* lab_id);
+
+int db_antenna_get_by_id(db_t* pDb, const char* antenna_id_in, db_antenna_t* pAntenna_out);
+
+int db_invm_insert(db_t* pDb, 
+                   const char* time, 
+                   const char* inventory_epc, 
+                   const char* antenna_id, 
+                   const char* rx_signal_strength, 
+                   const char* read_rate, 
+                   const char* tx_power, 
+                   const char* read_latency, 
+                   const char* measurement_type, 
+                   const char* rotator_ktheta, 
+                   const char* rotator_kphi);
 
 #endif // DB_H

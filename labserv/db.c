@@ -629,3 +629,598 @@ int db_user_unset_session(db_t* pDb, const char* username) {
   __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
   return 0;
 }
+
+int db_reagent_type_insert(db_t* pDb, const char* name) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  const char* pQuery = "INSERT INTO public.reagent_types (name) VALUES ($1)";
+  const char* pParams[1] = {name};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_type_insert: Failed to insert reagent type (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_reagent_type_t db_reagent_type_clone(db_reagent_type_t dbReagentType) {
+  return (db_reagent_type_t) {
+    .reagtype_id = dbReagentType.reagtype_id,
+    .name = p_strdup(dbReagentType.name)
+  };
+}
+
+static int db_reagent_type_get_by_x(db_t* pDb,
+                               const char* pQuery,
+                               const char** pParams,
+                               int nParams,
+                               db_reagent_type_t* pReagentType_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pReagentType_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_type_get_by_x: Failed to get reagent type: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_reagent_type_get_by_x: No reagent type found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No reagent type found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_reagent_type_get_by_x: Multiple reagent types found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple reagent types found
+  }
+  if (PQnfields(pResult) != 2) {
+    LOG_E("db_reagent_type_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_reagent_type_t reagent_type;
+  reagent_type.reagtype_id = atoi(PQgetvalue(pResult, 0, 0));
+  reagent_type.name = PQgetvalue(pResult, 0, 1);
+
+  *pReagentType_out = db_reagent_type_clone(reagent_type);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_type_t* pReagentType_out) {
+  assert(pDb != NULL);
+  assert(reagtype_id_in > 0);
+  assert(pReagentType_out != NULL);
+  const char* pQuery = "SELECT * FROM public.reagent_types WHERE reagtype_id = $1";
+  const char* pParams[1] = {reagtype_id_in};
+  return db_reagent_type_get_by_x(pDb, pQuery, pParams, 1, pReagentType_out);
+}
+
+int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(vendor != NULL);
+  assert(reagent_type_id != NULL);
+  const char* pQuery = "INSERT INTO public.reagents (name, vendor, reagtype_id) VALUES ($1, $2, $3)";
+  const char* pParams[3] = {name, vendor, reagent_type_id};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_insert: Failed to insert reagent (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_reagent_t db_reagent_clone(db_reagent_t dbReagent) {
+  return (db_reagent_t) {
+    .reagent_id = dbReagent.reagent_id,
+    .name = p_strdup(dbReagent.name),
+    .vendor = p_strdup(dbReagent.vendor),
+    .reagent_type_id = dbReagent.reagent_type_id
+  };
+}
+
+// TODO Replace repeating code in these db_<y>_get_by_x functions with a single function and refactor
+static int db_reagent_get_by_x(db_t* pDb,
+                               const char* pQuery,
+                               const char** pParams,
+                               int nParams,
+                               db_reagent_t* pReagent_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pReagent_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_get_by_x: Failed to get reagent: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_reagent_get_by_x: No reagent found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No reagent found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_reagent_get_by_x: Multiple reagents found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple reagents found
+  }
+  if (PQnfields(pResult) != 4) {
+    LOG_E("db_reagent_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_reagent_t reagent;
+  reagent.reagent_id = atoi(PQgetvalue(pResult, 0, 0));
+  reagent.name = PQgetvalue(pResult, 0, 1);
+  reagent.vendor = PQgetvalue(pResult, 0, 2);
+  reagent.reagent_type_id = atoi(PQgetvalue(pResult, 0, 3));
+
+  *pReagent_out = db_reagent_clone(reagent);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pReagent_out) {
+  assert(pDb != NULL);
+  assert(reagent_id_in > 0);
+  assert(pReagent_out != NULL);
+  const char* pQuery = "SELECT * FROM public.reagents WHERE reagent_id = $1";
+  const char* pParams[1] = {reagent_id_in};
+  return db_reagent_get_by_x(pDb, pQuery, pParams, 1, pReagent_out);
+}
+
+//TODO avoid repeating code/logic in these db_<x>_insert functions
+int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(email_domain != NULL);
+  const char* pQuery = "INSERT INTO public.faculties (name, email_domain) VALUES ($1, $2)";
+  const char* pParams[2] = {name, email_domain};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 2, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_faculty_insert: Failed to insert faculty (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_faculty_t db_faculty_clone(db_faculty_t dbFaculty) {
+  return (db_faculty_t) {
+    .faculty_id = dbFaculty.faculty_id,
+    .name = p_strdup(dbFaculty.name),
+    .email_domain = p_strdup(dbFaculty.email_domain)
+  };
+}
+
+static int db_faculty_get_by_x(db_t* pDb,
+                               const char* pQuery,
+                               const char** pParams,
+                               int nParams,
+                               db_faculty_t* pFaculty_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pFaculty_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_faculty_get_by_x: Failed to get faculty: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_faculty_get_by_x: No faculty found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No faculty found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_faculty_get_by_x: Multiple faculties found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple faculties found
+  }
+  if (PQnfields(pResult) != 3) {
+    LOG_E("db_faculty_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_faculty_t faculty;
+  faculty.faculty_id = atoi(PQgetvalue(pResult, 0, 0));
+  faculty.name = PQgetvalue(pResult, 0, 1);
+  faculty.email_domain = PQgetvalue(pResult, 0, 2);
+
+  *pFaculty_out = db_faculty_clone(faculty);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_faculty_get_by_id(db_t* pDb, const char* faculty_id_in, db_faculty_t* pFaculty_out) {
+  assert(pDb != NULL);
+  assert(faculty_id_in > 0);
+  assert(pFaculty_out != NULL);
+  const char* pQuery = "SELECT * FROM public.faculties WHERE faculty_id = $1";
+  const char* pParams[1] = {faculty_id_in};
+  return db_faculty_get_by_x(pDb, pQuery, pParams, 1, pFaculty_out);
+}
+
+int db_lab_insert(db_t* pDb, 
+                  const char* name, 
+                  const char* bearer_token_hash, 
+                  const char* bearer_token_salt, 
+                  const char* faculty_id) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(bearer_token_hash != NULL);
+  assert(bearer_token_salt != NULL);
+  assert(faculty_id != NULL);
+  const char* pQuery = "INSERT INTO public.labs (name, bearer_token_hash, bearer_token_salt, faculty_id) VALUES ($1, $2, $3, $4)";
+  const char* pParams[4] = {name, bearer_token_hash, bearer_token_salt, faculty_id};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 4, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_lab_insert: Failed to insert lab (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_lab_t db_lab_clone(db_lab_t dbLab) {
+  return (db_lab_t) {
+    .lab_id = dbLab.lab_id,
+    .name = p_strdup(dbLab.name),
+    .bearer_token_hash = p_strdup(dbLab.bearer_token_hash),
+    .bearer_token_salt = p_strdup(dbLab.bearer_token_salt),
+    .faculty_id = dbLab.faculty_id
+  };
+}
+
+static int db_lab_get_by_x(db_t* pDb,
+                           const char* pQuery,
+                           const char** pParams,
+                           int nParams,
+                           db_lab_t* pLab_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pLab_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_lab_get_by_x: Failed to get lab: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_lab_get_by_x: No lab found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No lab found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_lab_get_by_x: Multiple labs found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple labs found
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_lab_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_lab_t lab;
+  lab.lab_id = atoi(PQgetvalue(pResult, 0, 0));
+  lab.name = PQgetvalue(pResult, 0, 1);
+  lab.bearer_token_hash = PQgetvalue(pResult, 0, 2);
+  lab.bearer_token_salt = PQgetvalue(pResult, 0, 3);
+  lab.faculty_id = atoi(PQgetvalue(pResult, 0, 4));
+
+  *pLab_out = db_lab_clone(lab);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out) {
+  assert(pDb != NULL);
+  assert(lab_id_in > 0);
+  assert(pLab_out != NULL);
+  const char* pQuery = "SELECT * FROM public.labs WHERE lab_id = $1";
+  const char* pParams[1] = {lab_id_in};
+  return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
+}
+
+int db_inventory_insert(db_t* pDb, 
+                        const char* reagent_id, 
+                        const char* date_added, 
+                        const char* date_expire, 
+                        const char* lab_id, 
+                        const char* epc) {
+  assert(pDb != NULL);
+  assert(reagent_id != NULL);
+  assert(date_added != NULL);
+  assert(date_expire != NULL);
+  assert(lab_id != NULL);
+  assert(epc != NULL);
+  const char* pQuery = "INSERT INTO public.inventory (reagent_id, date_added, date_expire, lab_id, epc) VALUES ($1, $2, $3, $4, $5)";
+  const char* pParams[5] = {reagent_id, date_added, date_expire, lab_id, epc};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 5, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_inventory_insert: Failed to insert inventory (reagent_id \"%s\"): %s", reagent_id, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_inventory_item_t db_inventory_item_clone(db_inventory_item_t dbInventoryItem) {
+  return (db_inventory_item_t) {
+    .inventory_id = dbInventoryItem.inventory_id,
+    .reagent_id = dbInventoryItem.reagent_id,
+    .date_added = p_strdup(dbInventoryItem.date_added),
+    .date_expire = p_strdup(dbInventoryItem.date_expire),
+    .lab_id = dbInventoryItem.lab_id,
+    .epc = p_strdup(dbInventoryItem.epc)
+  };
+}
+
+static int db_inventory_get_by_x(db_t* pDb,
+                                 const char* pQuery,
+                                 const char** pParams,
+                                 int nParams,
+                                 db_inventory_item_t* pInventoryItem_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pInventoryItem_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_inventory_get_by_x: Failed to get inventory item: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_inventory_get_by_x: No inventory item found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No inventory found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_inventory_get_by_x: Multiple inventory items found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple inventories found
+  }
+  if (PQnfields(pResult) != 6) {
+    LOG_E("db_inventory_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_inventory_item_t inventoryItem;
+  inventoryItem.inventory_id = atoi(PQgetvalue(pResult, 0, 0));
+  inventoryItem.reagent_id = atoi(PQgetvalue(pResult, 0, 1));
+  inventoryItem.date_added = PQgetvalue(pResult, 0, 2);
+  inventoryItem.date_expire = PQgetvalue(pResult, 0, 3);
+  inventoryItem.lab_id = atoi(PQgetvalue(pResult, 0, 4));
+  inventoryItem.epc = PQgetvalue(pResult, 0, 5);
+
+  *pInventoryItem_out = db_inventory_item_clone(inventoryItem);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_item_t* pInventoryItem_out) {
+  assert(pDb != NULL);
+  assert(inventory_id_in > 0);
+  assert(pInventoryItem_out != NULL);
+  const char* pQuery = "SELECT * FROM public.inventory WHERE inventory_id = $1";
+  const char* pParams[1] = {inventory_id_in};
+  return db_inventory_get_by_x(pDb, pQuery, pParams, 1, pInventoryItem_out);
+}
+
+int db_antenna_insert(db_t* pDb, 
+                      const char* name, 
+                      const char* info, 
+                      const char* k, 
+                      const char* lab_id) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(info != NULL);
+  assert(k != NULL);
+  assert(lab_id != NULL);
+  const char* pQuery = "INSERT INTO public.antennas (name, info, k, lab_id) VALUES ($1, $2, $3, $4)";
+  const char* pParams[4] = {name, info, k, lab_id};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 4, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_antenna_insert: Failed to insert antenna (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_antenna_t db_antenna_clone(db_antenna_t dbAntenna) {
+  return (db_antenna_t) {
+    .antenna_id = dbAntenna.antenna_id,
+    .name = p_strdup(dbAntenna.name),
+    .info = p_strdup(dbAntenna.info),
+    .k = dbAntenna.k,
+    .lab_id = dbAntenna.lab_id
+  };
+}
+
+static int db_antenna_get_by_x(db_t* pDb,
+                               const char* pQuery,
+                               const char** pParams,
+                               int nParams,
+                               db_antenna_t* pAntenna_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pAntenna_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_antenna_get_by_x: Failed to get antenna: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_antenna_get_by_x: No antenna found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No antenna found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_antenna_get_by_x: Multiple antennas found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple antennas found
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_antenna_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_antenna_t antenna;
+  antenna.antenna_id = atoi(PQgetvalue(pResult, 0, 0));
+  antenna.name = PQgetvalue(pResult, 0, 1);
+  antenna.info = PQgetvalue(pResult, 0, 2);
+  antenna.k = atoi(PQgetvalue(pResult, 0, 3));
+  antenna.lab_id = atoi(PQgetvalue(pResult, 0, 4));
+
+  *pAntenna_out = db_antenna_clone(antenna);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_antenna_get_by_id(db_t* pDb, const char* antenna_id_in, db_antenna_t* pAntenna_out) {
+  assert(pDb != NULL);
+  assert(antenna_id_in > 0);
+  assert(pAntenna_out != NULL);
+  const char* pQuery = "SELECT * FROM public.antennas WHERE antenna_id = $1";
+  const char* pParams[1] = {antenna_id_in};
+  return db_antenna_get_by_x(pDb, pQuery, pParams, 1, pAntenna_out);
+}
+
+int db_invm_insert(db_t* pDb, 
+                   const char* time, 
+                   const char* inventory_epc, 
+                   const char* antenna_id, 
+                   const char* rx_signal_strength, 
+                   const char* read_rate, 
+                   const char* tx_power, 
+                   const char* read_latency, 
+                   const char* measurement_type, 
+                   const char* rotator_ktheta, 
+                   const char* rotator_kphi) {
+  assert(pDb != NULL);
+  assert(time != NULL);
+  assert(inventory_epc != NULL);
+  assert(antenna_id != NULL);
+  assert(rx_signal_strength != NULL);
+  assert(read_rate != NULL);
+  assert(tx_power != NULL);
+  assert(read_latency != NULL);
+  assert(measurement_type != NULL);
+  assert(rotator_ktheta != NULL);
+  assert(rotator_kphi != NULL);
+  const char* pQuery = "INSERT INTO public.invm (time, inventory_epc, antenna_id, rx_signal_strength, read_rate, tx_power, read_latency, measurement_type, rotator_ktheta, rotator_kphi) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
+  const char* pParams[10] = {time, inventory_epc, antenna_id, rx_signal_strength, read_rate, tx_power, read_latency, measurement_type, rotator_ktheta, rotator_kphi};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 10, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_invm_insert: Failed to insert invm (time \"%s\"): %s", time, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
