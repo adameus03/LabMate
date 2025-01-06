@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS public.faculties(
 CREATE TABLE IF NOT EXISTS public.labs(
 	lab_id serial4 NOT NULL,
 	name varchar NOT NULL,
+	bearer_token_hash varchar NOT NULL,
+	bearer_token_salt varchar NOT NULL,
 	faculty_id int4 NOT NULL,
 	CONSTRAINT labs_pk PRIMARY KEY (lab_id),
 	CONSTRAINT faculty_id_fk FOREIGN KEY (faculty_id) REFERENCES public.faculties(faculty_id)

@@ -40,6 +40,8 @@ typedef struct db_reagent_type {
 typedef struct db_lab {
   int lab_id;
   char* name;
+  char* bearer_token_hash;
+  char* bearer_token_salt;
   int faculty_id;
 } db_lab_t;
 
