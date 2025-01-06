@@ -26,6 +26,59 @@ typedef struct db_user {
   char* email_verification_token_salt;
 } db_user_t;
 
+typedef struct db_faculty {
+  int faculty_id;
+  char* name;
+  char* email_domain;
+} db_faculty_t;
+
+typedef struct db_reagent_type {
+  int reagtype_id;
+  char* name;
+} db_reagent_type_t;
+
+typedef struct db_lab {
+  int lab_id;
+  char* name;
+  int faculty_id;
+} db_lab_t;
+
+typedef struct db_reagent {
+  int reagent_id;
+  char* name;
+  int reagent_type_id;
+  char* vendor;
+} db_reagent_t;
+
+typedef struct db_inventory {
+  int inventory_id;
+  int reagent_id;
+  char* date_added;
+  char* date_expire;
+  int lab_id;
+  char* epc;
+} db_inventory_t;
+
+typedef struct db_antenna {
+  int antenna_id;
+  char* name;
+  char* info;
+  int k;
+  int lab_id;
+} db_antenna_t;
+
+typedef struct db_invm {
+  char* time;
+  char* inventory_epc;
+  int antenna_id;
+  int rx_signal_strength;
+  int read_rate;
+  int tx_power;
+  int read_latency;
+  int measurement_type;
+  int rotator_ktheta; // For future when antennas can rotate
+  int rotator_kphi; // For future when antennas can rotate
+} db_invm_t;
 /**
  * @brief Create a new database driver instance
  */

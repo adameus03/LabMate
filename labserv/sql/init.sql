@@ -64,27 +64,45 @@ CREATE TABLE IF NOT EXISTS public.inventory(
 	date_added date NOT NULL,
 	date_expire date NULL,
 	lab_id int4 NOT NULL,
-	epc varchar NOT NULL,
+	epc TEXT NOT NULL,
 	CONSTRAINT inventory_pk PRIMARY KEY (inventory_id),
 	CONSTRAINT inventory_unique UNIQUE (epc),
 	CONSTRAINT reagent_id_fk FOREIGN KEY (reagent_id) REFERENCES public.reagents(reagent_id),
 	CONSTRAINT lab_id_fk FOREIGN KEY (lab_id) REFERENCES public.labs(lab_id)
 );
 
+-- Antennas
+CREATE TABLE IF NOT EXISTS public.antennas(
+	antenna_id serial4 NOT NULL,
+	name varchar NULL,
+	info varchar NULL,
+	k int4 NOT NULL,
+	lab_id int4 NOT NULL,
+	CONSTRAINT antennas_pk PRIMARY KEY (antenna_id),
+	CONSTRAINT lab_id_fk FOREIGN KEY (lab_id) REFERENCES public.labs(lab_id)
+);
+
 -- Inventory measurements
 CREATE TABLE IF NOT EXISTS public.invm(
 	"time" TIMESTAMPTZ NOT NULL,
-	inventory_id int4 NOT NULL,
-	signal_strength int4 NULL,
+	inventory_epc TEXT NOT NULL,
+	antenna_id int4 NOT NULL,
+	rx_signal_strength int4 NULL,
 	read_rate int4 NULL,
-	FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
+	tx_power int4 NULL,
+	read_latency int4 NULL,
+	measurement_type int4 NULL,
+	rotator_ktheta int4 NULL,
+	rotator_kphi int4 NULL,
+	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc),
+	FOREIGN KEY (antenna_id) REFERENCES public.antennas(antenna_id)
 );
 
 -- Make the TimescaleDB extension available
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
--- Commit changes, so that we can create the hypertable
-COMMIT;
+-- -- Commit changes, so that we can create the hypertable
+-- COMMIT;
 
 --Check if the TimescaleDB extension is available
 DO $$

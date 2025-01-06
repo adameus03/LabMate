@@ -970,3 +970,10 @@ int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     //TODO Implement
     return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
 }
+
+int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
