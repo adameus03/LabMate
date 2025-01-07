@@ -757,7 +757,7 @@ int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const cha
   assert(name != NULL);
   assert(vendor != NULL);
   assert(reagent_type_id != NULL);
-  const char* pQuery = "INSERT INTO public.reagents (name, vendor, reagtype_id) VALUES ($1, $2, $3)";
+  const char* pQuery = "INSERT INTO public.reagents (name, vendor, reagent_type_id) VALUES ($1, $2, $3)";
   const char* pParams[3] = {name, vendor, reagent_type_id};
   db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
   PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
@@ -779,6 +779,49 @@ static db_reagent_t db_reagent_clone(db_reagent_t dbReagent) {
     .vendor = p_strdup(dbReagent.vendor),
     .reagent_type_id = dbReagent.reagent_type_id
   };
+}
+
+int db_reagent_insert_ret(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id, db_reagent_t* pReagent_out) {
+  //TODO extract repeating code in db_<x>_insert_ret  and db_<x>_insert functions into a separate function/s and refactor
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(vendor != NULL);
+  assert(reagent_type_id != NULL);
+  assert(pReagent_out != NULL);
+  const char* pQuery = "INSERT INTO public.reagents (name, vendor, reagent_type_id) VALUES ($1, $2, $3) RETURNING *";
+  const char* pParams[3] = {name, vendor, reagent_type_id};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_insert_ret: Failed to ret-insert reagent (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_reagent_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 4) {
+    LOG_E("db_reagent_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_reagent_t reagent;
+  reagent.reagent_id = atoi(PQgetvalue(pResult, 0, 0));
+  reagent.name = PQgetvalue(pResult, 0, 1);
+  reagent.vendor = PQgetvalue(pResult, 0, 2);
+  reagent.reagent_type_id = atoi(PQgetvalue(pResult, 0, 3));
+
+  *pReagent_out = db_reagent_clone(reagent);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
 }
 
 // TODO Replace repeating code in these db_<y>_get_by_x functions with a single function and refactor

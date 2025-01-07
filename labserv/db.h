@@ -138,6 +138,8 @@ int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_
 
 int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id);
 
+int db_reagent_insert_ret(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id, db_reagent_t* pReagent_out);
+
 int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pReagent_out);
 
 int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain);
