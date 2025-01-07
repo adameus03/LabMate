@@ -480,7 +480,7 @@ int lsapi_endpoint_user(h2o_handler_t* pH2oHandler, h2o_req_t* pReq)
 }
 
 // Request syntax: GET /api/email-verify?token=<token>&username=<username>
-int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+static int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     assert(pLsapi != NULL);
@@ -660,7 +660,7 @@ int lsapi_endpoint_service_status(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
 }
 
 // curl -X PUT -d '{"username":"abc","password":"test"}' http://localhost:7890/api/session
-int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+static int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     assert(pLsapi != NULL);
@@ -786,7 +786,7 @@ int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, ls
 }
 
 // curl -X DELETE -d '{"username":"abc", "session_key":"woedimioduoid"}' http://localhost:7890/api/session
-int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+static int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     assert(pLsapi != NULL);
@@ -918,7 +918,161 @@ int lsapi_endpoint_ws(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     return 0;
 }
 
-int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+// curl -X PUT -d '{"rtname":"abc", "username":"abc", "session_key":"<sesskey>"}' http://localhost:7890/api/reagtype
+static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pRtName = yyjson_obj_get(pRoot, "rtname");
+    if (pRtName== NULL || !yyjson_is_str(pRtName)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rtname (reagent type name)");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pSessionKey = yyjson_obj_get(pRoot, "session_key");
+    if (pSessionKey == NULL || !yyjson_is_str(pSessionKey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid token in request body");
+    }
+
+    const char* rtName = yyjson_get_str(pRtName);
+    const char* username = yyjson_get_str(pUsername);
+    const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
+
+    assert(rtName != NULL && username != NULL && userProvidedSessionKey != NULL);
+
+    // TODO replace repeating code with a separate function
+    // get user data from database so that we can verify the session key
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    // verify session key
+    char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
+    assert(user.sesskey_hash != NULL);
+    assert(strlen(user.sesskey_hash) == BCRYPT_HASHSIZE - 4);
+    assert(user.sesskey_salt != NULL);
+    assert(strlen(user.sesskey_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+    
+    assert(0 == bcrypt_hashpw(userProvidedSessionKey, user.sesskey_salt, userProvidedSessionKeyHash));
+    assert(userProvidedSessionKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedSessionKeyHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_reagtype_put: user-provided session key: %s", userProvidedSessionKey);
+    LOG_V("__lsapi_endpoint_reagtype_put: userProvidedSessionKeyHash: %s, user.sesskey_hash: %s, user.sesskey_salt: %s", userProvidedSessionKeyHash, user.sesskey_hash, user.sesskey_salt);
+
+    if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
+    }
+
+    // create reagent type + get reagent type data from database so that we can use it for the http response
+    db_reagent_type_t reagent_type;
+    if (0 != db_reagent_type_insert_ret(pLsapi->pDb, rtName, &reagent_type)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create reagent type");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Reagent type created successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add reagent type data as sub-object
+    yyjson_mut_val* pReagentType = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_int(pJsonResp, pReagentType, "reagtype_id", reagent_type.reagtype_id);
+    yyjson_mut_obj_add_str(pJsonResp, pReagentType, "name", reagent_type.name);
+    // add reagent type object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "reagtype", pReagentType);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+int lsapi_endpoint_reagtype(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
+        return __lsapi_endpoint_reagtype_put(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    //TODO Implement
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     assert(pLsapi != NULL);
@@ -934,46 +1088,4 @@ int lsapi_endpoint_invm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
     return __lsapi_endpoint_invm_put(pH2oHandler, pReq, pLsapi);
-}
-
-int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-    assert(pH2oHandler != NULL);
-    assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
-}
-
-int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-    assert(pH2oHandler != NULL);
-    assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
-}
-
-int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-    assert(pH2oHandler != NULL);
-    assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
-}
-
-int lsapi_endpoint_reagtype(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-    assert(pH2oHandler != NULL);
-    assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
-}
-
-int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-    assert(pH2oHandler != NULL);
-    assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
-}
-
-int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-    assert(pH2oHandler != NULL);
-    assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
 }

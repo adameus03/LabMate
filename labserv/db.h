@@ -132,6 +132,8 @@ int db_user_unset_session(db_t* pDb, const char* username);
 
 int db_reagent_type_insert(db_t* pDb, const char* name);
 
+int db_reagent_type_insert_ret(db_t* pDb, const char* name, db_reagent_type_t* pReagentType_out);
+
 int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_type_t* pReagentType_out);
 
 int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id);

@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS public.users (
 CREATE TABLE IF NOT EXISTS public.reagent_types(
 	reagent_type_id serial4 NOT NULL,
 	name varchar NOT NULL,
-	CONSTRAINT reagent_types_pk PRIMARY KEY (reagent_type_id)
+	CONSTRAINT reagent_types_pk PRIMARY KEY (reagent_type_id),
+	CONSTRAINT reagent_types_unique UNIQUE (name)
 );
 
 CREATE TABLE IF NOT EXISTS public.reagents(
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS public.reagents(
 	vendor varchar NULL,
 	reagent_type_id int4 NOT NULL,
 	CONSTRAINT reagents_pk PRIMARY KEY (reagent_id),
+	CONSTRAINT reagent_id_unique UNIQUE (name, vendor),
 	CONSTRAINT reagent_type_id_fk FOREIGN KEY (reagent_type_id) REFERENCES public.reagent_types(reagent_type_id)
 );
 
@@ -47,7 +49,9 @@ CREATE TABLE IF NOT EXISTS public.faculties(
 	faculty_id serial4 NOT NULL,
 	name varchar NOT NULL,
 	email_domain varchar NOT NULL,
-	CONSTRAINT faculties_pk PRIMARY KEY (faculty_id)
+	CONSTRAINT faculties_pk PRIMARY KEY (faculty_id),
+	CONSTRAINT faculties_name_unique UNIQUE (name),
+	CONSTRAINT faculties_email_domain_unique UNIQUE (email_domain)
 );
 
 CREATE TABLE IF NOT EXISTS public.labs(

@@ -655,6 +655,44 @@ static db_reagent_type_t db_reagent_type_clone(db_reagent_type_t dbReagentType) 
   };
 }
 
+int db_reagent_type_insert_ret(db_t* pDb, const char* name, db_reagent_type_t* pReagentType_out) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(pReagentType_out != NULL);
+  const char* pQuery = "INSERT INTO public.reagent_types (name) VALUES ($1) RETURNING *";
+  const char* pParams[1] = {name};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_type_insert_ret: Failed to ret-insert reagent type (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_reagent_type_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 2) {
+    LOG_E("db_reagent_type_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_reagent_type_t reagent_type;
+  reagent_type.reagtype_id = atoi(PQgetvalue(pResult, 0, 0));
+  reagent_type.name = PQgetvalue(pResult, 0, 1);
+
+  *pReagentType_out = db_reagent_type_clone(reagent_type);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
 static int db_reagent_type_get_by_x(db_t* pDb,
                                const char* pQuery,
                                const char** pParams,
