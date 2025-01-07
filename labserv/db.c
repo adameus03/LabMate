@@ -1160,6 +1160,15 @@ int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out) {
   return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
 }
 
+int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out) {
+  assert(pDb != NULL);
+  assert(epc_in != NULL);
+  assert(pLab_out != NULL);
+  const char* pQuery = "SELECT l.lab_id, l.name, l.bearer_token_hash, l.bearer_token_salt, l.faculty_id FROM public.labs l LEFT JOIN public.inventory i ON l.lab_id = i.lab_id WHERE i.epc = $1";
+  const char* pParams[1] = {epc_in};
+  return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
+}
+
 int db_inventory_insert(db_t* pDb, 
                         const char* reagent_id, 
                         const char* date_added, 
@@ -1494,4 +1503,85 @@ int db_invm_insert(db_t* pDb,
   PQclear(pResult);
   __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
   return 0;
+}
+
+static db_invm_t db_invm_clone(db_invm_t dbInvm) {
+  return (db_invm_t) {
+    .time = p_strdup(dbInvm.time),
+    .inventory_epc = p_strdup(dbInvm.inventory_epc),
+    .antenna_id = dbInvm.antenna_id,
+    .rx_signal_strength = dbInvm.rx_signal_strength,
+    .read_rate = dbInvm.read_rate,
+    .tx_power = dbInvm.tx_power,
+    .read_latency = dbInvm.read_latency,
+    .measurement_type = dbInvm.measurement_type,
+    .rotator_ktheta = dbInvm.rotator_ktheta,
+    .rotator_kphi = dbInvm.rotator_kphi
+  };
+}
+
+int db_invm_insert_ret(db_t* pDb, 
+                       const char* time, 
+                       const char* inventory_epc, 
+                       const char* antenna_id, 
+                       const char* rx_signal_strength, 
+                       const char* read_rate, 
+                       const char* tx_power, 
+                       const char* read_latency, 
+                       const char* measurement_type, 
+                       const char* rotator_ktheta, 
+                       const char* rotator_kphi, 
+                       db_invm_t* pInvm_out) {
+  assert(pDb != NULL);
+  assert(time != NULL);
+  assert(inventory_epc != NULL);
+  assert(antenna_id != NULL);
+  assert(rx_signal_strength != NULL);
+  assert(read_rate != NULL);
+  assert(tx_power != NULL);
+  assert(read_latency != NULL);
+  assert(measurement_type != NULL);
+  assert(rotator_ktheta != NULL);
+  assert(rotator_kphi != NULL);
+  assert(pInvm_out != NULL);
+  const char* pQuery = "INSERT INTO public.invm (time, inventory_epc, antenna_id, rx_signal_strength, read_rate, tx_power, read_latency, measurement_type, rotator_ktheta, rotator_kphi) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *";
+  const char* pParams[10] = {time, inventory_epc, antenna_id, rx_signal_strength, read_rate, tx_power, read_latency, measurement_type, rotator_ktheta, rotator_kphi};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 10, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_invm_insert_ret: Failed to ret-insert invm (time \"%s\"): %s", time, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_invm_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 10) {
+    LOG_E("db_invm_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_invm_t invm;
+  invm.time = PQgetvalue(pResult, 0, 0);
+  invm.inventory_epc = PQgetvalue(pResult, 0, 1);
+  invm.antenna_id = atoi(PQgetvalue(pResult, 0, 2));
+  invm.rx_signal_strength = atoi(PQgetvalue(pResult, 0, 3));
+  invm.read_rate = atoi(PQgetvalue(pResult, 0, 4));
+  invm.tx_power = atoi(PQgetvalue(pResult, 0, 5));
+  invm.read_latency = atoi(PQgetvalue(pResult, 0, 6));
+  invm.measurement_type = atoi(PQgetvalue(pResult, 0, 7));
+  invm.rotator_ktheta = atoi(PQgetvalue(pResult, 0, 8));
+  invm.rotator_kphi = atoi(PQgetvalue(pResult, 0, 9));
+
+  *pInvm_out = db_invm_clone(invm);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
 }

@@ -1752,12 +1752,192 @@ int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
+// curl -X PUT -d '{"t": "<t>", "epc": "<epc>", "aid": <antenna id>, "rxss": <rx signal strength>, "rxrate": <read rate>, "txp": <tx power>, "rxlat": <read latency>, "mtype": <measurement type>, "rkt": <rotator ktheta>, "rkp": <rotator kphi>, "lbtoken": "<lab bearer token>"}'
 static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     assert(pLsapi != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pT = yyjson_obj_get(pRoot, "t");
+    if (pT == NULL || !yyjson_is_str(pT)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid t (timestamp)");
+    }
+    yyjson_val* pEpc = yyjson_obj_get(pRoot, "epc");
+    if (pEpc == NULL || !yyjson_is_str(pEpc)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid epc");
+    }
+    yyjson_val* pAid = yyjson_obj_get(pRoot, "aid");
+    if (pAid == NULL || !yyjson_is_int(pAid)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid aid (antenna id)");
+    }
+    yyjson_val* pRxss = yyjson_obj_get(pRoot, "rxss");
+    if (pRxss == NULL || !yyjson_is_int(pRxss)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rxss (rx signal strength)");
+    }
+    yyjson_val* pRxrate = yyjson_obj_get(pRoot, "rxrate");
+    if (pRxrate == NULL || !yyjson_is_int(pRxrate)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rxrate (read rate)");
+    }
+    yyjson_val* pTxp = yyjson_obj_get(pRoot, "txp");
+    if (pTxp == NULL || !yyjson_is_int(pTxp)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid txp (tx power)");
+    }
+    yyjson_val* pRxlat = yyjson_obj_get(pRoot, "rxlat");
+    if (pRxlat == NULL || !yyjson_is_int(pRxlat)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rxlat (read latency)");
+    }
+    yyjson_val* pMType = yyjson_obj_get(pRoot, "mtype");
+    if (pMType == NULL || !yyjson_is_int(pMType)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid mtype (measurement type)");
+    }
+    yyjson_val* pRkt = yyjson_obj_get(pRoot, "rkt");
+    if (pRkt == NULL || !yyjson_is_int(pRkt)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rkt (rotator ktheta)");
+    }
+    yyjson_val* pRkp = yyjson_obj_get(pRoot, "rkp");
+    if (pRkp == NULL || !yyjson_is_int(pRkp)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rkp (rotator kphi)");
+    }
+    yyjson_val* pLbToken = yyjson_obj_get(pRoot, "lbtoken");
+    if (pLbToken == NULL || !yyjson_is_str(pLbToken)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid lbtoken (lab bearer token)");
+    }
+
+    const char* t = yyjson_get_str(pT);
+    const char* epc = yyjson_get_str(pEpc);
+    int aid = yyjson_get_int(pAid);
+    int rxss = yyjson_get_int(pRxss);
+    int rxrate = yyjson_get_int(pRxrate);
+    int txp = yyjson_get_int(pTxp);
+    int rxlat = yyjson_get_int(pRxlat);
+    int mtype = yyjson_get_int(pMType);
+    int rkt = yyjson_get_int(pRkt);
+    int rkp = yyjson_get_int(pRkp);
+    const char* lbToken = yyjson_get_str(pLbToken);
+
+    assert(t != NULL && epc != NULL && aid >= 0 && rxss >= 0 && rxrate >= 0 && txp >= 0 && rxlat >= 0 && mtype >= 0 && rkt >= 0 && rkp >= 0 && lbToken != NULL);
+
+    // get lab data from database so that we can verify the lab bearer token
+    db_lab_t lab;
+    int rv = db_lab_get_by_epc(pLsapi->pDb, epc, &lab);
+    if (0 != rv) {
+        if (rv == -2) {
+            LOG_W("__lsapi_endpoint_invm_put: EPC %s does not match any lab", epc);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "The given epc does not match any lab");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get lab data from database");
+        }
+    }
+
+    // verify lab bearer token
+    char lbTokenHash[BCRYPT_HASHSIZE];
+    assert(lab.bearer_token_hash != NULL);
+    assert(strlen(lab.bearer_token_hash) == BCRYPT_HASHSIZE - 4);
+    assert(lab.bearer_token_salt != NULL);
+    assert(strlen(lab.bearer_token_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+
+    assert(0 == bcrypt_hashpw(lbToken, lab.bearer_token_salt, lbTokenHash));
+    assert(lbTokenHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(lbTokenHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_invm_put: lab-provided bearer token: %s", lbToken);
+    LOG_V("__lsapi_endpoint_invm_put: lbTokenHash (lab-provided): %s, lab.bearer_token_hash: %s, lab.bearer_token_salt: %s", lbTokenHash, lab.bearer_token_hash, lab.bearer_token_salt);
+
+    if (0 != strcmp(lbTokenHash, lab.bearer_token_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid lab bearer token");
+    }
+
+    // insert inventory measurement + get inventory measurement data from database so that we can use it for the http response
+    db_invm_t invm;
+    char* aid_str = __lsapi_itoa(aid);
+    char* rxss_str = __lsapi_itoa(rxss);
+    char* rxrate_str = __lsapi_itoa(rxrate);
+    char* txp_str = __lsapi_itoa(txp);
+    char* rxlat_str = __lsapi_itoa(rxlat);
+    char* mtype_str = __lsapi_itoa(mtype);
+    char* rkt_str = __lsapi_itoa(rkt);
+    char* rkp_str = __lsapi_itoa(rkp);
+    if (0 != db_invm_insert_ret(pLsapi->pDb, t, epc, aid_str, rxss_str, rxrate_str, txp_str, rxlat_str, mtype_str, rkt_str, rkp_str, &invm)) {
+        yyjson_doc_free(pJson);
+        free(aid_str);
+        free(rxss_str);
+        free(rxrate_str);
+        free(txp_str);
+        free(rxlat_str);
+        free(mtype_str);
+        free(rkt_str);
+        free(rkp_str);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to insert inventory measurement");
+    }
+    free(aid_str);
+    free(rxss_str);
+    free(rxrate_str);
+    free(txp_str);
+    free(rxlat_str);
+    free(mtype_str);
+    free(rkt_str);
+    free(rkp_str);
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Inventory measurement inserted successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add inventory measurement data as sub-object
+    yyjson_mut_val* pInvm = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_str(pJsonResp, pInvm, "t", invm.time);
+    yyjson_mut_obj_add_str(pJsonResp, pInvm, "epc", invm.inventory_epc);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "antenna_id", invm.antenna_id);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "rx_signal_strength", invm.rx_signal_strength);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "read_rate", invm.read_rate);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "tx_power", invm.tx_power);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "read_latency", invm.read_latency);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "measurement_type", invm.measurement_type);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "rotator_ktheta", invm.rotator_ktheta);
+    yyjson_mut_obj_add_int(pJsonResp, pInvm, "rotator_kphi", invm.rotator_kphi);
+    // add inventory measurement object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "inventory_measurement", pInvm);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
 }
 
 int lsapi_endpoint_invm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {

@@ -163,6 +163,8 @@ int db_lab_insert_ret(db_t* pDb,
 
 int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out);
 
+int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out);
+
 int db_inventory_insert(db_t* pDb, 
                         const char* reagent_id, 
                         const char* date_added, 
@@ -206,5 +208,18 @@ int db_invm_insert(db_t* pDb,
                    const char* measurement_type, 
                    const char* rotator_ktheta, 
                    const char* rotator_kphi);
+
+int db_invm_insert_ret(db_t* pDb, 
+                       const char* time, 
+                       const char* inventory_epc, 
+                       const char* antenna_id, 
+                       const char* rx_signal_strength, 
+                       const char* read_rate, 
+                       const char* tx_power, 
+                       const char* read_latency, 
+                       const char* measurement_type, 
+                       const char* rotator_ktheta, 
+                       const char* rotator_kphi, 
+                       db_invm_t* pInvm_out);                   
 
 #endif // DB_H
