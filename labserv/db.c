@@ -1049,6 +1049,55 @@ static db_lab_t db_lab_clone(db_lab_t dbLab) {
   };
 }
 
+int db_lab_insert_ret(db_t* pDb, 
+                      const char* name, 
+                      const char* bearer_token_hash, 
+                      const char* bearer_token_salt, 
+                      const char* faculty_id, 
+                      db_lab_t* pLab_out) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(bearer_token_hash != NULL);
+  assert(bearer_token_salt != NULL);
+  assert(faculty_id != NULL);
+  assert(pLab_out != NULL);
+  const char* pQuery = "INSERT INTO public.labs (name, bearer_token_hash, bearer_token_salt, faculty_id) VALUES ($1, $2, $3, $4) RETURNING *";
+  const char* pParams[4] = {name, bearer_token_hash, bearer_token_salt, faculty_id};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 4, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_lab_insert_ret: Failed to ret-insert lab (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_lab_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_lab_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_lab_t lab;
+  lab.lab_id = atoi(PQgetvalue(pResult, 0, 0));
+  lab.name = PQgetvalue(pResult, 0, 1);
+  lab.bearer_token_hash = PQgetvalue(pResult, 0, 2);
+  lab.bearer_token_salt = PQgetvalue(pResult, 0, 3);
+  lab.faculty_id = atoi(PQgetvalue(pResult, 0, 4));
+
+  *pLab_out = db_lab_clone(lab);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
 static int db_lab_get_by_x(db_t* pDb,
                            const char* pQuery,
                            const char** pParams,

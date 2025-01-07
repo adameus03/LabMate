@@ -154,6 +154,13 @@ int db_lab_insert(db_t* pDb,
                   const char* bearer_token_salt, 
                   const char* faculty_id);
 
+int db_lab_insert_ret(db_t* pDb, 
+                      const char* name, 
+                      const char* bearer_token_hash, 
+                      const char* bearer_token_salt, 
+                      const char* faculty_id, 
+                      db_lab_t* pLab_out);
+
 int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out);
 
 int db_inventory_insert(db_t* pDb, 
