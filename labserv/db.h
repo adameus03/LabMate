@@ -170,6 +170,14 @@ int db_inventory_insert(db_t* pDb,
                         const char* lab_id, 
                         const char* epc);
 
+int db_inventory_insert_ret(db_t* pDb, 
+                                 const char* reagent_id, 
+                                 const char* date_added, 
+                                 const char* date_expire, 
+                                 const char* lab_id, 
+                                 const char* epc, 
+                                 db_inventory_item_t* pInventoryItem_out);                        
+
 int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_item_t* pInventoryItem_out);
 
 int db_antenna_insert(db_t* pDb, 

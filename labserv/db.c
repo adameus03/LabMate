@@ -1198,6 +1198,58 @@ static db_inventory_item_t db_inventory_item_clone(db_inventory_item_t dbInvento
   };
 }
 
+int db_inventory_insert_ret(db_t* pDb, 
+                                 const char* reagent_id, 
+                                 const char* date_added, 
+                                 const char* date_expire, 
+                                 const char* lab_id, 
+                                 const char* epc, 
+                                 db_inventory_item_t* pInventoryItem_out) {
+  assert(pDb != NULL);
+  assert(reagent_id != NULL);
+  assert(date_added != NULL);
+  assert(date_expire != NULL);
+  assert(lab_id != NULL);
+  assert(epc != NULL);
+  assert(pInventoryItem_out != NULL);
+  const char* pQuery = "INSERT INTO public.inventory (reagent_id, date_added, date_expire, lab_id, epc) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+  const char* pParams[5] = {reagent_id, date_added, date_expire, lab_id, epc};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 5, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_inventory_insert_ret: Failed to ret-insert inventory item (reagent_id \"%s\"): %s", reagent_id, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_inventory_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 6) {
+    LOG_E("db_inventory_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_inventory_item_t inventoryItem;
+  inventoryItem.inventory_id = atoi(PQgetvalue(pResult, 0, 0));
+  inventoryItem.reagent_id = atoi(PQgetvalue(pResult, 0, 1));
+  inventoryItem.date_added = PQgetvalue(pResult, 0, 2);
+  inventoryItem.date_expire = PQgetvalue(pResult, 0, 3);
+  inventoryItem.lab_id = atoi(PQgetvalue(pResult, 0, 4));
+  inventoryItem.epc = PQgetvalue(pResult, 0, 5);
+
+  *pInventoryItem_out = db_inventory_item_clone(inventoryItem);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
 static int db_inventory_get_by_x(db_t* pDb,
                                  const char* pQuery,
                                  const char** pParams,
