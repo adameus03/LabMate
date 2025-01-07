@@ -144,6 +144,8 @@ int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pRe
 
 int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain);
 
+int db_faculty_insert_ret(db_t* pDb, const char* name, const char* email_domain, db_faculty_t* pFaculty_out);
+
 int db_faculty_get_by_id(db_t* pDb, const char* faculty_id_in, db_faculty_t* pFaculty_out);
 
 int db_lab_insert(db_t* pDb, 

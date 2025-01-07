@@ -914,6 +914,46 @@ static db_faculty_t db_faculty_clone(db_faculty_t dbFaculty) {
   };
 }
 
+int db_faculty_insert_ret(db_t* pDb, const char* name, const char* email_domain, db_faculty_t* pFaculty_out) {
+  assert(pDb != NULL);
+  assert(name != NULL);
+  assert(email_domain != NULL);
+  assert(pFaculty_out != NULL);
+  const char* pQuery = "INSERT INTO public.faculties (name, email_domain) VALUES ($1, $2) RETURNING *";
+  const char* pParams[2] = {name, email_domain};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 2, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_faculty_insert_ret: Failed to ret-insert faculty (name \"%s\"): %s", name, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_faculty_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 3) {
+    LOG_E("db_faculty_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_faculty_t faculty;
+  faculty.faculty_id = atoi(PQgetvalue(pResult, 0, 0));
+  faculty.name = PQgetvalue(pResult, 0, 1);
+  faculty.email_domain = PQgetvalue(pResult, 0, 2);
+
+  *pFaculty_out = db_faculty_clone(faculty);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
 static int db_faculty_get_by_x(db_t* pDb,
                                const char* pQuery,
                                const char** pParams,
