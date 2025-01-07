@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS public.antennas(
 	k int4 NOT NULL,
 	lab_id int4 NOT NULL,
 	CONSTRAINT antennas_pk PRIMARY KEY (antenna_id),
+	CONSTRAINT antennas_unique_1 UNIQUE (name, lab_id),
+	CONSTRAINT antennas_unique_2 UNIQUE (k, lab_id),
 	CONSTRAINT lab_id_fk FOREIGN KEY (lab_id) REFERENCES public.labs(lab_id)
 );
 

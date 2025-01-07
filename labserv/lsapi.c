@@ -1607,11 +1607,149 @@ int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
+// curl -X PUT -d '{"aname": "<antenna name>", "info": "<antenna info>", "k": <k>, "lid": <lab id>, "username": "<username>", "session_key": "<sesskey>"}'
+static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pAName = yyjson_obj_get(pRoot, "aname");
+    if (pAName == NULL || !yyjson_is_str(pAName)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid aname (antenna name)");
+    }
+    yyjson_val* pInfo = yyjson_obj_get(pRoot, "info");
+    if (pInfo == NULL || !yyjson_is_str(pInfo)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid info (antenna info)");
+    }
+    yyjson_val* pK = yyjson_obj_get(pRoot, "k");
+    if (pK == NULL || !yyjson_is_int(pK)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid k (antenna k)");
+    }
+    yyjson_val* pLid = yyjson_obj_get(pRoot, "lid");
+    if (pLid == NULL || !yyjson_is_int(pLid)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid lid (lab id)");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pSessionKey = yyjson_obj_get(pRoot, "session_key");
+    if (pSessionKey == NULL || !yyjson_is_str(pSessionKey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid session_key in request body");
+    }
+
+    const char* aName = yyjson_get_str(pAName);
+    const char* info = yyjson_get_str(pInfo);
+    int k = yyjson_get_int(pK);
+    int lid = yyjson_get_int(pLid);
+    const char* username = yyjson_get_str(pUsername);
+    const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
+
+    assert(aName != NULL && info != NULL && k >= 0 && lid >= 0 && username != NULL && userProvidedSessionKey != NULL);
+
+    // get user data from database so that we can verify the session key
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    // verify session key
+    char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
+    assert(user.sesskey_hash != NULL);
+    assert(strlen(user.sesskey_hash) == BCRYPT_HASHSIZE - 4);
+    assert(user.sesskey_salt != NULL);
+    assert(strlen(user.sesskey_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+
+    assert(0 == bcrypt_hashpw(userProvidedSessionKey, user.sesskey_salt, userProvidedSessionKeyHash));
+    assert(userProvidedSessionKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedSessionKeyHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_antenna_put: user-provided session key: %s", userProvidedSessionKey);
+    LOG_V("__lsapi_endpoint_antenna_put: userProvidedSessionKeyHash: %s, user.sesskey_hash: %s, user.sesskey_salt: %s", userProvidedSessionKeyHash, user.sesskey_hash, user.sesskey_salt);
+
+    if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
+    }
+
+    // create antenna + get antenna data from database so that we can use it for the http response
+    db_antenna_t antenna;
+    char* k_str = __lsapi_itoa(k);
+    char* lid_str = __lsapi_itoa(lid);
+    if (0 != db_antenna_insert_ret(pLsapi->pDb, aName, info, k_str, lid_str, &antenna)) {
+        yyjson_doc_free(pJson);
+        free(k_str);
+        free(lid_str);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create antenna");
+    }
+    free(k_str);
+    free(lid_str);
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Antenna created successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add antenna data as sub-object
+    yyjson_mut_val* pAntenna = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_int(pJsonResp, pAntenna, "antenna_id", antenna.antenna_id);
+    yyjson_mut_obj_add_str(pJsonResp, pAntenna, "name", antenna.name);
+    yyjson_mut_obj_add_str(pJsonResp, pAntenna, "info", antenna.info);
+    yyjson_mut_obj_add_int(pJsonResp, pAntenna, "k", antenna.k);
+    yyjson_mut_obj_add_int(pJsonResp, pAntenna, "lab_id", antenna.lab_id);
+    // add antenna object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "antenna", pAntenna);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
 int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
-    //TODO Implement
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
+        return __lsapi_endpoint_antenna_put(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
 }
 
 static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {

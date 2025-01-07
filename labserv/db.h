@@ -186,6 +186,13 @@ int db_antenna_insert(db_t* pDb,
                       const char* k, 
                       const char* lab_id);
 
+int db_antenna_insert_ret(db_t* pDb, 
+                          const char* name, 
+                          const char* info, 
+                          const char* k, 
+                          const char* lab_id, 
+                          db_antenna_t* pAntenna_out);
+
 int db_antenna_get_by_id(db_t* pDb, const char* antenna_id_in, db_antenna_t* pAntenna_out);
 
 int db_invm_insert(db_t* pDb, 
