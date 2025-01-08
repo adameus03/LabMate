@@ -31,63 +31,62 @@
 #include "h2o/http1.h"
 #include "h2o/http2.h"
 #include "h2o/memcached.h"
+#include <plibsys/plibsys.h>
 
-//#define USE_HTTPS 1
-#define USE_HTTPS 0
-#define USE_MEMCACHED 0
+#include "config.h"
+#include "mcapi.h"
 
-static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *))
+struct main_endpoint_handler_spawn_params {
+    h2o_handler_t* pH2oHandler;
+    h2o_req_t* pReq;
+};
+
+static struct main_endpoint_handler_spawn_params* main_endpoint_handler_spawn_params_new(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    struct main_endpoint_handler_spawn_params* pParams = (struct main_endpoint_handler_spawn_params*)malloc(sizeof(struct main_endpoint_handler_spawn_params));
+    pParams->pH2oHandler = pH2oHandler;
+    pParams->pReq = pReq;
+    return pParams;
+}
+
+static void main_endpoint_handler_spawn_params_free(struct main_endpoint_handler_spawn_params* pParams) {
+    assert(pParams != NULL);
+    free(pParams);
+}
+
+static void main_endpoint_handler_spawn_handler(void* pUserData) {
+    struct main_endpoint_handler_spawn_params* pParams = (struct main_endpoint_handler_spawn_params*)pUserData;
+    int (*on_req)(h2o_handler_t *, h2o_req_t *) = NULL;
+    on_req = *((void**)(pParams->pH2oHandler + 2));
+    on_req(pParams->pH2oHandler, pParams->pReq);
+    main_endpoint_handler_spawn_params_free(pParams);
+}
+
+static int main_endpoint_handler_spawn(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    uv_thread_t uvThreadId;
+    struct main_endpoint_handler_spawn_params* pParams = main_endpoint_handler_spawn_params_new(pH2oHandler, pReq);
+    uv_thread_create(&uvThreadId, main_endpoint_handler_spawn_handler, (void*)pParams);
+    //main_endpoint_handler_spawn_handler((void*)pParams);
+    //p_uthread_create(main_endpoint_handler_spawn_handler, (void*)pParams, FALSE, NULL);
+}
+
+static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *), void* pUserData, h2o_access_log_filehandle_t* pLogFh)
 {
+    assert(sizeof(h2o_handler_t) > sizeof(void*));
+    assert(sizeof(h2o_handler_t) % sizeof(void*) == 0); //defensive?
+
     h2o_pathconf_t *pathconf = h2o_config_register_path(hostconf, path, 0);
-    h2o_handler_t *handler = h2o_create_handler(pathconf, sizeof(*handler));
-    handler->on_req = on_req;
-    return pathconf;
-}
+    //h2o_handler_t* pHandler = h2o_create_handler(pathconf, sizeof(h2o_handler_t) + 2 * sizeof(void*));
+    h2o_handler_t* pHandler = h2o_create_handler(pathconf, 3 * sizeof(h2o_handler_t)); // `3 * sizeof(h2o_handler_t)` not `sizeof(h2o_handler_t) + 2 * sizeof(void*)` to avoid memory bug (it worked with glibc, but segfaulted with musl libc)
 
-static int chunked_test(h2o_handler_t *self, h2o_req_t *req)
-{
-    static h2o_generator_t generator = {NULL, NULL};
+    *((void**)(pHandler + 1)) = pUserData;
+    *((void**)(pHandler + 2)) = on_req;
+    //pHandler->on_req = on_req;
+    pHandler->on_req = main_endpoint_handler_spawn;
 
-    if (!h2o_memis(req->method.base, req->method.len, H2O_STRLIT("GET")))
-        return -1;
-
-    h2o_iovec_t body = h2o_strdup(&req->pool, "hello world\n", SIZE_MAX);
-    req->res.status = 200;
-    req->res.reason = "OK";
-    h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("text/plain"));
-    h2o_start_response(req, &generator);
-    h2o_send(req, &body, 1, 1);
-
-    return 0;
-}
-
-static int reproxy_test(h2o_handler_t *self, h2o_req_t *req)
-{
-    if (!h2o_memis(req->method.base, req->method.len, H2O_STRLIT("GET")))
-        return -1;
-
-    req->res.status = 200;
-    req->res.reason = "OK";
-    h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_X_REPROXY_URL, NULL, H2O_STRLIT("http://www.ietf.org/"));
-    h2o_send_inline(req, H2O_STRLIT("you should never see this!\n"));
-
-    return 0;
-}
-
-static int post_test(h2o_handler_t *self, h2o_req_t *req)
-{
-    if (h2o_memis(req->method.base, req->method.len, H2O_STRLIT("POST")) &&
-        h2o_memis(req->path_normalized.base, req->path_normalized.len, H2O_STRLIT("/post-test/"))) {
-        static h2o_generator_t generator = {NULL, NULL};
-        req->res.status = 200;
-        req->res.reason = "OK";
-        h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("text/plain; charset=utf-8"));
-        h2o_start_response(req, &generator);
-        h2o_send(req, &req->entity, 1, 1);
-        return 0;
+    if (pLogFh != NULL) {
+        h2o_access_log_register(pathconf, pLogFh);
     }
-
-    return -1;
+    return pathconf;
 }
 
 static h2o_globalconf_t config;
@@ -113,7 +112,7 @@ static void on_accept(uv_stream_t *listener, int status)
         return;
     }
 
-    sock = h2o_uv_socket_create((uv_handle_t *)conn, (uv_close_cb)free);
+    sock = h2o_uv_socket_create((uv_stream_t *)conn, (uv_close_cb)free);
     h2o_accept(&accept_ctx, sock);
 }
 
@@ -124,7 +123,7 @@ static int create_listener(void)
     int r;
 
     uv_tcp_init(ctx.loop, &listener);
-    uv_ip4_addr("127.0.0.1", 7890, &addr);
+    uv_ip4_addr(RAQMC_IPV4_ADDR, RAQMC_IP_PORT, &addr);
     if ((r = uv_tcp_bind(&listener, (struct sockaddr *)&addr, 0)) != 0) {
         fprintf(stderr, "uv_tcp_bind:%s\n", uv_strerror(r));
         goto Error;
@@ -164,7 +163,7 @@ static int create_listener(void)
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(0x7f000001);
-    addr.sin_port = htons(7890);
+    addr.sin_port = htons(RAQMC_IP_PORT);
 
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1 ||
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_flag, sizeof(reuseaddr_flag)) != 0 ||
@@ -189,10 +188,10 @@ static int setup_ssl(const char *cert_file, const char *key_file, const char *ci
     accept_ctx.ssl_ctx = SSL_CTX_new(SSLv23_server_method());
     SSL_CTX_set_options(accept_ctx.ssl_ctx, SSL_OP_NO_SSLv2);
 
-    if (USE_MEMCACHED) {
+    if (RAQMC_USE_MEMCACHED) {
         accept_ctx.libmemcached_receiver = &libmemcached_receiver;
-        h2o_accept_setup_memcached_ssl_resumption(h2o_memcached_create_context("127.0.0.1", 11211, 0, 1, "h2o:ssl-resumption:"),
-                                                  86400);
+        //h2o_accept_setup_memcached_ssl_resumption(h2o_memcached_create_context(RAQMC_IPV4_ADDR, 11211, 0, 1, "h2o:ssl-resumption:"), 86400);
+        h2o_accept_setup_async_ssl_resumption(h2o_memcached_create_context(RAQMC_IPV4_ADDR, 11211, 0, 1, "h2o:ssl-resumption:"), 86400);
         h2o_socket_ssl_async_resumption_setup_ctx(accept_ctx.ssl_ctx);
     }
 
@@ -228,32 +227,40 @@ static int setup_ssl(const char *cert_file, const char *key_file, const char *ci
 
 int main(int argc, char **argv)
 {
+    p_libsys_init();
+    log_global_init();
+    mcapi_t* pMcapi = mcapi_new();
+    mcapi_init(pMcapi);
+
     h2o_hostconf_t *hostconf;
-    h2o_access_log_filehandle_t *logfh = h2o_access_log_open_handle("/dev/stdout", NULL, H2O_LOGCONF_ESCAPE_APACHE);
+    h2o_access_log_filehandle_t *logfh = h2o_access_log_open_handle(RAQMC_H2O_ACCESS_LOG_FILE_PATH, NULL, H2O_LOGCONF_ESCAPE_APACHE);
     h2o_pathconf_t *pathconf;
 
     signal(SIGPIPE, SIG_IGN);
 
     h2o_config_init(&config);
     hostconf = h2o_config_register_host(&config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
+    
+    /***************************/
+    /* Endpoint registrations */
+    /*************************/
+    // pathconf = register_handler(hostconf, "/api/user", mcapi_endpoint_user, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/email-verify", mcapi_endpoint_email_verify, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/service-status", mcapi_endpoint_service_status, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/session", mcapi_endpoint_session, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/ws", mcapi_endpoint_ws, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/invm", mcapi_endpoint_invm, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/inventory", mcapi_endpoint_inventory, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/lab", mcapi_endpoint_lab, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/reagent", mcapi_endpoint_reagent, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/reagtype", mcapi_endpoint_reagtype, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/faculty", mcapi_endpoint_faculty, (void*)pMcapi, logfh);
+    // pathconf = register_handler(hostconf, "/api/antenna", mcapi_endpoint_antenna, (void*)pMcapi, logfh);
 
-    pathconf = register_handler(hostconf, "/post-test", post_test);
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
-
-    pathconf = register_handler(hostconf, "/chunked-test", chunked_test);
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
-
-    pathconf = register_handler(hostconf, "/reproxy-test", reproxy_test);
-    h2o_reproxy_register(pathconf);
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
-
-    pathconf = h2o_config_register_path(hostconf, "/", 0);
-    h2o_file_register(pathconf, "doc_root", NULL, NULL, 0);
-    if (logfh != NULL)
-        h2o_access_log_register(pathconf, logfh);
+    // pathconf = h2o_config_register_path(hostconf, "/", 0);
+    // h2o_file_register(pathconf, "htdocs", NULL, NULL, 0);
+    // if (logfh != NULL)
+    //     h2o_access_log_register(pathconf, logfh);
 
 #if H2O_USE_LIBUV
     uv_loop_t loop;
@@ -262,10 +269,10 @@ int main(int argc, char **argv)
 #else
     h2o_context_init(&ctx, h2o_evloop_create(), &config);
 #endif
-    if (USE_MEMCACHED)
+    if (RAQMC_USE_MEMCACHED)
         h2o_multithread_register_receiver(ctx.queue, &libmemcached_receiver, h2o_memcached_receiver);
 
-    if (USE_HTTPS && setup_ssl("examples/h2o/server.crt", "examples/h2o/server.key",
+    if (RAQMC_USE_HTTPS && setup_ssl("examples/h2o/server.crt", "examples/h2o/server.key",
                                "DEFAULT:!MD5:!DSS:!DES:!RC4:!RC2:!SEED:!IDEA:!NULL:!ADH:!EXP:!SRP:!PSK") != 0)
         goto Error;
 
@@ -273,7 +280,7 @@ int main(int argc, char **argv)
     accept_ctx.hosts = config.hosts;
 
     if (create_listener() != 0) {
-        fprintf(stderr, "failed to listen to 127.0.0.1:7890:%s\n", strerror(errno));
+        fprintf(stderr, "failed to listen to %s:%d:%s\n", RAQMC_IPV4_ADDR, RAQMC_IP_PORT, strerror(errno));
         goto Error;
     }
 
@@ -285,5 +292,9 @@ int main(int argc, char **argv)
 #endif
 
 Error:
+    mcapi_deinit(pMcapi);
+    mcapi_free(pMcapi);
+    log_global_deinit();
+    p_libsys_shutdown();
     return 1;
 }

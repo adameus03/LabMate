@@ -113,7 +113,7 @@ static void __lsapi_email_push_verification_token(const char* email, const char*
     redisFree(pRedisContext);
 }
 
-static int __Lsapi_endpoint_resp_short(h2o_req_t *pReq, 
+static int __lsapi_endpoint_resp_short(h2o_req_t *pReq, 
                                        const int httpStatus, 
                                        const char* httpReason, 
                                        const char* jsonStatus, 
@@ -168,11 +168,11 @@ static int __lsapi_endpoint_error(h2o_req_t *pReq, const int status, const char*
     // free((void*)respErrText);
     // yyjson_mut_doc_free(pJsonErrResp);
     // return 0;
-    return __Lsapi_endpoint_resp_short(pReq, status, reason, "error", errMessage);
+    return __lsapi_endpoint_resp_short(pReq, status, reason, "error", errMessage);
 }
 
 static int __lsapi_endpoint_success(h2o_req_t *pReq, const int status, const char* reason, const char* message) {
-    return __Lsapi_endpoint_resp_short(pReq, status, reason, "success", message);
+    return __lsapi_endpoint_resp_short(pReq, status, reason, "success", message);
 }
 
 static int __lsapi_username_check(const char* username) {
