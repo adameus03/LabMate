@@ -32,12 +32,12 @@ void antennactl_set_target(antennactl_t* pActl, antennactl_target_t target) {
 #if (ANTENNACTL_HW_ARCH == ANTENNACTL_HW_ARCH_HMC349_DUAL)
   hmc349_set_outp(pActl->w.hw.pHmc349, target);
 #endif
-  antennactl_target_t new_target;
-  antennactl_get_target(pActl, &new_target);
-  if (new_target != target) {
-    LOG_E("antennactl_set_target: Failed to set target %d", target);
-    exit(EXIT_FAILURE);
-  }
+  // antennactl_target_t new_target;
+  // antennactl_get_target(pActl, &new_target);
+  // if (new_target != target) {
+  //   LOG_E("antennactl_set_target: Failed to set target %d", target);
+  //   exit(EXIT_FAILURE);
+  // }
   pActl->target = target;
   assert(TRUE == p_mutex_unlock(pActl->w.l.pHwMutex));
   LOG_D("antennactl_set_target: successfully set target %d", target);
