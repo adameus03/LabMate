@@ -35,4 +35,9 @@ int mcapi_endpoint_ite(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
  */
 int mcapi_endpoint_itq(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
+/**
+ * Handle MCAPI Inventory Trigger Measurement endpoint
+ */
+int mcapi_endpoint_itm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
 #endif // MCAPI_H

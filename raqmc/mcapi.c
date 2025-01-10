@@ -219,3 +219,22 @@ int mcapi_endpoint_itq(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     return __mcapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
   }
 }
+
+static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, mcapi_t* pMcapi) {
+  assert(pH2oHandler != NULL);
+  assert(pReq != NULL);
+  assert(pMcapi != NULL);
+  // TODO <<<<<<
+  return __mcapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int mcapi_endpoint_itm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+  assert(pH2oHandler != NULL);
+  assert(pReq != NULL);
+  mcapi_t* pMcapi = __mcapi_self_from_h2o_handler(pH2oHandler);
+  if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+    return __mcapi_endpoint_itm_post(pH2oHandler, pReq, pMcapi);
+  } else {
+    return __mcapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+  }
+}

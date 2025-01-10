@@ -259,6 +259,7 @@ int main(int argc, char **argv)
 
     pathconf = register_handler(hostconf, "/api/ite", mcapi_endpoint_ite, (void*)pMcapi, logfh);
     pathconf = register_handler(hostconf, "/api/itq", mcapi_endpoint_itq, (void*)pMcapi, logfh);
+    pathconf = register_handler(hostconf, "/api/itm", mcapi_endpoint_itm, (void*)pMcapi, logfh);
 
     // pathconf = h2o_config_register_path(hostconf, "/", 0);
     // h2o_file_register(pathconf, "htdocs", NULL, NULL, 0);
