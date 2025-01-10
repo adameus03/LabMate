@@ -21,13 +21,28 @@ int rscall_ie_set_flags(const char* iePath, const char* flags);
 int rscall_ie_drv_embody(const char* iePath);
 
 /**
- * @brief Measures RSSI only
+ * @brief Triggers RSSI measurement only
  */
 int rscall_ie_drv_measure_quick(const char* iePath, const int txPower);
 
 /**
- * @brief Measures RSSI and read rate
+ * @brief Triggers RSSI and read rate measurement
  */
 int rscall_ie_drv_measure_dual(const char* iePath, const int txPower);
+
+/**
+ * @note Measurement needs to be triggered first with `rscall_ie_drv_measure_quick` or `rscall_ie_drv_measure_dual`. Otherwise the function will return a cached value.
+ */
+int rscall_ie_get_rssi(const char* iePath, int* pRssi);
+
+/**
+ * @note Measurement needs to be triggered first with `rscall_ie_drv_measure_dual`. Otherwise the function will return a cached value.
+ */
+int rscall_ie_get_read_rate(const char* iePath, int* pReadRate);
+
+/**
+ * @warning Output buffer needs to be freed with free()
+ */
+const char* rscall_ie_get_path(const int index);
 
 #endif // RSCALL_H

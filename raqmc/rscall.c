@@ -23,6 +23,7 @@ static char* __rscall_abspath(const char* __relpath) {
     relpath++;
   }
   char* absPath = (char*)malloc(absPathStrlen + 1);
+  assert(absPath != NULL);
   strcpy(absPath, mountPath);
   if (mountPath[mountPathStrlen - 1] != '/') {
       absPath[mountPathStrlen] = '/';
@@ -77,6 +78,7 @@ char* rscall_ie_dir_create(void) {
   size_t devno_path_prolog_strlen = strlen(devno_path_prolog);
   char* devno_path_epilog = "/value";
   char* devno_path = (char*)malloc(devno_path_prolog_strlen + sidStrlen + strlen(devno_path_epilog) + 1);
+  assert(devno_path != NULL);
   strcpy(devno_path, devno_path_prolog);
   strcpy(devno_path + devno_path_prolog_strlen, sid);
   strcpy(devno_path + devno_path_prolog_strlen + sidStrlen, devno_path_epilog);
@@ -108,6 +110,7 @@ char* rscall_ie_dir_create(void) {
   size_t ie_dir_path_prolog_strlen = strlen(ie_dir_path_prolog);
   assert(ie_dir_path_prolog[ie_dir_path_prolog_strlen - 1] != '/');
   char* ie_dir_path = (char*)malloc(ie_dir_path_prolog_strlen + devnoStrlen + 1);
+  assert(ie_dir_path != NULL);
   strcpy(ie_dir_path, ie_dir_path_prolog);
   strcpy(ie_dir_path + ie_dir_path_prolog_strlen, devno);
   ie_dir_path[ie_dir_path_prolog_strlen + devnoStrlen] = '\0';
@@ -126,6 +129,7 @@ static int __rscall_ie_set_x(const char* iePath, const char* xPathEpilog, const 
   const size_t x_path_epilog_strlen = strlen(xPathEpilog);
   assert(xPathEpilog[0] == '/');
   char* x_path = (char*)malloc(iePathStrlen + x_path_epilog_strlen + 1);
+  assert(x_path != NULL);
   strcpy(x_path, iePath);
   strcpy(x_path + iePathStrlen, xPathEpilog);
   x_path[iePathStrlen + x_path_epilog_strlen] = '\0';
@@ -139,7 +143,7 @@ static int __rscall_ie_set_x(const char* iePath, const char* xPathEpilog, const 
   if (fprintf(x_file, "%s", xValue) <= 0) {
     assert(0 == fclose(x_file));
     assert(0);
-    return -1;
+    return -2;
   }
   assert(0 == fclose(x_file));
   return 0;
@@ -190,6 +194,7 @@ int rscall_ie_drv_embody(const char* iePath) {
 int rscall_ie_drv_measure_quick(const char* iePath, const int txPower) {
   // To trigger measurement we write to driver/measure
   char* args = (char*)malloc(256); // 256 bytes should be enough for two space separated numbers
+  assert(args != NULL);
   int argsStrlen = sprintf(args, "%d %d", -1, txPower);
   args[argsStrlen] = '\0';
   return __rscall_ie_set_x(iePath, "/driver/measure", args);
@@ -198,7 +203,85 @@ int rscall_ie_drv_measure_quick(const char* iePath, const int txPower) {
 int rscall_ie_drv_measure_dual(const char* iePath, const int txPower) {
   // To trigger measurement we write to driver/measure
   char* args = (char*)malloc(256); // 256 bytes should be enough for two space separated numbers
+  assert(args != NULL);
   int argsStrlen = sprintf(args, "%d %d", RSCALL_IE_DRV_DUAL_MEASURE_TIMEOUT, txPower);
   args[argsStrlen] = '\0';
   return __rscall_ie_set_x(iePath, "/driver/measure", args);
+}
+
+
+int rscall_ie_get_rssi(const char* iePath, int* pRssi) {
+  // Read from `rssi`
+  const size_t iePathStrlen = strlen(iePath);
+  const char* rssi_path_epilog = "/rssi";
+  const size_t rssi_path_epilog_strlen = strlen(rssi_path_epilog);
+  char* rssi_path = (char*)malloc(iePathStrlen + rssi_path_epilog_strlen + 1);
+  assert(rssi_path != NULL);
+  strcpy(rssi_path, iePath);
+  strcpy(rssi_path + iePathStrlen, rssi_path_epilog);
+  rssi_path[iePathStrlen + rssi_path_epilog_strlen] = '\0';
+
+  FILE* rssi_file = fopen(rssi_path, "r");
+  if (rssi_file == NULL) {
+    free((void*)rssi_path);
+    return -1;
+  }
+  char rssi[129]; // We should not exceed 128 characters in rssi as all we read is a natural number
+  if (fgets(rssi, sizeof(rssi), rssi_file) == NULL) {
+    fclose(rssi_file);
+    free((void*)rssi_path);
+    return -1;
+  }
+  size_t rssiStrlen = strlen(rssi);
+  assert(rssiStrlen > 0 && rssiStrlen < 128); // If we have 128 characters, there is something going on wrong definitely
+  fclose(rssi_file);
+
+  int rssiValue = atoi(rssi);
+  *pRssi = rssiValue;
+  free((void*)rssi_path);
+  return 0;
+}
+
+/**
+ * TODO Refactor repeating code with rscall_ie_get_rssi and rscall_ie_dir_create
+ */
+int rscall_ie_get_read_rate(const char* iePath, int* pReadRate) {
+  // Read from `rssi`
+  const size_t iePathStrlen = strlen(iePath);
+  const char* read_rate_path_epilog = "/read_rate";
+  const size_t read_rate_path_epilog_strlen = strlen(read_rate_path_epilog);
+  char* read_rate_path = (char*)malloc(iePathStrlen + read_rate_path_epilog_strlen + 1);
+  assert(read_rate_path != NULL);
+  strcpy(read_rate_path, iePath);
+  strcpy(read_rate_path + iePathStrlen, read_rate_path_epilog);
+  read_rate_path[iePathStrlen + read_rate_path_epilog_strlen] = '\0';
+
+  FILE* read_rate_file = fopen(read_rate_path, "r");
+  if (read_rate_file == NULL) {
+    free((void*)read_rate_path);
+    return -1;
+  }
+  char read_rate[129]; // We should not exceed 128 characters in rssi as all we read is a natural number
+  if (fgets(read_rate, sizeof(read_rate), read_rate_file) == NULL) {
+    fclose(read_rate_file);
+    free((void*)read_rate_path);
+    return -1;
+  }
+  size_t readRateStrlen = strlen(read_rate);
+  assert(readRateStrlen > 0 && readRateStrlen < 128); // If we have 128 characters, there is something going on wrong definitely
+  fclose(read_rate_file);
+
+  int readRateValue = atoi(read_rate);
+  *pReadRate = readRateValue;
+  free((void*)read_rate_path);
+  return 0;
+}
+
+const char* rscall_ie_get_path(const int index) {
+  char* relpath = (char*)malloc(129);
+  assert(relpath != NULL);
+  int n = snprintf(relpath, 128, "uhf%d", index);
+  assert(n > 0 && n < 128);
+  assert(relpath[n] == '\0');
+  return __rscall_abspath(relpath);
 }

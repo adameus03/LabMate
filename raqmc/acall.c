@@ -1,5 +1,8 @@
 #include "acall.h"
 #include "config.h"
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifndef ACALL_ANTC_MOUNT_PATH
   #error "ACALL_ANTC_MOUNT_PATH is not defined!"
@@ -20,6 +23,7 @@ static char* __acall_abspath(const char* __relpath) {
     relpath++;
   }
   char* absPath = (char*)malloc(absPathStrlen + 1);
+  assert(absPath != NULL);
   strcpy(absPath, mountPath);
   if (mountPath[mountPathStrlen - 1] != '/') {
       absPath[mountPathStrlen] = '/';
@@ -37,6 +41,7 @@ static int __acall_ant_set_x(const char* path, const char* xPathEpilog, const ch
   const size_t x_path_epilog_strlen = strlen(xPathEpilog);
   assert(xPathEpilog[0] == '/');
   char* x_path = (char*)malloc(pathStrlen + x_path_epilog_strlen + 1);
+  assert(x_path != NULL);
   strcpy(x_path, path);
   strcpy(x_path + pathStrlen, xPathEpilog);
   x_path[pathStrlen + x_path_epilog_strlen] = '\0';
@@ -50,7 +55,7 @@ static int __acall_ant_set_x(const char* path, const char* xPathEpilog, const ch
   if (fprintf(x_file, "%s", xValue) <= 0) {
     assert(0 == fclose(x_file));
     assert(0);
-    return -1;
+    return -2;
   }
   assert(0 == fclose(x_file));
   return 0;
@@ -65,10 +70,8 @@ int acall_ant_set_disabled(const char* path) {
 }
 
 const char* acall_ant_get_path(const int index) {
-  char* relpath = (char*)malloc(128);
-  if (relpath == NULL) {
-    return NULL;
-  }
+  char* relpath = (char*)malloc(129);
+  assert(relpath != NULL);
   int n = snprintf(relpath, 128, "ant%d", index);
   assert(n > 0 && n < 128);
   assert(relpath[n] == '\0');

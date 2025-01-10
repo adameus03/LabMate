@@ -4,6 +4,7 @@
 #include "config.h"
 #include "log.h"
 #include "rscall.h"
+#include "measurements.h"
 
 struct mcapi {
 
@@ -220,12 +221,129 @@ int mcapi_endpoint_itq(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
   }
 }
 
+// curl -X POST -d '{"iei": <ieIndex>, "antno": <antno>, "txp": <txPower>, "mt": <measurementType>, "btoken": "<bearer token>"}' http://localhost:7891/api/itm
 static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, mcapi_t* pMcapi) {
   assert(pH2oHandler != NULL);
   assert(pReq != NULL);
   assert(pMcapi != NULL);
-  // TODO <<<<<<
-  return __mcapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+  yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+  if (pJson == NULL) {
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+  }
+  yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+  if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+  }
+  yyjson_val* pIei = yyjson_obj_get(pRoot, "iei");
+  if (pIei == NULL || !yyjson_is_int(pIei)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid IE index");
+  }
+  yyjson_val* pAntno = yyjson_obj_get(pRoot, "antno");
+  if (pAntno == NULL || !yyjson_is_int(pAntno)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid antenna number");
+  }
+  yyjson_val* pTxp = yyjson_obj_get(pRoot, "txp");
+  if (pTxp == NULL || !yyjson_is_int(pTxp)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid tx power");
+  }
+  yyjson_val* pMt = yyjson_obj_get(pRoot, "mt");
+  if (pMt == NULL || !yyjson_is_int(pMt)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid measurement type");
+  }
+  yyjson_val* pBtoken = yyjson_obj_get(pRoot, "btoken");
+  if (pBtoken == NULL || !yyjson_is_str(pBtoken)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid bearer token");
+  }
+
+  int iei = yyjson_get_int(pIei);
+  int antno = yyjson_get_int(pAntno);
+  int txp = yyjson_get_int(pTxp);
+  int mt = yyjson_get_int(pMt);
+  const char* btoken = yyjson_get_str(pBtoken);
+
+  assert(btoken != NULL);
+
+  // Check bearer token
+  if (strcmp(btoken, RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN) != 0) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 401, "Unauthorized", "Invalid bearer token");
+  }
+
+  if (iei < 0) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "IE index must be non-negative");
+  }
+  if (antno < 0) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Antenna number must be non-negative");
+  }
+  if (txp < 0) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "TX power must be non-negative");
+  }
+  if (mt != 0 && mt != 1) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Invalid measurement type");
+  }
+
+  // Peform measurement
+  int readings[2] = {0, 0};
+  switch(mt) {
+    case 0:
+      measurements_quick_perform(iei, antno, txp, &readings[0]);
+      break;
+    case 1:
+      measurements_dual_perform(iei, antno, txp, &readings[0], &readings[1]);
+      break;
+    default:
+      yyjson_doc_free(pJson);
+      assert(0); // Should never reach here really
+      return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Invalid measurement type");
+  }
+
+  static h2o_generator_t generator = {NULL, NULL};
+  pReq->res.status = 200;
+  pReq->res.reason = "OK";
+  h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+  h2o_start_response(pReq, &generator);
+
+  const char* status = "success";
+  const char* message = "Measurement performed successfully";
+
+  // create json response
+  yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+  yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+  yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+  yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+  yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+  // add data as sub-object
+  yyjson_mut_val* pMeasurement = yyjson_mut_obj(pJsonResp);
+  yyjson_mut_obj_add_int(pJsonResp, pMeasurement, "iei", iei);
+  yyjson_mut_obj_add_int(pJsonResp, pMeasurement, "antenna_number", antno);
+  yyjson_mut_obj_add_int(pJsonResp, pMeasurement, "tx_power", txp);
+  yyjson_mut_obj_add_int(pJsonResp, pMeasurement, "measurement_type", mt);
+  yyjson_mut_obj_add_int(pJsonResp, pMeasurement, "rssi", readings[0]);
+  if (mt == 1) {
+    yyjson_mut_obj_add_int(pJsonResp, pMeasurement, "read_rate", readings[1]);
+  }
+  // add measurement object to root
+  yyjson_mut_obj_add_val(pJsonResp, pRootResp, "measurement", pMeasurement);
+
+  const char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+  assert(respText != NULL);
+  h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+  h2o_send(pReq, &body, 1, 1);
+
+  free((void*)respText);
+  yyjson_doc_free(pJson);
+  yyjson_mut_doc_free(pJsonResp);
+  return 0;
 }
 
 int mcapi_endpoint_itm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {

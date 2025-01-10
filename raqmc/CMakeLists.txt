@@ -133,6 +133,7 @@ add_executable(${CMAKE_PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/rscall.c
     ${CMAKE_CURRENT_SOURCE_DIR}/acall.c
     ${CMAKE_CURRENT_SOURCE_DIR}/qpcall.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/measurements.c
 )
 
 #target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)

@@ -35,6 +35,7 @@
 
 #include "config.h"
 #include "mcapi.h"
+#include "measurements.h"
 
 struct main_endpoint_handler_spawn_params {
     h2o_handler_t* pH2oHandler;
@@ -229,6 +230,7 @@ int main(int argc, char **argv)
 {
     p_libsys_init();
     log_global_init();
+    measurements_global_init();
     mcapi_t* pMcapi = mcapi_new();
     mcapi_init(pMcapi);
 
@@ -298,6 +300,7 @@ int main(int argc, char **argv)
 Error:
     mcapi_deinit(pMcapi);
     mcapi_free(pMcapi);
+    measurements_global_deinit();
     log_global_deinit();
     p_libsys_shutdown();
     return 1;
