@@ -1174,17 +1174,21 @@ int db_inventory_insert(db_t* pDb,
                         const char* date_added, 
                         const char* date_expire, 
                         const char* lab_id, 
-                        const char* epc) {
+                        const char* epc,
+                        const char* apwd,
+                        const char* kpwd) {
   assert(pDb != NULL);
   assert(reagent_id != NULL);
   assert(date_added != NULL);
   assert(date_expire != NULL);
   assert(lab_id != NULL);
   assert(epc != NULL);
-  const char* pQuery = "INSERT INTO public.inventory (reagent_id, date_added, date_expire, lab_id, epc) VALUES ($1, $2, $3, $4, $5)";
-  const char* pParams[5] = {reagent_id, date_added, date_expire, lab_id, epc};
+  assert(apwd != NULL);
+  assert(kpwd != NULL);
+  const char* pQuery = "INSERT INTO public.inventory (reagent_id, date_added, date_expire, lab_id, epc, apwd, kpwd) VALUES ($1, $2, $3, $4, $5, $6, $7)";
+  const char* pParams[7] = {reagent_id, date_added, date_expire, lab_id, epc, apwd, kpwd};
   db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
-  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 5, NULL, pParams, NULL, NULL, 0);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 7, NULL, pParams, NULL, NULL, 0);
   if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
     LOG_E("db_inventory_insert: Failed to insert inventory (reagent_id \"%s\"): %s", reagent_id, PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
@@ -1203,7 +1207,9 @@ static db_inventory_item_t db_inventory_item_clone(db_inventory_item_t dbInvento
     .date_added = p_strdup(dbInventoryItem.date_added),
     .date_expire = p_strdup(dbInventoryItem.date_expire),
     .lab_id = dbInventoryItem.lab_id,
-    .epc = p_strdup(dbInventoryItem.epc)
+    .epc = p_strdup(dbInventoryItem.epc),
+    .apwd = p_strdup(dbInventoryItem.apwd),
+    .kpwd = p_strdup(dbInventoryItem.kpwd)
   };
 }
 
@@ -1212,7 +1218,9 @@ int db_inventory_insert_ret(db_t* pDb,
                                  const char* date_added, 
                                  const char* date_expire, 
                                  const char* lab_id, 
-                                 const char* epc, 
+                                 const char* epc,
+                                 const char* apwd,
+                                 const char* kpwd,
                                  db_inventory_item_t* pInventoryItem_out) {
   assert(pDb != NULL);
   assert(reagent_id != NULL);
@@ -1220,11 +1228,13 @@ int db_inventory_insert_ret(db_t* pDb,
   assert(date_expire != NULL);
   assert(lab_id != NULL);
   assert(epc != NULL);
+  assert(apwd != NULL);
+  assert(kpwd != NULL);
   assert(pInventoryItem_out != NULL);
-  const char* pQuery = "INSERT INTO public.inventory (reagent_id, date_added, date_expire, lab_id, epc) VALUES ($1, $2, $3, $4, $5) RETURNING *";
-  const char* pParams[5] = {reagent_id, date_added, date_expire, lab_id, epc};
+  const char* pQuery = "INSERT INTO public.inventory (reagent_id, date_added, date_expire, lab_id, epc, apwd, kpwd) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *";
+  const char* pParams[7] = {reagent_id, date_added, date_expire, lab_id, epc, apwd, kpwd};
   db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
-  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 5, NULL, pParams, NULL, NULL, 0);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 7, NULL, pParams, NULL, NULL, 0);
   if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
     LOG_E("db_inventory_insert_ret: Failed to ret-insert inventory item (reagent_id \"%s\"): %s", reagent_id, PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
@@ -1237,7 +1247,7 @@ int db_inventory_insert_ret(db_t* pDb,
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     exit(EXIT_FAILURE);
   }
-  if (PQnfields(pResult) != 6) {
+  if (PQnfields(pResult) != 8) {
     LOG_E("db_inventory_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
@@ -1251,6 +1261,8 @@ int db_inventory_insert_ret(db_t* pDb,
   inventoryItem.date_expire = PQgetvalue(pResult, 0, 3);
   inventoryItem.lab_id = atoi(PQgetvalue(pResult, 0, 4));
   inventoryItem.epc = PQgetvalue(pResult, 0, 5);
+  inventoryItem.apwd = PQgetvalue(pResult, 0, 6);
+  inventoryItem.kpwd = PQgetvalue(pResult, 0, 7);
 
   *pInventoryItem_out = db_inventory_item_clone(inventoryItem);
 

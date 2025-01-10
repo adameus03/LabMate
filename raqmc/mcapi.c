@@ -1,7 +1,9 @@
 #include "mcapi.h"
 #include <yyjson.h>
+#include <assert.h>
 #include "config.h"
 #include "log.h"
+#include "rscall.h"
 
 struct mcapi {
 
@@ -81,10 +83,139 @@ static int __mcapi_endpoint_success(h2o_req_t *pReq, const int status, const cha
     return __mcapi_endpoint_resp_short(pReq, status, reason, "success", message);
 }
 
+// curl -X POST -d '{"epc": "<epc", "apwd": "<access password>", "kpwd": "<kill password>", "btoken": "<bearer token>""}' http://localhost:7891/api/ite
+static int __mcapi_endpoint_ite_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, mcapi_t* pMcapi) {
+  assert(pH2oHandler != NULL);
+  assert(pReq != NULL);
+  assert(pMcapi != NULL);
+  yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+  if (pJson == NULL) {
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+  }
+  yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+  if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+  }
+  yyjson_val* pEpc = yyjson_obj_get(pRoot, "epc");
+  if (pEpc == NULL || !yyjson_is_str(pEpc)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid EPC");
+  }
+  yyjson_val* pApwd = yyjson_obj_get(pRoot, "apwd");
+  if (pApwd == NULL || !yyjson_is_str(pApwd)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid access password");
+  }
+  yyjson_val* pKpwd = yyjson_obj_get(pRoot, "kpwd");
+  if (pKpwd == NULL || !yyjson_is_str(pKpwd)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid kill password");
+  }
+  yyjson_val* pBtoken = yyjson_obj_get(pRoot, "btoken");
+  if (pBtoken == NULL || !yyjson_is_str(pBtoken)) {
+      yyjson_doc_free(pJson);
+      return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid bearer token");
+  }
+
+  const char* epc = yyjson_get_str(pEpc);
+  const char* apwd = yyjson_get_str(pApwd);
+  const char* kpwd = yyjson_get_str(pKpwd);
+  const char* btoken = yyjson_get_str(pBtoken);
+
+  assert(epc != NULL && apwd != NULL && kpwd != NULL && btoken != NULL);
+
+  // Check bearer token
+  if (strcmp(btoken, RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN) != 0) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 401, "Unauthorized", "Invalid bearer token");
+  }
+
+  // Create and embody the item
+  const char* iePath = rscall_ie_dir_create();
+  if (iePath == NULL) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create inventory element directory");
+  }
+  if (0 != rscall_ie_set_epc(iePath, epc)) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set EPC");
+  }
+  if (0 != rscall_ie_set_access_passwd(iePath, apwd)) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set access password");
+  }
+  if (0 != rscall_ie_set_kill_passwd(iePath, kpwd)) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set kill password");
+  }
+  if (0 != rscall_ie_set_flags(iePath, "00")) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set flags");
+  }
+  if (0 != rscall_ie_drv_embody(iePath)) {
+    yyjson_doc_free(pJson);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to embody inventory element"); // TODO: Consider using 503 Service Unavailable ?
+  }
+
+  static h2o_generator_t generator = {NULL, NULL}; // TODO should we really have it static?
+  pReq->res.status = 200;
+  pReq->res.reason = "OK";
+  h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+  h2o_start_response(pReq, &generator);
+
+  const char* status = "success";
+  const char* message = "Inventory element embodied successfully";
+
+  // create json response
+  yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+  yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+  yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+  yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+  yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+  // add some data as sub-object
+  yyjson_mut_val* pItem = yyjson_mut_obj(pJsonResp);
+  yyjson_mut_obj_add_str(pJsonResp, pItem, "epc", epc);
+  // add item object to root
+  yyjson_mut_obj_add_val(pJsonResp, pRootResp, "item", pItem);
+
+  const char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+  assert(respText != NULL);
+  h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+  h2o_send(pReq, &body, 1, 1);
+
+  free((void*)respText);
+  yyjson_doc_free(pJson);
+  yyjson_mut_doc_free(pJsonResp);
+  return 0;
+}
+
 int mcapi_endpoint_ite(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-  
+  assert(pH2oHandler != NULL);
+  assert(pReq != NULL);
+  mcapi_t* pMcapi = __mcapi_self_from_h2o_handler(pH2oHandler);
+  if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+    return __mcapi_endpoint_ite_post(pH2oHandler, pReq, pMcapi);
+  } else {
+    return __mcapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+  }
+}
+
+static int __mcapi_endpoint_itq_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, mcapi_t* pMcapi) {
+  assert(pH2oHandler != NULL);
+  assert(pReq != NULL);
+  assert(pMcapi != NULL);
+  // TODO Figure out what RID can be sent to qps and implement qpcall and then this function
+  return __mcapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
 }
 
 int mcapi_endpoint_itq(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
-
+  assert(pH2oHandler != NULL);
+  assert(pReq != NULL);
+  mcapi_t* pMcapi = __mcapi_self_from_h2o_handler(pH2oHandler);
+  if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+    return __mcapi_endpoint_itq_post(pH2oHandler, pReq, pMcapi);
+  } else {
+    return __mcapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+  }
 }

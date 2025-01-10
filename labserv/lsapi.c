@@ -1455,7 +1455,11 @@ int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
-// curl -X PUT -d '{"rgid":<reagent id>, "dadd":"<date added>", "dexp": "<date expire>", "lid":<lab id>, "epc": "<epc>", "username":"<username>", "session_key":"<sesskey>"}'
+
+/**
+ * TODO should we really pass epc, apwd, kpwd instead of generate it? For now yes, as it seems to make debugging easier
+*/
+// curl -X PUT -d '{"rgid":<reagent id>, "dadd":"<date added>", "dexp": "<date expire>", "lid":<lab id>, "epc": "<epc>", "apwd": "<apwd>", "kpwd":"<kpwd>", "username":"<username>", "session_key":"<sesskey>"}'
 static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -1494,6 +1498,16 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_doc_free(pJson);
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid epc");
     }
+    yyjson_val* pApwd = yyjson_obj_get(pRoot, "apwd");
+    if (pApwd == NULL || !yyjson_is_str(pApwd)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid apwd");
+    }
+    yyjson_val* pKpwd = yyjson_obj_get(pRoot, "kpwd");
+    if (pKpwd == NULL || !yyjson_is_str(pKpwd)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid kpwd");
+    }
     yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
     if (pUsername == NULL || !yyjson_is_str(pUsername)) {
         yyjson_doc_free(pJson);
@@ -1510,10 +1524,12 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
     const char* dexp = yyjson_get_str(pDexp);
     int lid = yyjson_get_int(pLid);
     const char* epc = yyjson_get_str(pEpc);
+    const char* apwd = yyjson_get_str(pApwd);
+    const char* kpwd = yyjson_get_str(pKpwd);
     const char* username = yyjson_get_str(pUsername);
     const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
 
-    assert(rgid >= 0 && dadd != NULL && dexp != NULL && lid >= 0 && epc != NULL && username != NULL && userProvidedSessionKey != NULL);
+    assert(rgid >= 0 && dadd != NULL && dexp != NULL && lid >= 0 && epc != NULL && apwd != NULL && kpwd != NULL && username != NULL && userProvidedSessionKey != NULL);
 
     // get user data from database so that we can verify the session key
     db_user_t user;
@@ -1550,7 +1566,7 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
     db_inventory_item_t inventoryItem;
     char* rgid_str = __lsapi_itoa(rgid);
     char* lid_str = __lsapi_itoa(lid);
-    if (0 != db_inventory_insert_ret(pLsapi->pDb, rgid_str, dadd, dexp, lid_str, epc, &inventoryItem)) {
+    if (0 != db_inventory_insert_ret(pLsapi->pDb, rgid_str, dadd, dexp, lid_str, epc, apwd, kpwd, &inventoryItem)) {
         yyjson_doc_free(pJson);
         free(rgid_str);
         free(lid_str);
@@ -1899,7 +1915,7 @@ static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     free(rkt_str);
     free(rkp_str);
 
-    static h2o_generator_t generator = {NULL, NULL};
+    static h2o_generator_t generator = {NULL, NULL}; // TODO should we really have it static?
     pReq->res.status = 200;
     pReq->res.reason = "OK";
     h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
