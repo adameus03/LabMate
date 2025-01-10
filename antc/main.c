@@ -115,6 +115,8 @@ static int main_antx_read(antennactl_target_t ant, char* buffer, size_t size, of
   antennactl_get_target(__main_globals.pActl, &targetAnt);
   if (targetAnt == ant) {
     buffer[0] = '1';
+  } else {
+    buffer[0] = '0';
   }
   return 1;
 }
