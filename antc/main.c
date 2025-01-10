@@ -88,8 +88,10 @@ static int do_open( const char* path, struct fuse_file_info* fi ) {
 #if ANTENNACTL_HW_ARCH == ANTENNACTL_HW_ARCH_HMC349_DUAL
   if (!strcmp(path, "/ant0")) {
     fi->fh = ANTENNACTL_TARGET_T0;
+    return 0;
   } else if (!strcmp(path, "/ant1")) {
     fi->fh = ANTENNACTL_TARGET_T1;
+    return 0;
   }
 #endif
   if (strcmp(path, "/")) {
