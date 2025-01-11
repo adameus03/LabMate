@@ -28,7 +28,7 @@ void measurements_global_deinit(void) {
   LOG_V("measurements_global_deinit: __pMeasurement_global_mtx deinitialized");
 }
 
-void measurements_quick_perform(const int ieIndex, const int antNo, const int txPower, int* pRssi_out) {
+int measurements_quick_perform(const int ieIndex, const int antNo, const int txPower, int* pRssi_out) {
   assert(pRssi_out != NULL);
   assert(__pMeasurement_global_mtx != NULL);
   const char* iePath = rscall_ie_get_path(ieIndex);
@@ -44,21 +44,28 @@ void measurements_quick_perform(const int ieIndex, const int antNo, const int tx
 
   p_mutex_lock(__pMeasurement_global_mtx);
 
-  if (0 != acall_ant_set_enabled(antPath)) {
+  int rv = acall_ant_set_enabled(antPath);
+  if (0 != rv) {
     LOG_W("measurements_quick_perform: Failed to enable antNo %d", antNo);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);
-    return;
+    if (-1 == rv) {
+      return -10; // antNo doesn't exist
+    } else {
+      assert(0);
+      return rv;
+    }
   }
 
   *pRssi_out = 0;
-  if (0 != rscall_ie_drv_measure_quick(iePath, txPower)) {
+  rv = rscall_ie_drv_measure_quick(iePath, txPower);
+  if (0 != rv) {
     LOG_W("measurements_quick_perform: Failed to trigger quick measurement for antNo %d", antNo);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);
-    return;
+    return rv;
   }
   if (0 != rscall_ie_get_rssi(iePath, pRssi_out)) {
     LOG_E("measurements_quick_perform: Failed to get RSSI for ieIndex %d, antNo %d, txPower %d", ieIndex, antNo, txPower);
@@ -74,10 +81,10 @@ void measurements_quick_perform(const int ieIndex, const int antNo, const int tx
 
   LOG_V("measurements_quick_perform: RSSI for ieIndex %d, antNo %d, txPower %d: %d", ieIndex, antNo, txPower, *pRssi_out);
 
-  return;
+  return 0;
 }
 
-void measurements_dual_perform(const int ieIndex, const int antNo, const int txPower, int* pRssi_out, int* pReadRate_out) {
+int measurements_dual_perform(const int ieIndex, const int antNo, const int txPower, int* pRssi_out, int* pReadRate_out) {
   assert(pRssi_out != NULL);
   assert(__pMeasurement_global_mtx != NULL);
   const char* iePath = rscall_ie_get_path(ieIndex);
@@ -93,22 +100,29 @@ void measurements_dual_perform(const int ieIndex, const int antNo, const int txP
 
   p_mutex_lock(__pMeasurement_global_mtx);
 
-  if (0 != acall_ant_set_enabled(antPath)) {
+  int rv = acall_ant_set_enabled(antPath);
+  if (0 != rv) {
     LOG_W("measurements_quick_perform: Failed to enable antNo %d", antNo);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);
-    return;
+    if (-1 == rv) {
+      return -10; // antNo doesn't exist
+    } else {
+      assert(0);
+      return rv;
+    }
   }
 
   *pRssi_out = 0;
   *pReadRate_out = 0;
-  if (0 != rscall_ie_drv_measure_dual(iePath, txPower)) {
+  rv = rscall_ie_drv_measure_dual(iePath, txPower);
+  if (0 != rv) {
     LOG_W("measurements_quick_perform: Failed to trigger quick measurement for antNo %d", antNo);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);
-    return;
+    return rv;
   }
   if (0 != rscall_ie_get_rssi(iePath, pRssi_out)) {
     LOG_E("measurements_quick_perform: Failed to get RSSI for ieIndex %d, antNo %d, txPower %d", ieIndex, antNo, txPower);
@@ -131,5 +145,5 @@ void measurements_dual_perform(const int ieIndex, const int antNo, const int txP
 
   LOG_V("measurements_quick_perform: (RSSI, read rate) for ieIndex %d, antNo %d, txPower %d: (%d, %d)", ieIndex, antNo, txPower, *pRssi_out, *pReadRate_out);
 
-  return;
+  return 0;
 }

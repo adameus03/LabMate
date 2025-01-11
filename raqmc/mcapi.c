@@ -289,17 +289,33 @@ static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
   }
   if (mt != 0 && mt != 1) {
     yyjson_doc_free(pJson);
-    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Invalid measurement type");
+    return __mcapi_endpoint_error(pReq, 400, "Bad Request", "Invalid measurement type provided");
   }
 
   // Peform measurement
   int readings[2] = {0, 0};
   switch(mt) {
     case 0:
-      measurements_quick_perform(iei, antno, txp, &readings[0]);
+      int rv = measurements_quick_perform(iei, antno, txp, &readings[0]);
+      assert (rv == 0 || rv == -1 || rv == -10);
+      if (rv == -1) {
+        yyjson_doc_free(pJson);
+        return __mcapi_endpoint_error(pReq, 404, "Not Found", "Measurement (quick) failed because specified iei does not exist");
+      } else if (rv == -10) {
+        yyjson_doc_free(pJson);
+        return __mcapi_endpoint_error(pReq, 404, "Not Found", "Measurement (quick) failed because specified antno does not exist");
+      }
       break;
     case 1:
-      measurements_dual_perform(iei, antno, txp, &readings[0], &readings[1]);
+      rv = measurements_dual_perform(iei, antno, txp, &readings[0], &readings[1]);
+      assert (rv == 0 || rv == -1 || rv == -10);
+      if (rv == -1) {
+        yyjson_doc_free(pJson);
+        return __mcapi_endpoint_error(pReq, 404, "Not Found", "Measurement (dual) failed because specified iei does not exist");
+      } else if (rv == -10) {
+        yyjson_doc_free(pJson);
+        return __mcapi_endpoint_error(pReq, 404, "Not Found", "Measurement (dual) failed because specified antno does not exist");
+      }
       break;
     default:
       yyjson_doc_free(pJson);
