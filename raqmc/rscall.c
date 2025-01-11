@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <plibsys/plibsys.h>
 #include "config.h"
 
 #ifndef RSCALL_RSCS_MOUNT_PATH
@@ -183,6 +184,38 @@ int rscall_ie_set_epc(const char* iePath, const char* epc) {
   return __rscall_ie_set_x(iePath, "/epc", epc);
 }
 
+int rscall_ie_get_epc(const char* iePath, char** ppEpc) {
+  // Read from `epc`
+  const size_t iePathStrlen = strlen(iePath);
+  const char* epc_path_epilog = "/epc";
+  const size_t epc_path_epilog_strlen = strlen(epc_path_epilog);
+  char* epc_path = (char*)malloc(iePathStrlen + epc_path_epilog_strlen + 1);
+  assert(epc_path != NULL);
+  strcpy(epc_path, iePath);
+  strcpy(epc_path + iePathStrlen, epc_path_epilog);
+  epc_path[iePathStrlen + epc_path_epilog_strlen] = '\0';
+
+  FILE* epc_file = fopen(epc_path, "r");
+  if (epc_file == NULL) {
+    free((void*)epc_path);
+    return -1;
+  }
+  //TODO adjust buffer size?
+  char epc[129]; // We should not exceed 128 characters in epc as all we read is a natural number
+  if (fgets(epc, sizeof(epc), epc_file) == NULL) {
+    fclose(epc_file);
+    free((void*)epc_path);
+    return -2;
+  }
+  size_t epcStrlen = strlen(epc);
+  assert(epcStrlen > 0 && epcStrlen < 128); // If we have 128 characters, there is something going on wrong definitely
+  fclose(epc_file);
+
+  *ppEpc = p_strdup(epc);
+  free((void*)epc_path);
+  return 0;
+}
+
 int rscall_ie_set_flags(const char* iePath, const char* flags) {
   return __rscall_ie_set_x(iePath, "/flags", flags);
 }
@@ -230,7 +263,7 @@ int rscall_ie_get_rssi(const char* iePath, int* pRssi) {
   if (fgets(rssi, sizeof(rssi), rssi_file) == NULL) {
     fclose(rssi_file);
     free((void*)rssi_path);
-    return -1;
+    return -2;
   }
   size_t rssiStrlen = strlen(rssi);
   assert(rssiStrlen > 0 && rssiStrlen < 128); // If we have 128 characters, there is something going on wrong definitely
@@ -265,7 +298,7 @@ int rscall_ie_get_read_rate(const char* iePath, int* pReadRate) {
   if (fgets(read_rate, sizeof(read_rate), read_rate_file) == NULL) {
     fclose(read_rate_file);
     free((void*)read_rate_path);
-    return -1;
+    return -2;
   }
   size_t readRateStrlen = strlen(read_rate);
   assert(readRateStrlen > 0 && readRateStrlen < 128); // If we have 128 characters, there is something going on wrong definitely

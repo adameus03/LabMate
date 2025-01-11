@@ -32,6 +32,7 @@
 #include "h2o/http2.h"
 #include "h2o/memcached.h"
 #include <plibsys/plibsys.h>
+#include <curl/curl.h>
 
 #include "config.h"
 #include "mcapi.h"
@@ -230,6 +231,7 @@ int main(int argc, char **argv)
 {
     p_libsys_init();
     log_global_init();
+    curl_global_init(CURL_GLOBAL_ALL);
     measurements_global_init();
     mcapi_t* pMcapi = mcapi_new();
     mcapi_init(pMcapi);
@@ -301,6 +303,7 @@ Error:
     mcapi_deinit(pMcapi);
     mcapi_free(pMcapi);
     measurements_global_deinit();
+    curl_global_cleanup();
     log_global_deinit();
     p_libsys_shutdown();
     return 1;

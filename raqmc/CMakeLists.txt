@@ -100,6 +100,7 @@ pkg_check_modules(YYJSON REQUIRED yyjson)
 #pkg_check_modules(BCRYPT REQUIRED libbcrypt)
 pkg_check_modules(PLIBSYS REQUIRED plibsys)
 #pkg_check_modules(HIREDIS REQUIRED hiredis)
+pkg_check_modules(CURL REQUIRED libcurl)
 
 message(STATUS "libuv version is: ${UV_VERSION}")
 message(STATUS "openssl version is: ${OPENSSL_VERSION}")
@@ -110,6 +111,7 @@ message(STATUS "yyjson version is: ${YYJSON_VERSION}")
 #message(STATUS "libbcrypt version is: ${BCRYPT_VERSION}")
 message(STATUS "plibsys version is: ${PLIBSYS_VERSION}")
 #message(STATUS "hiredis version is:  ${HIREDIS_VERSION}")
+message(STATUS "libcurl version is: ${CURL_VERSION}")
 
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/plibsys)
 #include_directories(${CMAKE_CURRENT_SOURCE_DIR}/plibsys/src)
@@ -124,6 +126,7 @@ include_directories(
                     #${BCRYPT_INCLUDE_DIRS} 
                     ${PLIBSYS_INCLUDE_DIRS} 
                     #${HIREDIS_INCLUDE_DIRS}
+                    ${CURL_INCLUDE_DIRS}
 )
 
 add_executable(${CMAKE_PROJECT_NAME} 
@@ -134,7 +137,8 @@ add_executable(${CMAKE_PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/acall.c
     ${CMAKE_CURRENT_SOURCE_DIR}/qpcall.c
     ${CMAKE_CURRENT_SOURCE_DIR}/measurements.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/walker.c
 )
 
 #target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${UV_LIBRARIES} ${OPENSSL_LIBRARIES} ${H2O_LIBRARIES} ${YYJSON_LIBRARIES} ${PLIBSYS_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${UV_LIBRARIES} ${OPENSSL_LIBRARIES} ${H2O_LIBRARIES} ${YYJSON_LIBRARIES} ${PLIBSYS_LIBRARIES} ${CURL_LIBRARIES})

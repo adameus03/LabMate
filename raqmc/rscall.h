@@ -16,6 +16,11 @@ int rscall_ie_set_kill_passwd(const char* iePath, const char* passwd);
 
 int rscall_ie_set_epc(const char* iePath, const char* epc);
 
+/**
+ * @warning Output `ppEpc buffer needs to be freed with free() after use
+ */
+int rscall_ie_get_epc(const char* iePath, char** ppEpc);
+
 int rscall_ie_set_flags(const char* iePath, const char* flags);
 
 int rscall_ie_drv_embody(const char* iePath);
