@@ -7,8 +7,10 @@
 #define RAQMC_IP_PORT 7891
 #define RAQMC_H2O_ACCESS_LOG_FILE_PATH "/dev/stdout"
 //TODO Configure this token in a better place so that changing it doesn't require recompilation?
-#define RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN "<pre-shared-bearer-token>"
-#define RAQMC_LABSERV_HOST "<labserv-host>"
+#define RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN "we98nyqoidjacvhao;dwq"
+#define RAQMC_LKEY_HASH "xxx"
+#define RAQMC_LKEY_SALT "yyy"
+#define RAQMC_LABSERV_HOST "http://pc6.home:7890"
 
 /* RSCALL configuration */
 #define RSCALL_RSCS_MOUNT_PATH "/mnt/rscs"

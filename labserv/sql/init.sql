@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS public.labs(
 	name varchar NOT NULL,
 	bearer_token_hash varchar NOT NULL,
 	bearer_token_salt varchar NOT NULL,
+	lab_key varchar NOT NULL,
 	faculty_id int4 NOT NULL,
 	CONSTRAINT labs_pk PRIMARY KEY (lab_id),
 	CONSTRAINT labs_unique UNIQUE (name, faculty_id),

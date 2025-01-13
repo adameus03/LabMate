@@ -97,7 +97,7 @@ pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(H2O REQUIRED libh2o)
 pkg_check_modules(YYJSON REQUIRED yyjson)
 #pkg_check_modules(PQ REQUIRED libpq)
-#pkg_check_modules(BCRYPT REQUIRED libbcrypt)
+pkg_check_modules(BCRYPT REQUIRED libbcrypt)
 pkg_check_modules(PLIBSYS REQUIRED plibsys)
 #pkg_check_modules(HIREDIS REQUIRED hiredis)
 pkg_check_modules(CURL REQUIRED libcurl)
@@ -108,7 +108,7 @@ message(STATUS "openssl version is: ${OPENSSL_VERSION}")
 message(STATUS "libh2o version is: ${H2O_VERSION}")
 message(STATUS "yyjson version is: ${YYJSON_VERSION}")
 #message(STATUS "libpq version is: ${PQ_VERSION}")
-#message(STATUS "libbcrypt version is: ${BCRYPT_VERSION}")
+message(STATUS "libbcrypt version is: ${BCRYPT_VERSION}")
 message(STATUS "plibsys version is: ${PLIBSYS_VERSION}")
 #message(STATUS "hiredis version is:  ${HIREDIS_VERSION}")
 message(STATUS "libcurl version is: ${CURL_VERSION}")
@@ -123,7 +123,7 @@ include_directories(
                     ${H2O_INCLUDE_DIRS} 
                     ${YYJSON_INCLUDE_DIRS} 
                     #${PQ_INCLUDE_DIRS} 
-                    #${BCRYPT_INCLUDE_DIRS} 
+                    ${BCRYPT_INCLUDE_DIRS} 
                     ${PLIBSYS_INCLUDE_DIRS} 
                     #${HIREDIS_INCLUDE_DIRS}
                     ${CURL_INCLUDE_DIRS}
@@ -141,4 +141,4 @@ add_executable(${CMAKE_PROJECT_NAME}
 )
 
 #target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE plibsys)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${UV_LIBRARIES} ${OPENSSL_LIBRARIES} ${H2O_LIBRARIES} ${YYJSON_LIBRARIES} ${PLIBSYS_LIBRARIES} ${CURL_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${UV_LIBRARIES} ${BCRYPT_LIBRARIES} ${OPENSSL_LIBRARIES} ${H2O_LIBRARIES} ${YYJSON_LIBRARIES} ${PLIBSYS_LIBRARIES} ${CURL_LIBRARIES})

@@ -42,6 +42,7 @@ typedef struct db_lab {
   char* name;
   char* bearer_token_hash;
   char* bearer_token_salt;
+  char* lab_key;
   int faculty_id;
 } db_lab_t;
 
@@ -153,19 +154,23 @@ int db_faculty_get_by_id(db_t* pDb, const char* faculty_id_in, db_faculty_t* pFa
 int db_lab_insert(db_t* pDb, 
                   const char* name, 
                   const char* bearer_token_hash, 
-                  const char* bearer_token_salt, 
+                  const char* bearer_token_salt,
+                  const char* lab_key, 
                   const char* faculty_id);
 
 int db_lab_insert_ret(db_t* pDb, 
                       const char* name, 
                       const char* bearer_token_hash, 
                       const char* bearer_token_salt, 
+                      const char* lab_key,
                       const char* faculty_id, 
                       db_lab_t* pLab_out);
 
 int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out);
 
 int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out);
+
+//int db_lab_
 
 int db_inventory_insert(db_t* pDb, 
                         const char* reagent_id, 

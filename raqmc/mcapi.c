@@ -1,5 +1,6 @@
 #include "mcapi.h"
 #include <yyjson.h>
+#include <bcrypt/bcrypt.h>
 #include <assert.h>
 #include "config.h"
 #include "log.h"
@@ -126,8 +127,19 @@ static int __mcapi_endpoint_ite_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
 
   assert(epc != NULL && apwd != NULL && kpwd != NULL && btoken != NULL);
 
-  // Check bearer token
-  if (strcmp(btoken, RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN) != 0) {
+  // Check bearer token //<<<<
+  // if (strcmp(btoken, RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN) != 0) {
+  //   yyjson_doc_free(pJson);
+  //   return __mcapi_endpoint_error(pReq, 401, "Unauthorized", "Invalid bearer token");
+  // }
+  char serverProvidedKeyHash[BCRYPT_HASHSIZE];
+  assert(strlen(RAQMC_LKEY_HASH) == BCRYPT_HASHSIZE - 4);
+  assert(strlen(RAQMC_LKEY_SALT) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+  assert(0 == bcrypt_hashpw(btoken, RAQMC_LKEY_SALT, serverProvidedKeyHash));
+  assert(serverProvidedKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+  assert(strlen(serverProvidedKeyHash) == BCRYPT_HASHSIZE - 4);
+  LOG_V("__mcapi_endpoint_ite_post: serverProvidedKeyHash: %s, RAQMC_LKEY_HASH: %s, RAQMC_LKEY_SALT: %s", serverProvidedKeyHash, RAQMC_LKEY_HASH, RAQMC_LKEY_SALT);
+  if (0 != strcmp(serverProvidedKeyHash, RAQMC_LKEY_HASH)) {
     yyjson_doc_free(pJson);
     return __mcapi_endpoint_error(pReq, 401, "Unauthorized", "Invalid bearer token");
   }
@@ -270,7 +282,18 @@ static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
   assert(btoken != NULL);
 
   // Check bearer token
-  if (strcmp(btoken, RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN) != 0) {
+  // if (strcmp(btoken, RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN) != 0) {
+  //   yyjson_doc_free(pJson);
+  //   return __mcapi_endpoint_error(pReq, 401, "Unauthorized", "Invalid bearer token");
+  // }
+  char serverProvidedKeyHash[BCRYPT_HASHSIZE];
+  assert(strlen(RAQMC_LKEY_HASH) == BCRYPT_HASHSIZE - 4);
+  assert(strlen(RAQMC_LKEY_SALT) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+  assert(0 == bcrypt_hashpw(btoken, RAQMC_LKEY_SALT, serverProvidedKeyHash));
+  assert(serverProvidedKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+  assert(strlen(serverProvidedKeyHash) == BCRYPT_HASHSIZE - 4);
+  LOG_V("__mcapi_endpoint_itm_post: serverProvidedKeyHash: %s, RAQMC_LKEY_HASH: %s, RAQMC_LKEY_SALT: %s", serverProvidedKeyHash, RAQMC_LKEY_HASH, RAQMC_LKEY_SALT);
+  if (0 != strcmp(serverProvidedKeyHash, RAQMC_LKEY_HASH)) {
     yyjson_doc_free(pJson);
     return __mcapi_endpoint_error(pReq, 401, "Unauthorized", "Invalid bearer token");
   }

@@ -1311,7 +1311,7 @@ int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
-// curl -X PUT -d '{"lname":"<lab name>", "ltoken":"<lab token>", "fid":<faculty id>, "username":"<username>", "session_key":"<sesskey>"}'
+// curl -X PUT -d '{"lname":"<lab name>", "ltoken":"<lab token>", "lkey": "<lkey>", "fid":<faculty id>, "username":"<username>", "session_key":"<sesskey>"}'
 static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -1335,6 +1335,11 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
         yyjson_doc_free(pJson);
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid ltoken (lab token)");
     }
+    yyjson_val* pLkey = yyjson_obj_get(pRoot, "lkey");
+    if (pLkey == NULL || !yyjson_is_str(pLkey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid lkey");
+    }
     yyjson_val* pFid = yyjson_obj_get(pRoot, "fid");
     if (pFid == NULL || !yyjson_is_int(pFid)) {
         yyjson_doc_free(pJson);
@@ -1353,11 +1358,12 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
 
     const char* lName = yyjson_get_str(pLName);
     const char* lToken = yyjson_get_str(pLToken);
+    const char* lKey = yyjson_get_str(pLkey);
     int fid = yyjson_get_int(pFid);
     const char* username = yyjson_get_str(pUsername);
     const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
 
-    assert(lName != NULL && lToken != NULL && fid >= 0 && username != NULL && userProvidedSessionKey != NULL);
+    assert(lName != NULL && lToken != NULL && lKey != NULL && fid >= 0 && username != NULL && userProvidedSessionKey != NULL);
 
     // get user data from database so that we can verify the session key
     db_user_t user;
@@ -1403,7 +1409,7 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     // create lab + get lab data from database so that we can use it for the http response
     db_lab_t lab;
     char* fid_str = __lsapi_itoa(fid);
-    if (0 != db_lab_insert_ret(pLsapi->pDb, lName, lTokenHash, lTokenSalt, fid_str, &lab)) {
+    if (0 != db_lab_insert_ret(pLsapi->pDb, lName, lTokenHash, lTokenSalt, lKey, fid_str, &lab)) {
         yyjson_doc_free(pJson);
         free(fid_str);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create lab");
@@ -1757,12 +1763,24 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     return 0;
 }
 
+// Obtain a list of antennas for given lab's bearer token
+// curl -X POST -d '{"btoken": "<bearer token>"}'
+static int __lsapi_endpoint_antenna_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    // TODO implement this and a database fetcher <<<<<< 
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
 int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
         return __lsapi_endpoint_antenna_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_antenna_post(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
