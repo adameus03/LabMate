@@ -43,7 +43,7 @@ labserv (interpreter => /lib64/ld-linux-x86-64.so.2)
 This means that having libuv, libssl, libcrypto, libh2o, libpq, libbcrypt, libplibsys and libhiredis development packages should be enough to build and run labserv.
 Depending on your distribution, you may need to compile and install plibsys, h2o and libbcrypt from source (see Containerfile for hints). As for other packages you can usually install them from your package manager. For example, on Debian stable release (bookworm) you can install them with:
 ```shell
-$ sudo apt install libuv1-dev libssl3 libpq5 libhiredis 
+$ sudo apt install libuv1-dev libssl-dev libpq-dev libhiredis 
 ``` 
 It is assumed that you have the gcc compiler, make and cmake installed. If not, you can install them with:
 ```shell
