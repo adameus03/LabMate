@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS public.invm(
 	measurement_type int4 NULL,
 	rotator_ktheta int4 NULL,
 	rotator_kphi int4 NULL,
+	ztb_flag bool DEFAULT false NOT NULL,
 	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc),
 	FOREIGN KEY (antenna_id) REFERENCES public.antennas(antenna_id)
 );

@@ -83,6 +83,7 @@ typedef struct db_invm {
   int measurement_type;
   int rotator_ktheta; // For future when antennas can rotate
   int rotator_kphi; // For future when antennas can rotate
+  int ztb_flag;
 } db_invm_t;
 /**
  * @brief Create a new database driver instance
