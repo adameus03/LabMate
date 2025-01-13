@@ -37,6 +37,7 @@
 #include "config.h"
 #include "mcapi.h"
 #include "measurements.h"
+#include "walker.h"
 
 struct main_endpoint_handler_spawn_params {
     h2o_handler_t* pH2oHandler;
@@ -233,6 +234,13 @@ int main(int argc, char **argv)
     log_global_init();
     curl_global_init(CURL_GLOBAL_ALL);
     measurements_global_init();
+#if RAQMC_ENABLE_WALKER == 1
+    LOG_V("main: Creating walker thread");
+    walker_t* pWalker = walker_start_thread();
+    LOG_I("main: Walker thread created");
+#else 
+    LOG_W("main: Walker is disabled, because the program was compiled with RAQMC_ENABLE_WALKER=0 in config.h");
+#endif
     mcapi_t* pMcapi = mcapi_new();
     mcapi_init(pMcapi);
 
@@ -302,6 +310,10 @@ int main(int argc, char **argv)
 Error:
     mcapi_deinit(pMcapi);
     mcapi_free(pMcapi);
+#if RAQMC_ENABLE_WALKER == 1
+    walker_stop_thread(pWalker);
+    walker_free_resources(pWalker);
+#endif
     measurements_global_deinit();
     curl_global_cleanup();
     log_global_deinit();

@@ -11,11 +11,9 @@ typedef struct walker walker_t;
 
 /**
  * @brief Start a new walker instance in a separate thread
- * @note `pWalker` is expected to be NULL. It can be later used to stop the walker thread. 
- * @warning Does not free `pWalker` resources allocated by `walker_start_thread`. You should call `walker_free_resources` to free them.
- * @warning `walker_init_antenna_table` should be called before calling this function
+ * @warning You should free resources by calling `walker_free_resources` on the returned pointer. It is recommended to call `walker_stop_thread` before freeing resources.
  */
-void walker_start_thread(walker_t* pWalker);
+walker_t* walker_start_thread(void);
 
 /**
  * @warning Does not free `pWalker` resources allocated by `walker_start_thread`. You should call `walker_free_resources` to free them.

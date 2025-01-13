@@ -151,14 +151,14 @@ static void* walker_task(void* pArg) {
 //   assert(0);
 // }
 
-void walker_start_thread(walker_t* pWalker) {
-  assert(pWalker == NULL);
-  pWalker = (walker_t*)malloc(sizeof(walker_t));
+walker_t* walker_start_thread(void) {
+  walker_t* pWalker = (walker_t*)malloc(sizeof(walker_t));
   assert(pWalker != NULL);
   pWalker->pCurl = curl_easy_init();
   assert(pWalker->pCurl != NULL);
   pWalker->pWalkerThread = p_uthread_create(walker_task, (void*)pWalker, TRUE, "walker_task");
   assert(pWalker->pWalkerThread != NULL);
+  return pWalker;
 }
 
 void walker_stop_thread(walker_t* pWalker) {
