@@ -5,8 +5,9 @@ typedef struct walker walker_t;
 
 /**
  * @brief Fetch the antenna table from the labserv host endpoint
+ * @note OBSOLETE (now antno is sent instead of ant_id during measurement transmission)
  */
-void walker_init_antenna_table(walker_t* pWalker);
+//void walker_init_antenna_table(walker_t* pWalker);
 
 /**
  * @brief Start a new walker instance in a separate thread

@@ -9,13 +9,12 @@
 #include "rscall.h"
 
 #define WALKER_TRANSMIT_READINGS_ENDPOINT_URL RAQMC_LABSERV_HOST "/api/invm"
-#define WALKER_MAX_ANTENNAS 100 /* Sorry for hard-coding buffer size. TODO make it dynamic in future if needed*/
 
 struct walker {
   PUThread* pWalkerThread;
   CURL* pCurl;
-  int antTab[WALKER_MAX_ANTENNAS]; //TODO what if foreign lab's aids get here?
-  size_t antTabLen;
+  //int antTab[WALKER_MAX_ANTENNAS]; //what if foreign lab's aids get here?
+  //size_t antTabLen;
   puint8 flags;
 };
 
@@ -60,10 +59,10 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   char* epc = NULL;
   assert(0 == rscall_ie_get_epc(iePath, &epc));
   yyjson_mut_obj_add_str(pJson, pRoot, "epc", epc);
-  assert(pWalker->antTab != NULL);
-  assert(antNo < pWalker->antTabLen);
-  const int antId = pWalker->antTab[antNo];
-  yyjson_mut_obj_add_int(pJson, pRoot, "aid", antId);
+  //assert(pWalker->antTab != NULL);
+  //assert(antNo < pWalker->antTabLen);
+  //const int antId = pWalker->antTab[antNo];
+  yyjson_mut_obj_add_int(pJson, pRoot, "an", antNo);
   yyjson_mut_obj_add_int(pJson, pRoot, "rxss", rssi);
   yyjson_mut_obj_add_int(pJson, pRoot, "rxrate", readRate);
   yyjson_mut_obj_add_int(pJson, pRoot, "txp", txp);
@@ -108,9 +107,9 @@ static void* walker_task(void* pArg) {
     while (!walker_flags_get_should_die(pWalker)) { //loop over inventory
       int should_break_inventory_looper = 0;
       while (!walker_flags_get_should_die(pWalker)) { //loop over antennas
-        if (antNo >= pWalker->antTabLen) {
-          break;
-        }
+        // if (antNo >= pWalker->antTabLen) {
+        //   break;
+        // }
         int should_break_antenna_looper = 0;
         int rv = measurements_quick_perform(ieIndex, antNo, txPower, &rssi);
         if (0 == rv) {
@@ -148,10 +147,9 @@ static void* walker_task(void* pArg) {
   return NULL;
 }
 
-void walker_init_antenna_table(walker_t* pWalker) {
-  assert(0); //Not implemented
-  //TODO Implement <<<<<<
-}
+// void walker_init_antenna_table(walker_t* pWalker) {
+//   assert(0);
+// }
 
 void walker_start_thread(walker_t* pWalker) {
   assert(pWalker == NULL);

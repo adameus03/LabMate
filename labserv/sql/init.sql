@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS public.antennas(
 CREATE TABLE IF NOT EXISTS public.invm(
 	"time" TIMESTAMPTZ NOT NULL,
 	inventory_epc TEXT NOT NULL,
-	antenna_id int4 NOT NULL,
+	--antenna_id int4 NOT NULL,
+	antno int4 NOT NULL,
 	rx_signal_strength int4 NULL,
 	read_rate int4 NULL,
 	tx_power int4 NULL,

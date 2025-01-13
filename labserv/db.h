@@ -75,7 +75,7 @@ typedef struct db_antenna {
 typedef struct db_invm {
   char* time;
   char* inventory_epc;
-  int antenna_id;
+  int antno;
   int rx_signal_strength;
   int read_rate;
   int tx_power;
@@ -211,7 +211,7 @@ int db_antenna_get_by_id(db_t* pDb, const char* antenna_id_in, db_antenna_t* pAn
 int db_invm_insert(db_t* pDb, 
                    const char* time, 
                    const char* inventory_epc, 
-                   const char* antenna_id, 
+                   const char* antno, 
                    const char* rx_signal_strength, 
                    const char* read_rate, 
                    const char* tx_power, 
@@ -223,7 +223,7 @@ int db_invm_insert(db_t* pDb,
 int db_invm_insert_ret(db_t* pDb, 
                        const char* time, 
                        const char* inventory_epc, 
-                       const char* antenna_id, 
+                       const char* antno,
                        const char* rx_signal_strength, 
                        const char* read_rate, 
                        const char* tx_power, 
