@@ -1373,7 +1373,8 @@ static db_inventory_item_t db_inventory_item_clone(db_inventory_item_t dbInvento
     .lab_id = dbInventoryItem.lab_id,
     .epc = p_strdup(dbInventoryItem.epc),
     .apwd = p_strdup(dbInventoryItem.apwd),
-    .kpwd = p_strdup(dbInventoryItem.kpwd)
+    .kpwd = p_strdup(dbInventoryItem.kpwd),
+    .basepoint_id = dbInventoryItem.basepoint_id
   };
 }
 
@@ -1411,7 +1412,7 @@ int db_inventory_insert_ret(db_t* pDb,
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     exit(EXIT_FAILURE);
   }
-  if (PQnfields(pResult) != 8) {
+  if (PQnfields(pResult) != 9) { // basepoint_id is an additional field
     LOG_E("db_inventory_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
@@ -1427,6 +1428,7 @@ int db_inventory_insert_ret(db_t* pDb,
   inventoryItem.epc = PQgetvalue(pResult, 0, 5);
   inventoryItem.apwd = PQgetvalue(pResult, 0, 6);
   inventoryItem.kpwd = PQgetvalue(pResult, 0, 7);
+  inventoryItem.basepoint_id = atoi(PQgetvalue(pResult, 0, 8));
 
   *pInventoryItem_out = db_inventory_item_clone(inventoryItem);
 
@@ -1496,6 +1498,24 @@ int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_
   const char* pQuery = "SELECT * FROM public.inventory WHERE inventory_id = $1";
   const char* pParams[1] = {inventory_id_in};
   return db_inventory_get_by_x(pDb, pQuery, pParams, 1, pInventoryItem_out);
+}
+
+int db_inventory_set_embodied(db_t* pDb, const char* inventory_id) {
+  assert(pDb != NULL);
+  assert(inventory_id != NULL);
+  const char* pQuery = "UPDATE public.inventory SET is_embodied = true WHERE inventory_id = $1";
+  const char* pParams[1] = {inventory_id};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_inventory_set_embodied: Failed to set inventory item as embodied (inventory_id \"%s\"): %s", inventory_id, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
 }
 
 int db_antenna_insert(db_t* pDb, 

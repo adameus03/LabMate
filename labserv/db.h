@@ -63,6 +63,7 @@ typedef struct db_inventory_item {
   char* epc;
   char* apwd;
   char* kpwd;
+  int basepoint_id;
 } db_inventory_item_t;
 
 typedef struct db_antenna {
@@ -217,6 +218,8 @@ int db_inventory_insert_ret(db_t* pDb,
                                  db_inventory_item_t* pInventoryItem_out);                        
 
 int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_item_t* pInventoryItem_out);
+
+int db_inventory_set_embodied(db_t* pDb, const char* inventory_id);
 
 int db_antenna_insert(db_t* pDb, 
                       const char* name, 

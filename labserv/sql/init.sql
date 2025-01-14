@@ -67,9 +67,19 @@ CREATE TABLE IF NOT EXISTS public.labs(
 	CONSTRAINT faculty_id_fk FOREIGN KEY (faculty_id) REFERENCES public.faculties(faculty_id)
 );
 
+CREATE TABLE IF NOT EXISTS public.basepoints(
+	basepoint_id serial4 NOT NULL,
+	x int4 NOT NULL,
+	y int4 NOT NULL,
+	z int4 NOT NULL,
+	is_virtual bool NOT NULL DEFAULT false,
+	lab_id int4 NOT NULL,
+	CONSTRAINT basepoints_pk PRIMARY KEY (basepoint_id)
+);
+
 CREATE TABLE IF NOT EXISTS public.inventory(
 	inventory_id serial4 NOT NULL,
-	reagent_id int4 NOT NULL,
+	reagent_id int4 NULL,
 	date_added date NOT NULL,
 	date_expire date NULL,
 	lab_id int4 NOT NULL,
@@ -77,10 +87,12 @@ CREATE TABLE IF NOT EXISTS public.inventory(
 	apwd TEXT NOT NULL,
 	kpwd TEXT NOT NULL,
 	is_embodied bool NOT NULL DEFAULT false,
+	basepoint_id int4 NULL,
 	CONSTRAINT inventory_pk PRIMARY KEY (inventory_id),
 	CONSTRAINT inventory_unique UNIQUE (epc),
 	CONSTRAINT reagent_id_fk FOREIGN KEY (reagent_id) REFERENCES public.reagents(reagent_id),
-	CONSTRAINT lab_id_fk FOREIGN KEY (lab_id) REFERENCES public.labs(lab_id)
+	CONSTRAINT lab_id_fk FOREIGN KEY (lab_id) REFERENCES public.labs(lab_id),
+	CONSTRAINT basepoint_id_fk FOREIGN KEY (basepoint_id) REFERENCES public.basepoints(basepoint_id)
 );
 
 -- Antennas
@@ -109,7 +121,7 @@ CREATE TABLE IF NOT EXISTS public.invm(
 	measurement_type int4 NULL,
 	rotator_ktheta int4 NULL,
 	rotator_kphi int4 NULL,
-	ztb_flag bool DEFAULT false NOT NULL,
+	--ztb_flag bool DEFAULT false NOT NULL,
 	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc)
 	--FOREIGN KEY (antenna_id) REFERENCES public.antennas(antenna_id)
 );

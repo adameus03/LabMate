@@ -7,6 +7,7 @@
 #include "config.h"
 #include "log.h"
 #include "db.h"
+#include "oph.h"
 
 struct lsapi {
     db_t* pDb;
@@ -1644,12 +1645,211 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
     return 0;
 }
 
+static int __lsapi_endpoint_inventory_post_action_embody(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi, const int iid) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    assert(iid >= 0);
+    // Obtain inventory item data
+    db_inventory_item_t inventoryItem;
+    char* iid_str = __lsapi_itoa(iid);
+    int rv = db_inventory_get_by_id(pLsapi->pDb, iid_str, &inventoryItem);
+    free(iid_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "Inventory item not found");
+        } else {
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get inventory item data from database");
+        }
+    }
+    // Obtain lab data
+    // TODO use a single query to optimize database load?
+    db_lab_t lab;
+    char* lid_str = __lsapi_itoa(inventoryItem.lab_id);
+    rv = db_lab_get_by_id(pLsapi->pDb, lid_str, &lab);
+    free(lid_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Lab not found (unexpected issue !)");
+        } else {
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get lab data from database");
+        }
+    }
+    
+    //Communicate with on-premise server
+    oph_t* pOph = oph_create(lab.host, lab.lab_key);
+    assert(pOph != NULL);
+    rv = oph_trigger_embodiment(pOph, inventoryItem.epc, inventoryItem.apwd, inventoryItem.kpwd);
+    switch (rv) {
+        case 0:
+            break;
+        case -1:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because the server ran out of memory (poor server)");
+        case -2:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of a network issue");
+        case -3:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of a missing host response");
+        case -4:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-4)");
+        case -5:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-5)");
+        case -6:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-6)");
+        case -7:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-7)");
+        case -8:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 503, "Service Unavailable", "Resource temporarily unavailable");
+        default:
+            oph_destroy(pOph);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an unknown issue (unexpected)");
+    }
+    oph_destroy(pOph);
+
+    // update inventory item data in database
+    iid_str = __lsapi_itoa(iid);
+    rv = db_inventory_set_embodied(pLsapi->pDb, iid_str);
+    free(iid_str);
+    if (0 != rv) {
+        LOG_E("__lsapi_endpoint_inventory_post_action_embody: Failed to update inventory item data in database. Data may be inconsistent with on-premise server (embodiment was successful...)!!! Manual intervention required."); // TODO Handle this case gracefully if possible? / Send an email to admin?
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to update inventory item data in database. Data may be inconsistent with on-premise server (embodiment was successful...). Please contact the administrator.");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Inventory item embodied successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+static int __lsapi_endpoint_inventory_post_action_print(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi, const int iid) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    assert(iid >= 0);
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+// curl -X POST -d '{"action": "<embody|print>", "iid": <reagid>, "username":"<username>", "session_key":"<sesskey>"}'
+static int __lsapi_endpoint_inventory_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pAction = yyjson_obj_get(pRoot, "action");
+    if (pAction == NULL || !yyjson_is_str(pAction)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid action");
+    }
+    yyjson_val* pIid = yyjson_obj_get(pRoot, "iid");
+    if (pIid == NULL || !yyjson_is_int(pIid)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid iid (inventory item id)");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pSessionKey = yyjson_obj_get(pRoot, "session_key");
+    if (pSessionKey == NULL || !yyjson_is_str(pSessionKey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid session_key in request body");
+    }
+
+    const char* action = yyjson_get_str(pAction);
+    const int iid = yyjson_get_int(pIid);
+    const char* username = yyjson_get_str(pUsername);
+    const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
+
+    assert(action != NULL && username != NULL && iid >= 0 && userProvidedSessionKey != NULL);
+
+    // get user data from database so that we can verify the session key
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "User not found");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    // verify session key
+    char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
+    assert(user.sesskey_hash != NULL);
+    assert(strlen(user.sesskey_hash) == BCRYPT_HASHSIZE - 4);
+    assert(user.sesskey_salt != NULL);
+    assert(strlen(user.sesskey_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+
+    assert(0 == bcrypt_hashpw(userProvidedSessionKey, user.sesskey_salt, userProvidedSessionKeyHash));
+    assert(userProvidedSessionKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedSessionKeyHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_inventory_post: user-provided session key: %s", userProvidedSessionKey);
+    LOG_V("__lsapi_endpoint_inventory_post: userProvidedSessionKeyHash: %s, user.sesskey_hash: %s, user.sesskey_salt: %s", userProvidedSessionKeyHash, user.sesskey_hash, user.sesskey_salt);
+
+    if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
+    }
+
+    //action strategy
+    if (0 == strcmp(action, "embody")) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_inventory_post_action_embody(pH2oHandler, pReq, pLsapi, iid);
+    } else if (0 == strcmp(action, "print")) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_inventory_post_action_print(pH2oHandler, pReq, pLsapi, iid);
+    } else {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid action");
+    }
+}
+
 int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
         return __lsapi_endpoint_inventory_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_inventory_post(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
