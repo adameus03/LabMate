@@ -147,7 +147,11 @@ static int __rscall_ie_set_x(const char* iePath, const char* xPathEpilog, const 
     assert(0);
     return -2;
   }
-  assert(0 == fclose(x_file));
+  int rv = fclose(x_file);
+  if (rv != 0) {
+    LOG_E("__rsccall_ie_set_x: fclose (path: %s) failed with %d", x_path, rv);
+  }
+  assert(0 == rv);
   return 0;
 }
 
