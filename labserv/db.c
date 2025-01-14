@@ -360,6 +360,63 @@ static int __db_exec_script(PGconn* pConn, const char* script_path) {
   return 0;
 }
 
+void db_user_free(db_user_t* pUser) {
+  assert(pUser != NULL);
+  free(pUser->passwd_hash);
+  free(pUser->ip_addr);
+  free(pUser->registration_date);
+  free(pUser->last_login_date);
+  free(pUser->username);
+  free(pUser->first_name);
+  free(pUser->last_name);
+  free(pUser->bio);
+  free(pUser->email);
+  free(pUser->email_verification_token_hash);
+  free(pUser->sesskey_hash); 
+  free(pUser->last_usr_chng_date);
+  free(pUser->sesskey_salt);
+  free(pUser->passwd_salt);
+  free(pUser->email_verification_token_salt);
+}
+void db_faculty_free(db_faculty_t* pFaculty) {
+  assert(pFaculty != NULL);
+  free(pFaculty->name);
+  free(pFaculty->email_domain);
+}
+void db_reagent_type_free(db_reagent_type_t* pReagentType) {
+  assert(pReagentType != NULL);
+  free(pReagentType->name);
+}
+void db_lab_free(db_lab_t* pLab) {
+  assert(pLab != NULL);
+  free(pLab->name);
+  free(pLab->bearer_token_hash);
+  free(pLab->bearer_token_salt);
+  free(pLab->lab_key);
+  free(pLab->host);
+}
+void db_reagent_free(db_reagent_t* pReagent) {
+  assert(pReagent != NULL);
+  free(pReagent->name);
+  free(pReagent->vendor);
+}
+void db_inventory_item_free(db_inventory_item_t* pInventoryItem) {
+  assert(pInventoryItem != NULL);
+  free(pInventoryItem->date_added);
+  free(pInventoryItem->date_expire);
+  free(pInventoryItem->epc);
+  free(pInventoryItem->apwd);
+  free(pInventoryItem->kpwd);
+}
+void db_antenna_free(db_antenna_t* pAntenna) {
+  assert(pAntenna != NULL);
+  free(pAntenna->name);
+  free(pAntenna->info);
+}
+void db_invm_free(db_invm_t* pInvm) {
+  assert(pInvm != NULL);
+  free(pInvm->inventory_epc);
+}
 
 void db_init(db_t* pDb) {
   assert(pDb != NULL);

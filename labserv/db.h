@@ -87,6 +87,16 @@ typedef struct db_invm {
   int rotator_kphi; // For future when antennas can rotate
   int ztb_flag;
 } db_invm_t;
+
+void db_user_free(db_user_t* pUser);
+void db_faculty_free(db_faculty_t* pFaculty);
+void db_reagent_type_free(db_reagent_type_t* pReagentType);
+void db_lab_free(db_lab_t* pLab);
+void db_reagent_free(db_reagent_t* pReagent);
+void db_inventory_item_free(db_inventory_item_t* pInventoryItem);
+void db_antenna_free(db_antenna_t* pAntenna);
+void db_invm_free(db_invm_t* pInvm);
+
 /**
  * @brief Create a new database driver instance
  */

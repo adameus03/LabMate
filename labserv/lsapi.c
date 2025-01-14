@@ -346,6 +346,7 @@ static int __lsapi_endpoint_user_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
     free(email_verif_token);
+    db_user_free(&user);
     return 0;
 }
 
@@ -452,6 +453,7 @@ static int __lsapi_endpoint_user_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     free(userIdParamValueNt);
     free((void*)respText);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
     return 0;
 }
 
@@ -606,6 +608,7 @@ static int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req
     if (0 != strcmp(userProvidedTokenHash, user.email_verification_token_hash)) {
         free(tokenParamValueNt);
         free(usernameParamValueNt);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid token");
     }
 
@@ -613,12 +616,14 @@ static int __lsapi_endpoint_email_verify_get(h2o_handler_t* pH2oHandler, h2o_req
     if (0 != db_user_set_email_verified(pLsapi->pDb, user.username)) {
         free(tokenParamValueNt);
         free(usernameParamValueNt);
+        db_user_free(&user);
         LOG_E("__lsapi_endpoint_email_verify_get: Failed to update user data in database while trying to mark user as email-verified");
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to update user data in database");
     }
 
     free(tokenParamValueNt);
     free(usernameParamValueNt);
+    db_user_free(&user);
 
     //Redirect to email-verification.html (which automatically redirects to login.html after a timeout)
     pReq->res.status = 303;
@@ -714,11 +719,13 @@ static int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 != strcmp(userProvidedPwdHash, user.passwd_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid password");
     }
     // If user is not email-verified, we don't allow login
     if (!user.is_email_verified) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Email not verified");
     }
 
@@ -726,6 +733,7 @@ static int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     char* session_token = __lsapi_generate_token();
     if (session_token == NULL) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to generate session token. Poor server");
     }
 
@@ -745,6 +753,7 @@ static int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     if (0 != db_user_set_session(pLsapi->pDb, username, session_token_hash, session_token_salt)) {
         free(session_token);
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set session credentials in database");
     }
 
@@ -783,6 +792,7 @@ static int __lsapi_endpoint_session_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
     free(session_token);
+    db_user_free(&user);
     return 0;
 }
 
@@ -830,6 +840,7 @@ static int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -845,12 +856,14 @@ static int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
     // delete session credentials in database
     if (0 != db_user_unset_session(pLsapi->pDb, username)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to delete session credentials in database");
     }
 
@@ -878,6 +891,7 @@ static int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
     return 0;
 }
 
@@ -976,6 +990,7 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -994,6 +1009,7 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
@@ -1001,6 +1017,7 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
     db_reagent_type_t reagent_type;
     if (0 != db_reagent_type_insert_ret(pLsapi->pDb, rtName, &reagent_type)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create reagent type");
     }
 
@@ -1034,6 +1051,8 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
+    db_reagent_type_free(&reagent_type);
     return 0;
 }
 
@@ -1125,6 +1144,7 @@ static int __lsapi_endpoint_reagent_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -1143,6 +1163,7 @@ static int __lsapi_endpoint_reagent_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
@@ -1152,6 +1173,7 @@ static int __lsapi_endpoint_reagent_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     if (0 != db_reagent_insert_ret(pLsapi->pDb, rName, vendor, rtid_str, &reagent)) {
         yyjson_doc_free(pJson);
         free(rtid_str);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create reagent");
     }
     free(rtid_str);
@@ -1188,6 +1210,8 @@ static int __lsapi_endpoint_reagent_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
+    db_reagent_free(&reagent);
     return 0;
 }
 
@@ -1278,6 +1302,7 @@ static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -1296,6 +1321,7 @@ static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
@@ -1303,6 +1329,7 @@ static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     db_faculty_t faculty;
     if (0 != db_faculty_insert_ret(pLsapi->pDb, fName, feDomain, &faculty)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create faculty");
     }
 
@@ -1337,6 +1364,8 @@ static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
+    db_faculty_free(&faculty);
     return 0;
 }
 
@@ -1426,6 +1455,7 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -1444,6 +1474,7 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
@@ -1463,6 +1494,7 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     if (0 != db_lab_insert_ret(pLsapi->pDb, lName, lTokenHash, lTokenSalt, lKey, host, fid_str, &lab)) {
         yyjson_doc_free(pJson);
         free(fid_str);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create lab");
     }
     free(fid_str);
@@ -1499,6 +1531,8 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
+    db_lab_free(&lab);
     return 0;
 }
 
@@ -1604,6 +1638,7 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -1622,6 +1657,7 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
@@ -1633,6 +1669,7 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_doc_free(pJson);
         free(rgid_str);
         free(lid_str);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create inventory item");
     }
     free(rgid_str);
@@ -1672,6 +1709,7 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
     return 0;
 }
 
@@ -1715,30 +1753,39 @@ static int __lsapi_endpoint_inventory_post_action_embody(h2o_handler_t* pH2oHand
             break;
         case -1:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because the server ran out of memory (poor server)");
         case -2:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of a network issue");
         case -3:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of a missing host response");
         case -4:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-4)");
         case -5:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-5)");
         case -6:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-6)");
         case -7:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an invalid host response (-7)");
         case -8:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 503, "Service Unavailable", "Resource temporarily unavailable");
         default:
             oph_destroy(pOph);
+            db_lab_free(&lab);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create request to on-premise server, because of an unknown issue (unexpected)");
     }
     oph_destroy(pOph);
@@ -1749,6 +1796,7 @@ static int __lsapi_endpoint_inventory_post_action_embody(h2o_handler_t* pH2oHand
     free(iid_str);
     if (0 != rv) {
         LOG_E("__lsapi_endpoint_inventory_post_action_embody: Failed to update inventory item data in database. Data may be inconsistent with on-premise server (embodiment was successful...)!!! Manual intervention required."); // TODO Handle this case gracefully if possible? / Send an email to admin?
+        db_lab_free(&lab);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to update inventory item data in database. Data may be inconsistent with on-premise server (embodiment was successful...). Please contact the administrator.");
     }
 
@@ -1775,6 +1823,7 @@ static int __lsapi_endpoint_inventory_post_action_embody(h2o_handler_t* pH2oHand
 
     free((void*)respText);
     yyjson_mut_doc_free(pJsonResp);
+    db_lab_free(&lab);
     return 0;
 }
 
@@ -1843,6 +1892,7 @@ static int __lsapi_endpoint_inventory_post(h2o_handler_t* pH2oHandler, h2o_req_t
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -1861,18 +1911,22 @@ static int __lsapi_endpoint_inventory_post(h2o_handler_t* pH2oHandler, h2o_req_t
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
     //action strategy
     if (0 == strcmp(action, "embody")) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_inventory_post_action_embody(pH2oHandler, pReq, pLsapi, iid);
     } else if (0 == strcmp(action, "print")) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_inventory_post_action_print(pH2oHandler, pReq, pLsapi, iid);
     } else {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid action");
     }
 }
@@ -1959,6 +2013,7 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 == strlen(user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
@@ -1977,6 +2032,7 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 
     if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
         yyjson_doc_free(pJson);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
     }
 
@@ -1988,6 +2044,7 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
         yyjson_doc_free(pJson);
         free(k_str);
         free(lid_str);
+        db_user_free(&user);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create antenna");
     }
     free(k_str);
@@ -2026,6 +2083,8 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
+    db_antenna_free(&antenna);
     return 0;
 }
 
@@ -2164,6 +2223,7 @@ static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
 
     if (0 != strcmp(lbTokenHash, lab.bearer_token_hash)) {
         yyjson_doc_free(pJson);
+        db_lab_free(&lab);
         return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid lab bearer token");
     }
 
@@ -2187,6 +2247,7 @@ static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
         free(mtype_str);
         free(rkt_str);
         free(rkp_str);
+        db_lab_free(&lab);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to insert inventory measurement");
     }
     free(an_str);
@@ -2236,6 +2297,8 @@ static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     free((void*)respText);
     yyjson_doc_free(pJson);
     yyjson_mut_doc_free(pJsonResp);
+    db_lab_free(&lab);
+    db_invm_free(&invm);
     return 0;
 }
 
