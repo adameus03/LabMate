@@ -63,6 +63,7 @@ typedef struct db_inventory_item {
   char* epc;
   char* apwd;
   char* kpwd;
+  int is_embodied;
   int basepoint_id;
 } db_inventory_item_t;
 

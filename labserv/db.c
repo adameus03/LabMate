@@ -1350,7 +1350,7 @@ static int db_lab_get_by_x(db_t* pDb,
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     return -3; // Multiple labs found
   }
-  if (PQnfields(pResult) != 5) {
+  if (PQnfields(pResult) != 7) {
     LOG_E("db_lab_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
@@ -1363,7 +1363,8 @@ static int db_lab_get_by_x(db_t* pDb,
   lab.bearer_token_hash = PQgetvalue(pResult, 0, 2);
   lab.bearer_token_salt = PQgetvalue(pResult, 0, 3);
   lab.lab_key = PQgetvalue(pResult, 0, 4);
-  lab.faculty_id = atoi(PQgetvalue(pResult, 0, 5));
+  lab.host = PQgetvalue(pResult, 0, 5);
+  lab.faculty_id = atoi(PQgetvalue(pResult, 0, 6));
 
   *pLab_out = db_lab_clone(lab);
 
@@ -1431,6 +1432,7 @@ static db_inventory_item_t db_inventory_item_clone(db_inventory_item_t dbInvento
     .epc = p_strdup(dbInventoryItem.epc),
     .apwd = p_strdup(dbInventoryItem.apwd),
     .kpwd = p_strdup(dbInventoryItem.kpwd),
+    .is_embodied = dbInventoryItem.is_embodied,
     .basepoint_id = dbInventoryItem.basepoint_id
   };
 }
@@ -1469,7 +1471,7 @@ int db_inventory_insert_ret(db_t* pDb,
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     exit(EXIT_FAILURE);
   }
-  if (PQnfields(pResult) != 9) { // basepoint_id is an additional field
+  if (PQnfields(pResult) != 10) { // there are additional fields
     LOG_E("db_inventory_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
@@ -1485,7 +1487,8 @@ int db_inventory_insert_ret(db_t* pDb,
   inventoryItem.epc = PQgetvalue(pResult, 0, 5);
   inventoryItem.apwd = PQgetvalue(pResult, 0, 6);
   inventoryItem.kpwd = PQgetvalue(pResult, 0, 7);
-  inventoryItem.basepoint_id = atoi(PQgetvalue(pResult, 0, 8));
+  inventoryItem.is_embodied = PQgetvalue(pResult, 0, 8)[0] == 't' ? 1 : 0;
+  inventoryItem.basepoint_id = atoi(PQgetvalue(pResult, 0, 9));
 
   *pInventoryItem_out = db_inventory_item_clone(inventoryItem);
 
@@ -1526,7 +1529,7 @@ static int db_inventory_get_by_x(db_t* pDb,
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     return -3; // Multiple inventories found
   }
-  if (PQnfields(pResult) != 6) {
+  if (PQnfields(pResult) != 10) {
     LOG_E("db_inventory_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
@@ -1540,6 +1543,10 @@ static int db_inventory_get_by_x(db_t* pDb,
   inventoryItem.date_expire = PQgetvalue(pResult, 0, 3);
   inventoryItem.lab_id = atoi(PQgetvalue(pResult, 0, 4));
   inventoryItem.epc = PQgetvalue(pResult, 0, 5);
+  inventoryItem.apwd = PQgetvalue(pResult, 0, 6);
+  inventoryItem.kpwd = PQgetvalue(pResult, 0, 7);
+  inventoryItem.is_embodied = PQgetvalue(pResult, 0, 8)[0] == 't' ? 1 : 0;
+  inventoryItem.basepoint_id = atoi(PQgetvalue(pResult, 0, 9));
 
   *pInventoryItem_out = db_inventory_item_clone(inventoryItem);
 
