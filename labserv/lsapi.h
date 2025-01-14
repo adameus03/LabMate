@@ -65,6 +65,11 @@ int lsapi_endpoint_reagtype(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
 /**
+ * @brief Handle LSAPI reagents endpoint
+ */
+int lsapi_endpoint_reagents(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
  * @brief Handle LSAPI faculty endpoint
  */
 int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);

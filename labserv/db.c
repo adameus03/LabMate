@@ -886,6 +886,157 @@ int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pRe
   return db_reagent_get_by_x(pDb, pQuery, pParams, 1, pReagent_out);
 }
 
+int db_reagents_get_total_count(db_t* pDb, int* pCount_out) {
+  assert(pDb != NULL);
+  assert(pCount_out != NULL);
+  const char* pQuery = "SELECT COUNT(*) FROM public.reagents";
+  const char* pParams[0] = {};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 0, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagents_get_total_count: Failed to get total reagents count: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_reagents_get_total_count: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 1) {
+    LOG_E("db_reagents_get_total_count: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  *pCount_out = atoi(PQgetvalue(pResult, 0, 0));
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+int db_reagents_read_page(db_t* pDb, const char* offset, const char* page_size, db_reagent_t** ppReagents_out, int* pN_out) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppReagents_out != NULL);
+  assert(pN_out != NULL);
+  const char* pQuery = "SELECT * FROM public.reagents ORDER BY reagent_id OFFSET $1 LIMIT $2";
+  const char* pParams[2] = {offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 2, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagents_read_page: Failed to read reagents page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_reagents_read_page: No reagents found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No reagents found
+  }
+  if (PQnfields(pResult) != 4) {
+    LOG_E("db_reagents_read_page: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_reagent_t* pReagents = malloc(nTuples * sizeof(db_reagent_t));
+  if (pReagents == NULL) {
+    LOG_E("db_reagents_read_page: Failed to allocate memory for reagents");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pReagents[i].reagent_id = atoi(PQgetvalue(pResult, i, 0));
+    pReagents[i].name = p_strdup(PQgetvalue(pResult, i, 1));
+    pReagents[i].vendor = p_strdup(PQgetvalue(pResult, i, 2));
+    pReagents[i].reagent_type_id = atoi(PQgetvalue(pResult, i, 3));
+  }
+  *ppReagents_out = pReagents;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+int db_reagents_read_page_filtered(db_t* pDb, 
+                                   const char* offset, 
+                                   const char* page_size, 
+                                   db_reagent_t** ppReagents_out, 
+                                   int* pN_out, 
+                                   db_reagent_filter_type_t filter_type, 
+                                   const char* filter_value) { // note: filter_value can be regex
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppReagents_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_type >= DB_REAGENT_FILTER_TYPE_NONE && filter_type <= DB_REAGENT_FILTER_TYPE_VENDOR);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_REAGENT_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.reagents WHERE $1 = $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_REAGENT_FILTER_TYPE_NAME:
+      pQuery = "SELECT * FROM public.reagents WHERE name ~* $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_REAGENT_FILTER_TYPE_VENDOR:
+      pQuery = "SELECT * FROM public.reagents WHERE vendor ~* $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_reagents_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagents_read_page_filtered: Failed to read reagents page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_reagents_read_page_filtered: No reagents found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No reagents found
+  }
+  if (PQnfields(pResult) != 4) {
+    LOG_E("db_reagents_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_reagent_t* pReagents = malloc(nTuples * sizeof(db_reagent_t));
+  if (pReagents == NULL) {
+    LOG_E("db_reagents_read_page_filtered: Failed to allocate memory for reagents");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pReagents[i].reagent_id = atoi(PQgetvalue(pResult, i, 0));
+    pReagents[i].name = p_strdup(PQgetvalue(pResult, i, 1));
+    pReagents[i].vendor = p_strdup(PQgetvalue(pResult, i, 2));
+    pReagents[i].reagent_type_id = atoi(PQgetvalue(pResult, i, 3));
+  }
+  *ppReagents_out = pReagents;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
 //TODO avoid repeating code/logic in these db_<x>_insert functions
 int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain) {
   assert(pDb != NULL);

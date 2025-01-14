@@ -1186,6 +1186,25 @@ int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
+// CURL -X POST -d '{?}'
+static int __lsapi_endpoint_reagents_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+}
+
+int lsapi_endpoint_reagents(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_reagents_post(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
 // curl -X PUT -d '{"fname":"<faculty name>", "fedomain":"<faculty email domain>", "username":"<username>", "session_key":"<sesskey>"}'
 static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);

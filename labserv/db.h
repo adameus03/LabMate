@@ -146,6 +146,27 @@ int db_reagent_insert_ret(db_t* pDb, const char* name, const char* vendor, const
 
 int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pReagent_out);
 
+int db_reagents_get_total_count(db_t* pDb, int* pCount_out);
+
+int db_reagents_read_page(db_t* pDb, const char* offset, const char* page_size, db_reagent_t** ppReagents_out, int* pN_out);
+
+typedef enum db_reagent_filter_type {
+  DB_REAGENT_FILTER_TYPE_NONE,
+  DB_REAGENT_FILTER_TYPE_NAME,
+  DB_REAGENT_FILTER_TYPE_VENDOR
+} db_reagent_filter_type_t;
+
+/**
+ * @brief Read a page of reagents from the database with filtering using regex on specified attribute
+ */
+int db_reagents_read_page_filtered(db_t* pDb, 
+                                   const char* offset, 
+                                   const char* page_size, 
+                                   db_reagent_t** ppReagents_out, 
+                                   int* pN_out, 
+                                   db_reagent_filter_type_t filter_type, 
+                                   const char* filter_value);
+
 int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain);
 
 int db_faculty_insert_ret(db_t* pDb, const char* name, const char* email_domain, db_faculty_t* pFaculty_out);
