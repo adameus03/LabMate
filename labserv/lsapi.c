@@ -828,6 +828,11 @@ static int __lsapi_endpoint_session_delete(h2o_handler_t* pH2oHandler, h2o_req_t
         }
     }
 
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
+    }
+
     // verify session key
     char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
     assert(user.sesskey_hash != NULL);
@@ -967,6 +972,11 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
             yyjson_doc_free(pJson);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
         }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
     // verify session key
@@ -1111,6 +1121,11 @@ static int __lsapi_endpoint_reagent_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
             yyjson_doc_free(pJson);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
         }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
     // verify session key
@@ -1261,6 +1276,11 @@ static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
         }
     }
 
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
+    }
+
     // verify session key
     char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
     assert(user.sesskey_hash != NULL);
@@ -1402,6 +1422,11 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
             yyjson_doc_free(pJson);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
         }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
     // verify session key
@@ -1575,6 +1600,11 @@ static int __lsapi_endpoint_inventory_put(h2o_handler_t* pH2oHandler, h2o_req_t*
             yyjson_doc_free(pJson);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
         }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
     // verify session key
@@ -1811,6 +1841,11 @@ static int __lsapi_endpoint_inventory_post(h2o_handler_t* pH2oHandler, h2o_req_t
         }
     }
 
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
+    }
+
     // verify session key
     char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
     assert(user.sesskey_hash != NULL);
@@ -1920,6 +1955,11 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
             yyjson_doc_free(pJson);
             return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
         }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Session key not set");
     }
 
     // verify session key
