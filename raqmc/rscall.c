@@ -78,12 +78,13 @@ char* rscall_ie_dir_create(void) {
   char* devno_path_prolog = __rscall_abspath("uhfd/result/");
   size_t devno_path_prolog_strlen = strlen(devno_path_prolog);
   char* devno_path_epilog = "/value";
-  char* devno_path = (char*)malloc(devno_path_prolog_strlen + sidStrlen + strlen(devno_path_epilog) + 1);
+  size_t devno_path_epilog_strlen = strlen(devno_path_epilog);
+  char* devno_path = (char*)malloc(devno_path_prolog_strlen + sidStrlen + devno_path_epilog_strlen + 1);
   assert(devno_path != NULL);
   strcpy(devno_path, devno_path_prolog);
   strcpy(devno_path + devno_path_prolog_strlen, sid);
   strcpy(devno_path + devno_path_prolog_strlen + sidStrlen, devno_path_epilog);
-  devno_path[devno_path_prolog_strlen + sidStrlen] = '\0';
+  devno_path[devno_path_prolog_strlen + sidStrlen + devno_path_epilog_strlen] = '\0';
   FILE* devno_file = fopen(devno_path, "r");
   if (devno_file == NULL) {
     free((void*)sid_path);
