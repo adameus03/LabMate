@@ -85,7 +85,7 @@ static char* __lsapi_generate_token() {
 #define __LSAPI_REDIS_IP LABSERV_REDIS_IP
 #define __LSAPI_REDIS_PORT LABSERV_REDIS_PORT
 
-static void __lsapi_email_push_verification_token(const char* email, const char* username, const char* verification_token) {//TODO
+static void __lsapi_email_push_verification_token(const char* email, const char* username, const char* verification_token) {
     assert(email != NULL);
     assert(username != NULL);
     assert(verification_token != NULL);
@@ -1330,7 +1330,7 @@ int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
-// curl -X PUT -d '{"lname":"<lab name>", "ltoken":"<lab token>", "lkey": "<lkey>", "fid":<faculty id>, "username":"<username>", "session_key":"<sesskey>"}'
+// curl -X PUT -d '{"lname":"<lab name>", "ltoken":"<lab token>", "lkey": "<lkey>", "host": "<host>", "fid":<faculty id>, "username":"<username>", "session_key":"<sesskey>"}'
 static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -1359,6 +1359,11 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
         yyjson_doc_free(pJson);
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid lkey");
     }
+    yyjson_val* pHost = yyjson_obj_get(pRoot, "host");
+    if (pHost == NULL || !yyjson_is_str(pHost)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid host");
+    }
     yyjson_val* pFid = yyjson_obj_get(pRoot, "fid");
     if (pFid == NULL || !yyjson_is_int(pFid)) {
         yyjson_doc_free(pJson);
@@ -1378,11 +1383,12 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     const char* lName = yyjson_get_str(pLName);
     const char* lToken = yyjson_get_str(pLToken);
     const char* lKey = yyjson_get_str(pLkey);
+    const char* host = yyjson_get_str(pHost);
     int fid = yyjson_get_int(pFid);
     const char* username = yyjson_get_str(pUsername);
     const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
 
-    assert(lName != NULL && lToken != NULL && lKey != NULL && fid >= 0 && username != NULL && userProvidedSessionKey != NULL);
+    assert(lName != NULL && lToken != NULL && lKey != NULL && host != NULL && fid >= 0 && username != NULL && userProvidedSessionKey != NULL);
 
     // get user data from database so that we can verify the session key
     db_user_t user;
@@ -1428,7 +1434,7 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     // create lab + get lab data from database so that we can use it for the http response
     db_lab_t lab;
     char* fid_str = __lsapi_itoa(fid);
-    if (0 != db_lab_insert_ret(pLsapi->pDb, lName, lTokenHash, lTokenSalt, lKey, fid_str, &lab)) {
+    if (0 != db_lab_insert_ret(pLsapi->pDb, lName, lTokenHash, lTokenSalt, lKey, host, fid_str, &lab)) {
         yyjson_doc_free(pJson);
         free(fid_str);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to create lab");
@@ -1454,6 +1460,7 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     yyjson_mut_val* pLab = yyjson_mut_obj(pJsonResp);
     yyjson_mut_obj_add_int(pJsonResp, pLab, "lab_id", lab.lab_id);
     yyjson_mut_obj_add_str(pJsonResp, pLab, "name", lab.name);
+    yyjson_mut_obj_add_str(pJsonResp, pLab, "host", lab.host);
     yyjson_mut_obj_add_int(pJsonResp, pLab, "faculty_id", lab.faculty_id);
     // add lab object to root
     yyjson_mut_obj_add_val(pJsonResp, pRootResp, "lab", pLab);

@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS public.labs(
 	bearer_token_hash varchar NOT NULL,
 	bearer_token_salt varchar NOT NULL,
 	lab_key varchar NOT NULL,
+	host varchar NOT NULL,
 	faculty_id int4 NOT NULL,
 	CONSTRAINT labs_pk PRIMARY KEY (lab_id),
 	CONSTRAINT labs_unique UNIQUE (name, faculty_id),
@@ -109,8 +110,8 @@ CREATE TABLE IF NOT EXISTS public.invm(
 	rotator_ktheta int4 NULL,
 	rotator_kphi int4 NULL,
 	ztb_flag bool DEFAULT false NOT NULL,
-	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc),
-	FOREIGN KEY (antenna_id) REFERENCES public.antennas(antenna_id)
+	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc)
+	--FOREIGN KEY (antenna_id) REFERENCES public.antennas(antenna_id)
 );
 
 -- Make the TimescaleDB extension available

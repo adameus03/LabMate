@@ -43,6 +43,7 @@ typedef struct db_lab {
   char* bearer_token_hash;
   char* bearer_token_salt;
   char* lab_key;
+  char* host;
   int faculty_id;
 } db_lab_t;
 
@@ -177,7 +178,8 @@ int db_lab_insert(db_t* pDb,
                   const char* name, 
                   const char* bearer_token_hash, 
                   const char* bearer_token_salt,
-                  const char* lab_key, 
+                  const char* lab_key,
+                  const char* host,
                   const char* faculty_id);
 
 int db_lab_insert_ret(db_t* pDb, 
@@ -185,6 +187,7 @@ int db_lab_insert_ret(db_t* pDb,
                       const char* bearer_token_hash, 
                       const char* bearer_token_salt, 
                       const char* lab_key,
+                      const char* host,
                       const char* faculty_id, 
                       db_lab_t* pLab_out);
 
