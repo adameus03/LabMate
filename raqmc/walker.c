@@ -49,6 +49,7 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   assert(pWalker != NULL);
   assert(pWalker->pCurl != NULL);
 
+  assert(CURLE_OK == curl_easy_setopt(pWalker->pCurl, CURLOPT_UPLOAD, 1L)); //PUT
   assert(CURLE_OK == curl_easy_setopt(pWalker->pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_ENDPOINT_URL));
   yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
   yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
