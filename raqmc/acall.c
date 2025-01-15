@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #ifndef ACALL_ANTC_MOUNT_PATH
   #error "ACALL_ANTC_MOUNT_PATH is not defined!"
@@ -53,6 +54,7 @@ static int __acall_ant_set_x(const char* path, const char* xPathEpilog, const ch
   // Write to x
   FILE* x_file = fopen(x_path, "w");
   if (x_file == NULL) {
+    LOG_E("__acall_ant_set_x: fopen (path: %s) failed with errno=%d", x_path, errno);
     assert(0);
     return -1;
   }
