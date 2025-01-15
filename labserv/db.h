@@ -86,7 +86,6 @@ typedef struct db_invm {
   int measurement_type;
   int rotator_ktheta; // For future when antennas can rotate
   int rotator_kphi; // For future when antennas can rotate
-  int ztb_flag;
 } db_invm_t;
 
 void db_user_free(db_user_t* pUser);

@@ -1777,7 +1777,6 @@ static db_invm_t db_invm_clone(db_invm_t dbInvm) {
     .measurement_type = dbInvm.measurement_type,
     .rotator_ktheta = dbInvm.rotator_ktheta,
     .rotator_kphi = dbInvm.rotator_kphi,
-    .ztb_flag = dbInvm.ztb_flag,
   };
 }
 
@@ -1821,7 +1820,7 @@ int db_invm_insert_ret(db_t* pDb,
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     exit(EXIT_FAILURE);
   }
-  if (PQnfields(pResult) != 11) { // ztb_flag is an additional field
+  if (PQnfields(pResult) != 10) {
     LOG_E("db_invm_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
@@ -1839,7 +1838,6 @@ int db_invm_insert_ret(db_t* pDb,
   invm.measurement_type = atoi(PQgetvalue(pResult, 0, 7));
   invm.rotator_ktheta = atoi(PQgetvalue(pResult, 0, 8));
   invm.rotator_kphi = atoi(PQgetvalue(pResult, 0, 9));
-  invm.ztb_flag = atoi(PQgetvalue(pResult, 0, 10));
 
   *pInvm_out = db_invm_clone(invm);
 
