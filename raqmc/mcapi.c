@@ -331,6 +331,9 @@ static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
   switch(mt) {
     case 0:
       int rv = measurements_quick_perform(iei, antno, txp, &readings[0]);
+      if (rv != 0) {
+        LOG_E("__mcapi_endpoint_itm_post: measurements_quick_perform failed with rv=%d", rv);
+      }
       assert (rv == 0 || rv == -1 || rv == -10);
       if (rv == -1) {
         yyjson_doc_free(pJson);
