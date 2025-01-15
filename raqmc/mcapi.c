@@ -345,7 +345,7 @@ static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
         yyjson_doc_free(pJson);
         return __mcapi_endpoint_error(pReq, 500, "Not Found", "Measurement (quick) failed because specified antno does not exist");
       } else {
-        assert(0);
+        assert(rv == 0);
       }
       break;
     case 1:
