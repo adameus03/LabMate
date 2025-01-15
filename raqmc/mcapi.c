@@ -334,13 +334,18 @@ static int __mcapi_endpoint_itm_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
       if (rv != 0) {
         LOG_E("__mcapi_endpoint_itm_post: measurements_quick_perform failed with rv=%d", rv);
       }
-      assert (rv == 0 || rv == -1 || rv == -10);
+      assert (rv == 0 || rv == -1 || rv == -3 || rv == -10);
       if (rv == -1) {
         yyjson_doc_free(pJson);
         return __mcapi_endpoint_error(pReq, 404, "Not Found", "Measurement (quick) failed because specified iei does not exist");
+      } else if (rv == -3) {
+        yyjson_doc_free(pJson);
+        return __mcapi_endpoint_error(pReq, 403, "Forbidden", "Measurement (quick) failed because specified iei couldn't be read");
       } else if (rv == -10) {
         yyjson_doc_free(pJson);
-        return __mcapi_endpoint_error(pReq, 404, "Not Found", "Measurement (quick) failed because specified antno does not exist");
+        return __mcapi_endpoint_error(pReq, 500, "Not Found", "Measurement (quick) failed because specified antno does not exist");
+      } else {
+        assert(0);
       }
       break;
     case 1:
