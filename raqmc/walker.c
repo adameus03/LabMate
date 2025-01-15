@@ -116,6 +116,8 @@ static void* walker_task(void* pArg) {
           walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
         } else if (-1 == rv) {
           should_break_antenna_looper = 1;
+        } else if (-3 == rv) {
+          break; // We skip this ie measurements as it's impossible to read it (e.g. not embodied)
         } else if (-10 == rv) {
           should_break_inventory_looper = 1;
         }
