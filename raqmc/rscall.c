@@ -275,7 +275,10 @@ int rscall_ie_get_rssi(const char* iePath, int* pRssi) {
   assert(rssiStrlen > 0 && rssiStrlen < 128); // If we have 128 characters, there is something going on wrong definitely
   fclose(rssi_file);
 
-  int rssiValue = atoi(rssi);
+  //int rssiValue = atoi(rssi);
+  //rssi has 2 hex digits, so we need to convert it to decimal
+  assert(rssiStrlen == 2);
+  int rssiValue = (int)strtol(rssi, NULL, 16);
   *pRssi = rssiValue;
   free((void*)rssi_path);
   return 0;
