@@ -1386,7 +1386,7 @@ int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out) {
   assert(pDb != NULL);
   assert(epc_in != NULL);
   assert(pLab_out != NULL);
-  const char* pQuery = "SELECT l.lab_id, l.name, l.bearer_token_hash, l.bearer_token_salt, l.faculty_id FROM public.labs l LEFT JOIN public.inventory i ON l.lab_id = i.lab_id WHERE i.epc = $1";
+  const char* pQuery = "SELECT l.lab_id, l.name, l.bearer_token_hash, l.bearer_token_salt, l.faculty_id FROM public.labs l LEFT JOIN public.inventory i ON l.lab_id = i.lab_id WHERE LOWER(i.epc) = LOWER($1)";
   const char* pParams[1] = {epc_in};
   return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
 }
