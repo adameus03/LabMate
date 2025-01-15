@@ -138,12 +138,13 @@ static void* walker_task(void* pArg) {
         // } else if (-10 == rv) {
         //   assert(should_break_antenna_looper == 1);
         // }
-        // if (should_break_antenna_looper) {
-        //   break;
-        // }
-        // if (should_break_inventory_looper) {
-        //   break;
-        // }
+
+        if (should_break_antenna_looper) {
+          break;
+        }
+        if (should_break_inventory_looper) {
+          break;
+        }
         antNo++;
       }
       if (should_break_inventory_looper) {
