@@ -106,6 +106,7 @@ static void* walker_task(void* pArg) {
 
     while (!walker_flags_get_should_die(pWalker)) { //loop over inventory
       int should_break_inventory_looper = 0;
+      antNo = 0;
       while (!walker_flags_get_should_die(pWalker)) { //loop over antennas
         // if (antNo >= pWalker->antTabLen) {
         //   break;
