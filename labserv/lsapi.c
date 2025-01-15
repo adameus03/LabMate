@@ -2192,7 +2192,18 @@ static int __lsapi_endpoint_invm_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     int rkp = yyjson_get_int(pRkp);
     const char* lbToken = yyjson_get_str(pLbToken);
 
-    assert(t != NULL && epc != NULL && an >= 0 && rxss >= 0 && rxrate >= 0 && txp >= 0 && rxlat >= 0 && mtype >= 0 && rkt >= 0 && rkp >= 0 && lbToken != NULL);
+    //assert(t != NULL && epc != NULL && an >= 0 && rxss >= 0 && rxrate >= 0 && txp >= 0 && rxlat >= 0 && mtype >= 0 && rkt >= 0 && rkp >= 0 && lbToken != NULL);
+    assert(t != NULL);
+    assert(epc != NULL);
+    assert(an >= 0);
+    assert(rxss >= 0);
+    assert(rxrate >= 0 || rxrate == -1);
+    assert(txp >= 0);
+    assert(rxlat >= 0 || rxlat == -1);
+    assert(mtype >= 0);
+    assert(rkt >= 0 || rkt == -1);
+    assert(rkp >= 0 || rkp == -1);
+    assert(lbToken != NULL);
 
     // get lab data from database so that we can verify the lab bearer token
     db_lab_t lab;

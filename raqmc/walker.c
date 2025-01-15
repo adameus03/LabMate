@@ -69,8 +69,8 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   yyjson_mut_obj_add_int(pJson, pRoot, "txp", txp);
   yyjson_mut_obj_add_int(pJson, pRoot, "rxlat", -1); //TODO Implement this
   yyjson_mut_obj_add_int(pJson, pRoot, "mtype", mt);
-  yyjson_mut_obj_add_int(pJson, pRoot, "rkt", 0); //TODO Future
-  yyjson_mut_obj_add_int(pJson, pRoot, "rkp", 0); //TODO Future
+  yyjson_mut_obj_add_int(pJson, pRoot, "rkt", -1); //TODO Future
+  yyjson_mut_obj_add_int(pJson, pRoot, "rkp", -1); //TODO Future
   const char* lbToken = RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN;
   yyjson_mut_obj_add_str(pJson, pRoot, "lbtoken", lbToken);
 
@@ -126,24 +126,24 @@ static void* walker_task(void* pArg) {
           LOG_E("walker_task: measurements_quick_perform() failed with unexpected return value: %d", rv);
           assert(0);
         }
-        rv = measurements_dual_perform(ieIndex, antNo, txPower, &rssi, &readRate);
-        if (0 == rv) {
-          walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, readRate, 1);
-          assert(should_break_antenna_looper == 0);
-          assert(should_break_inventory_looper == 0);
-        } else if (-1 == rv) {
-          assert(should_break_inventory_looper == 1);
-        } else if (-3 == rv) {
-          assert(0);
-        } else if (-10 == rv) {
-          assert(should_break_antenna_looper == 1);
-        }
-        if (should_break_antenna_looper) {
-          break;
-        }
-        if (should_break_inventory_looper) {
-          break;
-        }
+        // rv = measurements_dual_perform(ieIndex, antNo, txPower, &rssi, &readRate);
+        // if (0 == rv) {
+        //   walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, readRate, 1);
+        //   assert(should_break_antenna_looper == 0);
+        //   assert(should_break_inventory_looper == 0);
+        // } else if (-1 == rv) {
+        //   assert(should_break_inventory_looper == 1);
+        // } else if (-3 == rv) {
+        //   assert(0);
+        // } else if (-10 == rv) {
+        //   assert(should_break_antenna_looper == 1);
+        // }
+        // if (should_break_antenna_looper) {
+        //   break;
+        // }
+        // if (should_break_inventory_looper) {
+        //   break;
+        // }
         antNo++;
       }
       if (should_break_inventory_looper) {
