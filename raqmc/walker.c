@@ -69,8 +69,8 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   yyjson_mut_obj_add_int(pJson, pRoot, "txp", txp);
   yyjson_mut_obj_add_int(pJson, pRoot, "rxlat", -1); //TODO Implement this
   yyjson_mut_obj_add_int(pJson, pRoot, "mtype", mt);
-  yyjson_mut_obj_add_int(pJson, pRoot, "rkt", -1); //TODO Future
-  yyjson_mut_obj_add_int(pJson, pRoot, "rkp", -1); //TODO Future
+  yyjson_mut_obj_add_int(pJson, pRoot, "rkt", 0); //TODO Future
+  yyjson_mut_obj_add_int(pJson, pRoot, "rkp", 0); //TODO Future
   const char* lbToken = RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN;
   yyjson_mut_obj_add_str(pJson, pRoot, "lbtoken", lbToken);
 
