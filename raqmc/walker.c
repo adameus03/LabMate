@@ -115,11 +115,14 @@ static void* walker_task(void* pArg) {
         if (0 == rv) {
           walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
         } else if (-1 == rv) {
-          should_break_antenna_looper = 1;
+          should_break_inventory_looper = 1;
         } else if (-3 == rv) {
           break; // We skip this ie measurements as it's impossible to read it (e.g. not embodied)
         } else if (-10 == rv) {
-          should_break_inventory_looper = 1;
+          should_break_antenna_looper = 1;
+        } else {
+          LOG_E("walker_task: measurements_quick_perform() failed with unexpected return value: %d", rv);
+          assert(0);
         }
         rv = measurements_dual_perform(ieIndex, antNo, txPower, &rssi, &readRate);
         if (0 == rv) {

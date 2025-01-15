@@ -140,7 +140,7 @@ static int __rscall_ie_set_x(const char* iePath, const char* xPathEpilog, const 
   // Write to x
   FILE* x_file = fopen(x_path, "w");
   if (x_file == NULL) {
-    assert(0);
+    //assert(0);
     return -1;
   }
   if (fprintf(x_file, "%s", xValue) <= 0) {
