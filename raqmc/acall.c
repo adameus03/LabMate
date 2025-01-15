@@ -39,11 +39,15 @@ static int __acall_ant_set_x(const char* path, const char* xPathEpilog, const ch
   const size_t pathStrlen = strlen(path);
   assert(path[pathStrlen - 1] != '/');
   const size_t x_path_epilog_strlen = strlen(xPathEpilog);
-  assert(xPathEpilog[0] == '/');
+  if (x_path_epilog_strlen >= 1) {
+    assert(xPathEpilog[0] == '/');
+  }
   char* x_path = (char*)malloc(pathStrlen + x_path_epilog_strlen + 1);
   assert(x_path != NULL);
   strcpy(x_path, path);
-  strcpy(x_path + pathStrlen, xPathEpilog);
+  if (x_path_epilog_strlen >= 1) {
+    strcpy(x_path + pathStrlen, xPathEpilog); 
+  }
   x_path[pathStrlen + x_path_epilog_strlen] = '\0';
 
   // Write to x
