@@ -130,9 +130,11 @@ static void* walker_task(void* pArg) {
           assert(should_break_antenna_looper == 0);
           assert(should_break_inventory_looper == 0);
         } else if (-1 == rv) {
-          assert(should_break_antenna_looper == 1);
-        } else if (-10 == rv) {
           assert(should_break_inventory_looper == 1);
+        } else if (-3 == rv) {
+          assert(0);
+        } else if (-10 == rv) {
+          assert(should_break_antenna_looper == 1);
         }
         if (should_break_antenna_looper) {
           break;
