@@ -61,7 +61,7 @@ int measurements_quick_perform(const int ieIndex, const int antNo, const int txP
   *pRssi_out = 0;
   rv = rscall_ie_drv_measure_quick(iePath, txPower);
   if (0 != rv) {
-    LOG_W("measurements_quick_perform: Failed to trigger quick measurement for antNo %d", antNo);
+    LOG_W("measurements_quick_perform: Failed to trigger quick measurement for antNo %d (rv=%d)", antNo, rv);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);
@@ -89,12 +89,12 @@ int measurements_dual_perform(const int ieIndex, const int antNo, const int txPo
   assert(__pMeasurement_global_mtx != NULL);
   const char* iePath = rscall_ie_get_path(ieIndex);
   if (iePath == NULL) {
-    LOG_E("measurements_quick_perform: Failed to get path for ieIndex %d", ieIndex);
+    LOG_E("measurements_dual_perform: Failed to get path for ieIndex %d", ieIndex);
     exit(EXIT_FAILURE);
   }
   const char* antPath = acall_ant_get_path(antNo);
   if (antPath == NULL) {
-    LOG_E("measurements_quick_perform: Failed to get path for antNo %d", antNo);
+    LOG_E("measurements_dual_perform: Failed to get path for antNo %d", antNo);
     exit(EXIT_FAILURE);
   }
 
@@ -102,7 +102,7 @@ int measurements_dual_perform(const int ieIndex, const int antNo, const int txPo
 
   int rv = acall_ant_set_enabled(antPath);
   if (0 != rv) {
-    LOG_W("measurements_quick_perform: Failed to enable antNo %d", antNo);
+    LOG_W("measurements_dual_perform: Failed to enable antNo %d", antNo);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);
@@ -118,7 +118,7 @@ int measurements_dual_perform(const int ieIndex, const int antNo, const int txPo
   *pReadRate_out = 0;
   rv = rscall_ie_drv_measure_dual(iePath, txPower);
   if (0 != rv) {
-    LOG_W("measurements_quick_perform: Failed to trigger quick measurement for antNo %d", antNo);
+    LOG_W("measurements_dual_perform: Failed to trigger quick measurement for antNo %d (rv=%d)", antNo, rv);
     p_mutex_unlock(__pMeasurement_global_mtx);
     free((void*)iePath);
     free((void*)antPath);

@@ -12,7 +12,7 @@
 
 struct walker {
   PUThread* pWalkerThread;
-  CURL* pCurl;
+  //CURL* pCurl;
   //int antTab[WALKER_MAX_ANTENNAS]; //what if foreign lab's aids get here?
   //size_t antTabLen;
   puint8 flags;
@@ -44,13 +44,38 @@ static char* walker_get_timestamp_now() {
   return pTimestamp;
 }
 
+// static int __walker_curl_xferinfofn(void * p, curl_off_t o1, curl_off_t o2, curl_off_t ultotal, curl_off_t ulnow) {
+//   return 1;
+// }
+
+struct walker_transmit_readings_buffer_entry {
+  int ieIndex;
+  int antNo;
+  int txp;
+  int rssi;
+  int readRate;
+  int mt;
+};
+
+#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 1024
+static struct walker_transmit_readings_buffer_entry __walker_transmit_readings_buffer[__WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN];
+
 //TODO maybe do some refactoring so that we don't mix different layers of abstraction?
 static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
   assert(pWalker != NULL);
-  assert(pWalker->pCurl != NULL);
+  //assert(pWalker->pCurl != NULL);
 
-  assert(CURLE_OK == curl_easy_setopt(pWalker->pCurl, CURLOPT_CUSTOMREQUEST, "PUT")); // PUT request
-  assert(CURLE_OK == curl_easy_setopt(pWalker->pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_ENDPOINT_URL));
+  CURL* pCurl = curl_easy_init();
+  assert(pCurl != NULL);
+
+  // assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_XFERINFOFUNCTION, __walker_curl_xferinfofn));
+  // assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_VERBOSE, 1L));
+  // assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_FORBID_REUSE, 0L));
+  // assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_HTTPHEADER, curl_slist_append(NULL, "Expect:")));
+  
+  // assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4)); //https://stackoverflow.com/questions/48555551/using-libcurl-in-a-multithreaded-environment-causes-very-slow-performance-relate
+  assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_CUSTOMREQUEST, "PUT")); // PUT request
+  assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_ENDPOINT_URL));
   yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
   yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
   yyjson_mut_doc_set_root(pJson, pRoot);
@@ -76,18 +101,24 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
 
   char* jsonText = yyjson_mut_write(pJson, 0, NULL);
   assert(jsonText != NULL);
-  curl_easy_setopt(pWalker->pCurl, CURLOPT_POSTFIELDS, jsonText);
+  curl_easy_setopt(pCurl, CURLOPT_POSTFIELDS, jsonText);
 
-  CURLcode res = curl_easy_perform(pWalker->pCurl);
+  LOG_V("walker_transmit_readings: Calling curl_easy_perform");
+  CURLcode res = curl_easy_perform(pCurl);
   if (res != CURLE_OK) {
     LOG_E("walker_transmit_readings: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res);
+  } else {
+    LOG_V("walker_transmit_readings: curl_easy_perform() succeeded");
   }
+
   //TODO Handle response if needed?
   free(jsonText);
   free(pT);
   free((void*)iePath);
   free(epc);
   yyjson_mut_doc_free(pJson);
+
+  curl_easy_cleanup(pCurl);
 }
 
 static void* walker_task(void* pArg) {
@@ -113,8 +144,10 @@ static void* walker_task(void* pArg) {
         //   break;
         // }
         int should_break_antenna_looper = 0;
-        int rv = measurements_quick_perform(ieIndex, antNo, txPower, &rssi);
+        int rv;
+        rv = measurements_quick_perform(ieIndex, antNo, txPower, &rssi);
         if (0 == rv) {
+          LOG_V("walker_task: measurements_quick_perform() succeeded: ieIndex %d, antNo %d, txPower %d, rssi %d", ieIndex, antNo, txPower, rssi);
           walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
         } else if (-1 == rv) {
           should_break_inventory_looper = 1;
@@ -126,17 +159,25 @@ static void* walker_task(void* pArg) {
           LOG_E("walker_task: measurements_quick_perform() failed with unexpected return value: %d", rv);
           assert(0);
         }
+
         // rv = measurements_dual_perform(ieIndex, antNo, txPower, &rssi, &readRate);
         // if (0 == rv) {
-        //   walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, readRate, 1);
-        //   assert(should_break_antenna_looper == 0);
-        //   assert(should_break_inventory_looper == 0);
+        //   LOG_V("walker_task: measurements_dual_perform() succeeded: ieIndex %d, antNo %d, txPower %d, rssi %d, readRate %d", ieIndex, antNo, txPower, rssi, readRate);
+        //   //walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, readRate, 1);
+        //   //assert(should_break_antenna_looper == 0);
+        //   //assert(should_break_inventory_looper == 0);
         // } else if (-1 == rv) {
-        //   assert(should_break_inventory_looper == 1);
+        //   //assert(should_break_inventory_looper == 1);
+        //   should_break_inventory_looper = 1;
         // } else if (-3 == rv) {
-        //   assert(0);
+        //   //assert(0);
+        //   break; // We skip this ie measurements as it's impossible to read it (e.g. not embodied)
         // } else if (-10 == rv) {
-        //   assert(should_break_antenna_looper == 1);
+        //   //assert(should_break_antenna_looper == 1);
+        //   should_break_antenna_looper = 1;
+        // } else {
+        //   LOG_E("walker_task: measurements_dual_perform() failed with unexpected return value: %d", rv);
+        //   assert(0);
         // }
 
         if (should_break_antenna_looper) {
@@ -164,8 +205,8 @@ static void* walker_task(void* pArg) {
 walker_t* walker_start_thread(void) {
   walker_t* pWalker = (walker_t*)malloc(sizeof(walker_t));
   assert(pWalker != NULL);
-  pWalker->pCurl = curl_easy_init();
-  assert(pWalker->pCurl != NULL);
+  //pWalker->pCurl = curl_easy_init();
+  //assert(pWalker->pCurl != NULL);
   pWalker->pWalkerThread = p_uthread_create(walker_task, (void*)pWalker, TRUE, "walker_task");
   assert(pWalker->pWalkerThread != NULL);
   return pWalker;
@@ -180,8 +221,8 @@ void walker_stop_thread(walker_t* pWalker) {
 
 void walker_free_resources(walker_t* pWalker) {
   assert(pWalker != NULL);
-  curl_easy_cleanup(pWalker->pCurl);
-  pWalker->pCurl = NULL;
+  //curl_easy_cleanup(pWalker->pCurl);
+  //pWalker->pCurl = NULL;
   pWalker->pWalkerThread = NULL;
   pWalker->flags = (puint8)0U;
   // assert(pWalker->antTab != NULL);
