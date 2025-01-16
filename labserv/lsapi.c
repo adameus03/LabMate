@@ -2323,6 +2323,8 @@ int lsapi_endpoint_invm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     return __lsapi_endpoint_invm_put(pH2oHandler, pReq, pLsapi);
 }
 
+#define __LSAPI_ENDPOINT_INVM_BULK_PUT_MAX_INVMS 1024
+
 // curl -X PUT -d '{"lbtoken": "<lab bearer token>", "n_invms": <n_invms>, "invms": [
 //     {"t": "<t1>", "epc": "<epc1>", "an": <antno1>, "rxss": <rx_signal_strength_1>, "rxrate": <read_rate_1>, "txp": <tx_power_1>, "rxlat": <rxlat1>, "mtype": <mtype1>, "rkt": <rkt1>, "rkp": <rkp1>},
 //     {"t": "<t2>", "epc": "<epc2>", "an": <antno2>, "rxss": <rx_signal_strength_2>, "rxrate": <read_rate_2>, "txp": <tx_power_2>, "rxlat": <rxlat2>, "mtype": <mtype2>, "rkt": <rkt2>, "rkp": <rkp2>},
@@ -2362,16 +2364,29 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid invms (inventory measurements)");
     }
 
+    if (nInvms <= 0 || nInvms > __LSAPI_ENDPOINT_INVM_BULK_PUT_MAX_INVMS) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Unsupported value of n_invms (number of inventory measurements to insert)");
+    }
+
     db_invm_t* pInvms_structs = (db_invm_t*)malloc(nInvms * sizeof(db_invm_t));
     // Process each inventory measurement
     yyjson_val* pInvm;
     yyjson_arr_iter iter = yyjson_arr_iter_with(pInvms);
     while ((pInvm = yyjson_arr_iter_next(&iter))) {
-        assert(iter.idx >= 0);
-        assert(iter.idx < nInvms);
+        assert(iter.idx-1 >= 0);
+        LOG_V("__lsapi_endpoint_invm_bulk_put: Processing invm, iter.idx=%d", iter.idx);
+        if (!(iter.idx-1 < nInvms)) {
+            yyjson_doc_free(pJson);
+            for (int i = 0; i < iter.idx-1; i++) {
+                db_invm_free(&pInvms_structs[i]);
+            }
+            free(pInvms_structs);
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Provided more inventory measurements than specified by n_invms");
+        }
         if (!yyjson_is_obj(pInvm)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2380,7 +2395,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pT = yyjson_obj_get(pInvm, "t");
         if (pT == NULL || !yyjson_is_str(pT)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2389,7 +2404,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pEpc = yyjson_obj_get(pInvm, "epc");
         if (pEpc == NULL || !yyjson_is_str(pEpc)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2398,7 +2413,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pAn = yyjson_obj_get(pInvm, "an");
         if (pAn == NULL || !yyjson_is_int(pAn)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2407,7 +2422,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pRxss = yyjson_obj_get(pInvm, "rxss");
         if (pRxss == NULL || !yyjson_is_int(pRxss)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2416,7 +2431,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pRxrate = yyjson_obj_get(pInvm, "rxrate");
         if (pRxrate == NULL || !yyjson_is_int(pRxrate)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2425,7 +2440,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pTxp = yyjson_obj_get(pInvm, "txp");
         if (pTxp == NULL || !yyjson_is_int(pTxp)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2434,7 +2449,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pRxlat = yyjson_obj_get(pInvm, "rxlat");
         if (pRxlat == NULL || !yyjson_is_int(pRxlat)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2443,7 +2458,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pMType = yyjson_obj_get(pInvm, "mtype");
         if (pMType == NULL || !yyjson_is_int(pMType)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2452,7 +2467,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pRkt = yyjson_obj_get(pInvm, "rkt");
         if (pRkt == NULL || !yyjson_is_int(pRkt)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2461,7 +2476,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         yyjson_val* pRkp = yyjson_obj_get(pInvm, "rkp");
         if (pRkp == NULL || !yyjson_is_int(pRkp)) {
             yyjson_doc_free(pJson);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2497,14 +2512,14 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
             if (rv == -2) {
                 LOG_W("__lsapi_endpoint_invm_put: EPC %s does not match any lab", epc);
                 yyjson_doc_free(pJson);
-                for (int i = 0; i < iter.idx; i++) {
+                for (int i = 0; i < iter.idx-1; i++) {
                     db_invm_free(&pInvms_structs[i]);
                 }
                 free(pInvms_structs);
                 return __lsapi_endpoint_error(pReq, 404, "Not Found", "The given epc does not match any lab");
             } else {
                 yyjson_doc_free(pJson);
-                for (int i = 0; i < iter.idx; i++) {
+                for (int i = 0; i < iter.idx-1; i++) {
                     db_invm_free(&pInvms_structs[i]);
                 }
                 free(pInvms_structs);
@@ -2528,7 +2543,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         if (0 != strcmp(lbTokenHash, lab.bearer_token_hash)) {
             yyjson_doc_free(pJson);
             db_lab_free(&lab);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2544,7 +2559,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         char* mtype_str = __lsapi_itoa(mtype);
         char* rkt_str = __lsapi_itoa(rkt);
         char* rkp_str = __lsapi_itoa(rkp);
-        if (0 != db_invm_insert_ret(pLsapi->pDb, t, epc, an_str, rxss_str, rxrate_str, txp_str, rxlat_str, mtype_str, rkt_str, rkp_str, &pInvms_structs[iter.idx])) {
+        if (0 != db_invm_insert_ret(pLsapi->pDb, t, epc, an_str, rxss_str, rxrate_str, txp_str, rxlat_str, mtype_str, rkt_str, rkp_str, &pInvms_structs[iter.idx-1])) {
             yyjson_doc_free(pJson);
             free(an_str);
             free(rxss_str);
@@ -2555,7 +2570,7 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
             free(rkt_str);
             free(rkp_str);
             db_lab_free(&lab);
-            for (int i = 0; i < iter.idx; i++) {
+            for (int i = 0; i < iter.idx-1; i++) {
                 db_invm_free(&pInvms_structs[i]);
             }
             free(pInvms_structs);
@@ -2570,6 +2585,16 @@ static int __lsapi_endpoint_invm_bulk_put(h2o_handler_t* pH2oHandler, h2o_req_t*
         free(rkt_str);
         free(rkp_str);
         db_lab_free(&lab);
+    }
+
+    LOG_V("__lsapi_endpoint_invm_bulk_put: iter.idx=%d, nInvms=%d", iter.idx, nInvms);
+    if (iter.idx != nInvms) {
+        yyjson_doc_free(pJson);
+        for (int i = 0; i < iter.idx; i++) {
+            db_invm_free(&pInvms_structs[i]);
+        }
+        free(pInvms_structs);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Provided fewer inventory measurements than specified by n_invms");
     }
 
     static h2o_generator_t generator = {NULL, NULL};

@@ -10,12 +10,25 @@
 
 #define WALKER_TRANSMIT_READINGS_ENDPOINT_URL RAQMC_LABSERV_HOST "/api/invm"
 
+struct walker_transmit_readings_buffer_entry {
+  int ieIndex;
+  int antNo;
+  int txp;
+  int rssi;
+  int readRate;
+  int mt;
+};
+
+#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 1024
+
 struct walker {
   PUThread* pWalkerThread;
   //CURL* pCurl;
   //int antTab[WALKER_MAX_ANTENNAS]; //what if foreign lab's aids get here?
   //size_t antTabLen;
   puint8 flags;
+  struct walker_transmit_readings_buffer_entry __wt_readings_buffer[__WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN];
+  size_t __wt_readings_buffer_len;
 };
 
 static int walker_flags_get_should_die(walker_t* pWalker) {
@@ -47,18 +60,6 @@ static char* walker_get_timestamp_now() {
 // static int __walker_curl_xferinfofn(void * p, curl_off_t o1, curl_off_t o2, curl_off_t ultotal, curl_off_t ulnow) {
 //   return 1;
 // }
-
-struct walker_transmit_readings_buffer_entry {
-  int ieIndex;
-  int antNo;
-  int txp;
-  int rssi;
-  int readRate;
-  int mt;
-};
-
-#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 1024
-static struct walker_transmit_readings_buffer_entry __walker_transmit_readings_buffer[__WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN];
 
 //TODO maybe do some refactoring so that we don't mix different layers of abstraction?
 static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
@@ -119,6 +120,33 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   yyjson_mut_doc_free(pJson);
 
   curl_easy_cleanup(pCurl);
+}
+
+//TODO use async curl (multi interface) - then we need to memcpy the buffer first
+static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
+  assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
+  struct walker_transmit_readings_buffer_entry* pNewEntry = &pWalker->__wt_readings_buffer[pWalker->__wt_readings_buffer_len];
+  pNewEntry->ieIndex = ieIndex;
+  pNewEntry->antNo = antNo;
+  pNewEntry->txp = txp;
+  pNewEntry->rssi = rssi;
+  pNewEntry->readRate = readRate;
+  pNewEntry->mt = mt;
+  pWalker->__wt_readings_buffer_len++;
+
+  assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
+  if (pWalker->__wt_readings_buffer_len == __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN) {
+    yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
+    yyjson_mut_doc_set_root(pJson, pRoot);
+
+    for (size_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
+      struct walker_transmit_readings_buffer_entry* pEntry = &pWalker->__wt_readings_buffer[i];
+      //TODO continue implemnentation
+      assert(0);
+    }
+    pWalker->__wt_readings_buffer_len = 0;
+  }
 }
 
 static void* walker_task(void* pArg) {
@@ -207,6 +235,8 @@ walker_t* walker_start_thread(void) {
   assert(pWalker != NULL);
   //pWalker->pCurl = curl_easy_init();
   //assert(pWalker->pCurl != NULL);
+  pWalker->flags = (puint8)0U;
+  pWalker->__wt_readings_buffer_len = 0;
   pWalker->pWalkerThread = p_uthread_create(walker_task, (void*)pWalker, TRUE, "walker_task");
   assert(pWalker->pWalkerThread != NULL);
   return pWalker;
