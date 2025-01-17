@@ -9,17 +9,19 @@
 #include "rscall.h"
 
 #define WALKER_TRANSMIT_READINGS_ENDPOINT_URL RAQMC_LABSERV_HOST "/api/invm"
+#define WALKER_TRANSMIT_READINGS_BULK_ENDPOINT_URL RAQMC_LABSERV_HOST "/api/invm-bulk"
 
 struct walker_transmit_readings_buffer_entry {
-  int ieIndex;
   int antNo;
   int txp;
   int rssi;
   int readRate;
   int mt;
+  char* timestamp;
+  char* epc;
 };
 
-#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 1024
+#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 8
 
 struct walker {
   PUThread* pWalkerThread;
@@ -54,6 +56,27 @@ static char* walker_get_timestamp_now() {
   assert(pTimestamp != NULL);
   assert(pTm->tm_year < 10000); //We don't want to overflow the buffer. Sorry for the Y10K bug //TODO Fix this before Y10K (:D)
   strftime(pTimestamp, 20, "%Y-%m-%d %H:%M:%S", pTm);
+  LOG_V("walker_get_timestamp_now: Timestamp: %s", pTimestamp);
+  return pTimestamp;
+}
+
+/**
+ * @warning You need to free the returned buffer after use
+ */
+static char* walker_get_timestamp_precise_now() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  struct tm* pTm = localtime(&tv.tv_sec);
+  assert(pTm != NULL);
+  char* pTimestamp = (char*)malloc(30);
+  assert(pTm->tm_year < 10000); //We don't want to overflow the buffer. Sorry for the Y10K bug //TODO Fix this before Y10K (:D)
+  strftime(pTimestamp, 20, "%Y-%m-%d %H:%M:%S", pTm);
+  //Add microseconds
+  strcat(pTimestamp, ".");
+  char micros[7];
+  sprintf(micros, "%06ld", tv.tv_usec);
+  strcat(pTimestamp, micros);
+  LOG_V("walker_get_timestamp_precise_now: Timestamp (precise): %s", pTimestamp);
   return pTimestamp;
 }
 
@@ -80,7 +103,7 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
   yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
   yyjson_mut_doc_set_root(pJson, pRoot);
-  char* pT = walker_get_timestamp_now();
+  char* pT = walker_get_timestamp_precise_now();
   yyjson_mut_obj_add_str(pJson, pRoot, "t", pT);
   const char* iePath = rscall_ie_get_path(ieIndex);
   char* epc = NULL;
@@ -93,10 +116,10 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   yyjson_mut_obj_add_int(pJson, pRoot, "rxss", rssi);
   yyjson_mut_obj_add_int(pJson, pRoot, "rxrate", readRate);
   yyjson_mut_obj_add_int(pJson, pRoot, "txp", txp);
-  yyjson_mut_obj_add_int(pJson, pRoot, "rxlat", -1); //TODO Implement this
+  yyjson_mut_obj_add_int(pJson, pRoot, "rxlat", -1); //TODO Implement this #w34gwfse
   yyjson_mut_obj_add_int(pJson, pRoot, "mtype", mt);
-  yyjson_mut_obj_add_int(pJson, pRoot, "rkt", -1); //TODO Future
-  yyjson_mut_obj_add_int(pJson, pRoot, "rkp", -1); //TODO Future
+  yyjson_mut_obj_add_int(pJson, pRoot, "rkt", -1); //TODO Future #fgbefaw
+  yyjson_mut_obj_add_int(pJson, pRoot, "rkp", -1); //TODO Future #awdfefe
   const char* lbToken = RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN;
   yyjson_mut_obj_add_str(pJson, pRoot, "lbtoken", lbToken);
 
@@ -107,7 +130,7 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   LOG_V("walker_transmit_readings: Calling curl_easy_perform");
   CURLcode res = curl_easy_perform(pCurl);
   if (res != CURLE_OK) {
-    LOG_E("walker_transmit_readings: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res);
+    LOG_E("walker_transmit_readings: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res); // TODO Should we save it and retry later? #sdvohulcisa
   } else {
     LOG_V("walker_transmit_readings: curl_easy_perform() succeeded");
   }
@@ -126,27 +149,78 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
 static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
   assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
   struct walker_transmit_readings_buffer_entry* pNewEntry = &pWalker->__wt_readings_buffer[pWalker->__wt_readings_buffer_len];
-  pNewEntry->ieIndex = ieIndex;
   pNewEntry->antNo = antNo;
   pNewEntry->txp = txp;
   pNewEntry->rssi = rssi;
   pNewEntry->readRate = readRate;
   pNewEntry->mt = mt;
+  pNewEntry->timestamp = walker_get_timestamp_precise_now();
+  pNewEntry->epc = NULL;
+  const char* iePath = rscall_ie_get_path(ieIndex);
+  assert(0 == rscall_ie_get_epc(iePath, &pNewEntry->epc));
+  assert(pNewEntry->epc != NULL);
   pWalker->__wt_readings_buffer_len++;
 
-  assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
+  assert(pWalker->__wt_readings_buffer_len >= 1); // >=1 because we already executed pWalker->__wt_readings_buffer_len++
+  assert(pWalker->__wt_readings_buffer_len <= __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
   if (pWalker->__wt_readings_buffer_len == __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN) {
+    CURL* pCurl = curl_easy_init();
+    assert(pCurl != NULL);
+    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_CUSTOMREQUEST, "PUT")); // PUT request
+    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_BULK_ENDPOINT_URL));
+    
     yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
     yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
     yyjson_mut_doc_set_root(pJson, pRoot);
+    const char* lbToken = RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN;
+    yyjson_mut_obj_add_str(pJson, pRoot, "lbtoken", lbToken);
+    yyjson_mut_obj_add_int(pJson, pRoot, "n_invms", (int64_t)pWalker->__wt_readings_buffer_len);
+    yyjson_mut_val* pInvms = yyjson_mut_arr(pJson);
 
     for (size_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
       struct walker_transmit_readings_buffer_entry* pEntry = &pWalker->__wt_readings_buffer[i];
-      //TODO continue implemnentation
-      assert(0);
+      yyjson_mut_val* pInvm = yyjson_mut_obj(pJson);
+      yyjson_mut_obj_add_str(pJson, pInvm, "t", pEntry->timestamp);
+      yyjson_mut_obj_add_str(pJson, pInvm, "epc", pEntry->epc);
+      yyjson_mut_obj_add_int(pJson, pInvm, "an", pEntry->antNo);
+      yyjson_mut_obj_add_int(pJson, pInvm, "rxss", pEntry->rssi);
+      yyjson_mut_obj_add_int(pJson, pInvm, "rxrate", pEntry->readRate);
+      yyjson_mut_obj_add_int(pJson, pInvm, "txp", pEntry->txp);
+      yyjson_mut_obj_add_int(pJson, pInvm, "rxlat", -1); //TODO Implement this (ref @w34gwfse)
+      yyjson_mut_obj_add_int(pJson, pInvm, "mtype", pEntry->mt);
+      yyjson_mut_obj_add_int(pJson, pInvm, "rkt", -1); //TODO Future (ref @fgbefaw)
+      yyjson_mut_obj_add_int(pJson, pInvm, "rkp", -1); //TODO Future (ref @awdfefe)
+      // Add inventory management object to the array
+      yyjson_mut_arr_add_val(pInvms, pInvm);
     }
+    yyjson_mut_obj_add_val(pJson, pRoot, "invms", pInvms);
+
+    char* jsonText = yyjson_mut_write(pJson, 0, NULL);
+    assert(jsonText != NULL);
+    curl_easy_setopt(pCurl, CURLOPT_POSTFIELDS, jsonText);
+    LOG_V("walker_transmit_readings_buffered: Calling curl_easy_perform");
+    CURLcode res = curl_easy_perform(pCurl);
+    if (res != CURLE_OK) {
+      LOG_E("walker_transmit_readings_buffered: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res); // TODO Should we save it and retry later? (ref @sdvohulcisa)
+    } else {
+      LOG_V("walker_transmit_readings_buffered: curl_easy_perform() succeeded");
+    }
+
+    //TODO Handle response if needed?
+
+    for (size_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
+      struct walker_transmit_readings_buffer_entry* pEntry = &pWalker->__wt_readings_buffer[i];
+      free(pEntry->timestamp);
+      free(pEntry->epc);
+    }
+    
+    free(jsonText);
+    yyjson_mut_doc_free(pJson);
+    curl_easy_cleanup(pCurl);
+
     pWalker->__wt_readings_buffer_len = 0;
   }
+  free((void*)iePath);
 }
 
 static void* walker_task(void* pArg) {
@@ -176,7 +250,8 @@ static void* walker_task(void* pArg) {
         rv = measurements_quick_perform(ieIndex, antNo, txPower, &rssi);
         if (0 == rv) {
           LOG_V("walker_task: measurements_quick_perform() succeeded: ieIndex %d, antNo %d, txPower %d, rssi %d", ieIndex, antNo, txPower, rssi);
-          walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
+          //walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
+          walker_transmit_readings_buffered(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
         } else if (-1 == rv) {
           should_break_inventory_looper = 1;
         } else if (-3 == rv) {
