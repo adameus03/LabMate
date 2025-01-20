@@ -1,6 +1,8 @@
 #ifndef DB_H
 #define DB_H
 
+#include <stdlib.h>
+
 typedef struct db db_t;
 
 typedef struct db_user {
@@ -258,6 +260,19 @@ int db_invm_insert(db_t* pDb,
                    const char* rotator_ktheta, 
                    const char* rotator_kphi);
 
+int db_invm_insert_bulk(db_t* pDb, 
+                        const size_t nInvms, 
+                        const char* times[],
+                        const char* inventory_epcs[],
+                        const char* antnos[],
+                        const char* rx_signal_strengths[],
+                        const char* read_rates[],
+                        const char* tx_powers[],
+                        const char* read_latencies[],
+                        const char* measurement_types[],
+                        const char* rotator_kthetas[],
+                        const char* rotator_kphis[]);
+
 int db_invm_insert_ret(db_t* pDb, 
                        const char* time, 
                        const char* inventory_epc, 
@@ -269,6 +284,20 @@ int db_invm_insert_ret(db_t* pDb,
                        const char* measurement_type, 
                        const char* rotator_ktheta, 
                        const char* rotator_kphi, 
-                       db_invm_t* pInvm_out);                   
+                       db_invm_t* pInvm_out);
+
+// int db_invm_insert_bulk_ret(db_t* pDb, 
+//                         const size_t nInvms, 
+//                         const char* times[],
+//                         const char* inventory_epcs[],
+//                         const char* antnos[],
+//                         const char* rx_signal_strengths[],
+//                         const char* read_rates[],
+//                         const char* tx_powers[],
+//                         const char* read_latencies[],
+//                         const char* measurement_types[],
+//                         const char* rotator_kthetas[],
+//                         const char* rotator_kphis[],
+//                         db_invm_t** ppInvms_out);           
 
 #endif // DB_H

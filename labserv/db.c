@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <plibsys/plibsys.h>
+#include <string.h>
+#include <stdlib.h>
 #include "log.h"
 #include "config.h"
 
@@ -1756,6 +1758,117 @@ int db_invm_insert(db_t* pDb,
   PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 10, NULL, pParams, NULL, NULL, 0);
   if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
     LOG_E("db_invm_insert: Failed to insert invm (time \"%s\"): %s", time, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+#define __DB_INVM_INSERT_BULK_MAX 1024
+int db_invm_insert_bulk(db_t* pDb, 
+                        const size_t nInvms, 
+                        const char* times[],
+                        const char* inventory_epcs[],
+                        const char* antnos[],
+                        const char* rx_signal_strengths[],
+                        const char* read_rates[],
+                        const char* tx_powers[],
+                        const char* read_latencies[],
+                        const char* measurement_types[],
+                        const char* rotator_kthetas[],
+                        const char* rotator_kphis[]) {
+  assert(pDb != NULL);
+  assert(nInvms > 0);
+  assert(nInvms <= __DB_INVM_INSERT_BULK_MAX);
+  assert(times != NULL);
+  assert(inventory_epcs != NULL);
+  assert(antnos != NULL);
+  assert(rx_signal_strengths != NULL);
+  assert(read_rates != NULL);
+  assert(tx_powers != NULL);
+  assert(read_latencies != NULL);
+  assert(measurement_types != NULL);
+  assert(rotator_kthetas != NULL);
+  assert(rotator_kphis != NULL);
+  for (size_t i = 0; i < nInvms; i++) {
+    assert(times[i] != NULL);
+    assert(inventory_epcs[i] != NULL);
+    assert(antnos[i] != NULL);
+    assert(rx_signal_strengths[i] != NULL);
+    assert(read_rates[i] != NULL);
+    assert(tx_powers[i] != NULL);
+    assert(read_latencies[i] != NULL);
+    assert(measurement_types[i] != NULL);
+    assert(rotator_kthetas[i] != NULL);
+    assert(rotator_kphis[i] != NULL);
+  }
+
+  const char* pQuery = "COPY public.invm (time, inventory_epc, antno, rx_signal_strength, read_rate, tx_power, read_latency, measurement_type, rotator_ktheta, rotator_kphi) FROM STDIN";
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexec(pDbConnection->pConn, pQuery);
+  if (PGRES_COPY_IN != PQresultStatus(pResult)) {
+    LOG_E("db_invm_insert_bulk: Failed to start bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  
+  //Stream data
+  for (size_t i = 0; i < nInvms; i++) {
+    size_t timeStrlen = strlen(times[i]);
+    size_t epcStrlen = strlen(inventory_epcs[i]);
+    size_t antnoStrlen = strlen(antnos[i]);
+    size_t rxssStrlen = strlen(rx_signal_strengths[i]);
+    size_t rrStrlen = strlen(read_rates[i]);
+    size_t txpStrlen = strlen(tx_powers[i]);
+    size_t rxlatStrlen = strlen(read_latencies[i]);
+    size_t mtypeStrlen = strlen(measurement_types[i]);
+    size_t rkthetaStrlen = strlen(rotator_kthetas[i]);
+    size_t rkphiStrlen = strlen(rotator_kphis[i]);
+    
+    size_t lineStrlen = timeStrlen + epcStrlen + antnoStrlen + rxssStrlen + rrStrlen + txpStrlen + rxlatStrlen + mtypeStrlen + rkthetaStrlen + rkphiStrlen + 10;
+    char* line = (char*)malloc(lineStrlen + 1);
+    line[lineStrlen] = '\0';
+    if (line == NULL) {
+      LOG_E("db_invm_insert_bulk: Failed to allocate memory for line");
+      if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to allocate memory for line")) {
+        LOG_E("db_invm_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+      }
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      return -1;
+    }
+    int rv = snprintf(line, lineStrlen+1, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", times[i], inventory_epcs[i], antnos[i], rx_signal_strengths[i], read_rates[i], tx_powers[i], read_latencies[i], measurement_types[i], rotator_kthetas[i], rotator_kphis[i]);
+    if (rv != lineStrlen) {
+      LOG_E("db_invm_insert_bulk: Failed to format line (snprintf returned %d, expected %d)", rv, lineStrlen);
+      if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to format line")) {
+        LOG_E("db_invm_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+      }
+      free(line);
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      return -1;
+    }
+    LOG_V("db_invm_insert_bulk: lineStrlen: %d, strlen(line): %d, line: [%s]", lineStrlen, strlen(line), line);
+    assert(strlen(line) == lineStrlen);
+    rv = PQputCopyData(pDbConnection->pConn, line, lineStrlen);
+    free(line);
+    if (rv != 1) {
+      LOG_E("db_invm_insert_bulk: Failed to stream data: %s", PQerrorMessage(pDbConnection->pConn));
+      if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to stream data")) {
+        LOG_E("db_invm_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+      }
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      return -1;
+    }
+  }
+  int rv = PQputCopyEnd(pDbConnection->pConn, NULL);
+  if (rv != 1) {
+    LOG_E("db_invm_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
     __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
     return -1;
