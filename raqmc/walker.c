@@ -21,11 +21,13 @@ struct walker_transmit_readings_buffer_entry {
   char* epc;
 };
 
-#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 8
+#define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 32
 
 struct walker {
   PUThread* pWalkerThread;
   //CURL* pCurl;
+  CURLM* pCurlMulti;
+
   //int antTab[WALKER_MAX_ANTENNAS]; //what if foreign lab's aids get here?
   //size_t antTabLen;
   puint8 flags;
@@ -166,6 +168,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
   if (pWalker->__wt_readings_buffer_len == __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN) {
     CURL* pCurl = curl_easy_init();
     assert(pCurl != NULL);
+
     assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_CUSTOMREQUEST, "PUT")); // PUT request
     assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_BULK_ENDPOINT_URL));
     
@@ -198,16 +201,41 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     char* jsonText = yyjson_mut_write(pJson, 0, NULL);
     assert(jsonText != NULL);
     curl_easy_setopt(pCurl, CURLOPT_POSTFIELDS, jsonText);
-    LOG_V("walker_transmit_readings_buffered: Calling curl_easy_perform");
-    CURLcode res = curl_easy_perform(pCurl);
-    if (res != CURLE_OK) {
-      LOG_E("walker_transmit_readings_buffered: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res); // TODO Should we save it and retry later? (ref @sdvohulcisa)
+    
+    // LOG_V("walker_transmit_readings_buffered: Calling curl_easy_perform");
+    // CURLcode res = curl_easy_perform(pCurl);
+    // if (res != CURLE_OK) {
+    //   LOG_E("walker_transmit_readings_buffered: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res); // TODO Should we save it and retry later? (ref @sdvohulcisa)
+    // } else {
+    //   LOG_V("walker_transmit_readings_buffered: curl_easy_perform() succeeded");
+    // }
+
+    assert(CURLE_OK == curl_multi_add_handle(pWalker->pCurlMulti, pCurl));
+    LOG_V("walker_transmit_readings_buffered: Calling curl_multi_perform");
+    int runningHandles;
+    CURLMcode mres = curl_multi_perform(pWalker->pCurlMulti, &runningHandles);
+    if (mres != CURLM_OK) {
+      LOG_E("walker_transmit_readings_buffered: curl_multi_perform() failed: %d", mres);
+      assert(0);
     } else {
-      LOG_V("walker_transmit_readings_buffered: curl_easy_perform() succeeded");
+      LOG_V("walker_transmit_readings_buffered: curl_multi_perform() succeeded, runningHandles=%d", runningHandles);
     }
-
-    //TODO Handle response if needed?
-
+    CURLMsg* pMsg = NULL;
+    int msgsLeft;
+    while ((pMsg = curl_multi_info_read(pWalker->pCurlMulti, &msgsLeft))) {
+      if (pMsg->msg == CURLMSG_DONE) {
+        CURL* pDone = pMsg->easy_handle;
+        CURLcode res = pMsg->data.result;
+        if (res != CURLE_OK) {
+          LOG_E("walker_transmit_readings_buffered: transfer failed: %s (res=%d)", curl_easy_strerror(res), res);
+        } else {
+          LOG_V("walker_transmit_readings_buffered: transfer succeeded");
+        }
+        curl_multi_remove_handle(pWalker->pCurlMulti, pDone);
+        curl_easy_cleanup(pDone);
+      }
+    }
+    
     for (size_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
       struct walker_transmit_readings_buffer_entry* pEntry = &pWalker->__wt_readings_buffer[i];
       free(pEntry->timestamp);
@@ -216,7 +244,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     
     free(jsonText);
     yyjson_mut_doc_free(pJson);
-    curl_easy_cleanup(pCurl);
+    //curl_easy_cleanup(pCurl);
 
     pWalker->__wt_readings_buffer_len = 0;
   }
@@ -310,6 +338,9 @@ walker_t* walker_start_thread(void) {
   assert(pWalker != NULL);
   //pWalker->pCurl = curl_easy_init();
   //assert(pWalker->pCurl != NULL);
+  pWalker->pCurlMulti = curl_multi_init();
+  assert(pWalker->pCurlMulti != NULL);
+
   pWalker->flags = (puint8)0U;
   pWalker->__wt_readings_buffer_len = 0;
   pWalker->pWalkerThread = p_uthread_create(walker_task, (void*)pWalker, TRUE, "walker_task");
@@ -328,6 +359,9 @@ void walker_free_resources(walker_t* pWalker) {
   assert(pWalker != NULL);
   //curl_easy_cleanup(pWalker->pCurl);
   //pWalker->pCurl = NULL;
+  curl_multi_cleanup(pWalker->pCurlMulti);
+  pWalker->pCurlMulti = NULL;
+
   pWalker->pWalkerThread = NULL;
   pWalker->flags = (puint8)0U;
   // assert(pWalker->antTab != NULL);

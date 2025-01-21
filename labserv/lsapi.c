@@ -2503,7 +2503,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
         assert(rkp >= 0 || rkp == -1);
 
         // SKIP LAB BEARER TOKEN VERIFICATION FOR EACH INVENTORY MEASUREMENT
-        // TODO verify lab bearer token only once for the entire bulk request - but how do we do that without performing join for each epc?
+        // TODO verify lab bearer token only once for the entire bulk request - but how do we do that without performing join for each epc? - JWT, again? Or some JWT-like mechanism involving epc and lab secret?
 
         char* an_str = __lsapi_itoa(an);
         char* rxss_str = __lsapi_itoa(rxss);
