@@ -370,6 +370,17 @@ static int walker_load_inventory(walker_t* pWalker, size_t* nItems_out) {
     return -4;
   }
 
+  //parse message
+  yyjson_val* pMessage = yyjson_obj_get(pRootResp, "message");
+  if (pMessage == NULL || !yyjson_is_str(pMessage)) {
+    LOG_E("walker_load_inventory: Failed to obtain message from json response");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -16;
+  }
+  LOG_I("walker_load_inventory: Message from labserv: %s", yyjson_get_str(pMessage));
+
   //parse status
   yyjson_val* pStatus = yyjson_obj_get(pRootResp, "status");
   if (pStatus == NULL || !yyjson_is_str(pStatus)) {
