@@ -148,6 +148,11 @@ static void walker_transmit_readings(walker_t* pWalker, const int ieIndex, const
   curl_easy_cleanup(pCurl);
 }
 
+static size_t walker_libcurl_write_data_null(void *buffer, size_t size, size_t nmemb, void *userp)
+{
+   return size * nmemb;
+}
+
 //TODO use async curl (multi interface) - then we need to memcpy the buffer first
 static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
   assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
@@ -172,6 +177,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
 
     assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_CUSTOMREQUEST, "PUT")); // PUT request
     assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_BULK_ENDPOINT_URL));
+    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_WRITEFUNCTION, walker_libcurl_write_data_null));
     
     yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
     yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
