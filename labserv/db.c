@@ -1499,6 +1499,69 @@ int db_inventory_insert_ret(db_t* pDb,
   return 0; // Success
 }
 
+static int db_inventory_get_multi_by_x(db_t* pDb,
+                                       const char* pQuery,
+                                       const char** pParams,
+                                       int nParams,
+                                       db_inventory_item_t** ppInventoryItems_out,
+                                       size_t* pN_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(ppInventoryItems_out != NULL);
+  assert(pN_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_inventory_get_multi_by_x: Failed to get inventory items: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_inventory_get_multi_by_x: No inventory items found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No inventory items found
+  }
+  if (PQnfields(pResult) != 10) {
+    LOG_E("db_inventory_get_multi_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_inventory_item_t* pInventoryItems = malloc(nTuples * sizeof(db_inventory_item_t));
+  if (pInventoryItems == NULL) {
+    LOG_E("db_inventory_get_multi_by_x: Failed to allocate memory for inventory items");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pInventoryItems[i].inventory_id = atoi(PQgetvalue(pResult, i, 0));
+    pInventoryItems[i].reagent_id = atoi(PQgetvalue(pResult, i, 1));
+    pInventoryItems[i].date_added = PQgetvalue(pResult, i, 2);
+    pInventoryItems[i].date_expire = PQgetvalue(pResult, i, 3);
+    pInventoryItems[i].lab_id = atoi(PQgetvalue(pResult, i, 4));
+    pInventoryItems[i].epc = PQgetvalue(pResult, i, 5);
+    pInventoryItems[i].apwd = PQgetvalue(pResult, i, 6);
+    pInventoryItems[i].kpwd = PQgetvalue(pResult, i, 7);
+    pInventoryItems[i].is_embodied = PQgetvalue(pResult, i, 8)[0] == 't' ? 1 : 0;
+    pInventoryItems[i].basepoint_id = atoi(PQgetvalue(pResult, i, 9));
+  }
+  *ppInventoryItems_out = pInventoryItems;
+  *pN_out = nTuples;
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
 static int db_inventory_get_by_x(db_t* pDb,
                                  const char* pQuery,
                                  const char** pParams,
@@ -1569,6 +1632,16 @@ int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_
 // int db_inventory_get_by_lab_bthash(db_t* pDb, const char* lab_bthash_in, db_inventory_item_t* pInventoryItems_out, size_t* pN_out) {
 
 // }
+
+int db_inventory_get_by_lab_host(db_t* pDb, const char* lab_host_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out) {
+  assert(pDb != NULL);
+  assert(lab_host_in != NULL);
+  assert(ppInventoryItems_out != NULL);
+  assert(pN_out != NULL);
+  const char* pQuery = "SELECT * FROM public.inventory i LEFT JOIN public.labs l ON i.lab_id = l.lab_id WHERE l.host = $1";
+  const char* pParams[1] = {lab_host_in};
+  return db_inventory_get_multi_by_x(pDb, pQuery, pParams, 1, ppInventoryItems_out, pN_out);
+}
 
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id) {
   assert(pDb != NULL);

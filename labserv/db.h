@@ -233,6 +233,11 @@ int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_
 
 //int db_inventory_get_by_lab_bthash(db_t* pDb, const char* lab_bthash_in, db_inventory_item_t* pInventoryItems_out, size_t* pN_out);
 
+/**
+ * @note This function allocates memory for `*ppInventoryItems_out` which must be freed by the caller after use
+ */
+int db_inventory_get_by_lab_host(db_t* pDb, const char* lab_host_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out);
+
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id);
 
 int db_antenna_insert(db_t* pDb, 

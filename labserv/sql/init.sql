@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS public.labs(
 	faculty_id int4 NOT NULL,
 	CONSTRAINT labs_pk PRIMARY KEY (lab_id),
 	CONSTRAINT labs_unique UNIQUE (name, faculty_id),
+	CONSTRAINT labs_unique_1 UNIQUE (host),
 	CONSTRAINT faculty_id_fk FOREIGN KEY (faculty_id) REFERENCES public.faculties(faculty_id)
 );
 
