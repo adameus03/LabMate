@@ -33,18 +33,19 @@ void oph_destroy(oph_t* pOph) {
   free(pOph);
 }
 
-#define __OPH_LIBCURL_WRITE_DATA_MAX 1024
+#define __OPH_LIBCURL_WRITE_DATA_MAX 4096
 typedef struct __oph_libcurl_write_data {
   char data[__OPH_LIBCURL_WRITE_DATA_MAX];
   size_t pos; //initialize to 0
-} __oph_libcurl_write_data;
+} __oph_libcurl_write_data_t;
 
 // Writes data to a content buffer
 static size_t __oph_libcurl_write(void* ptr, size_t size, size_t nmemb, void* userdata) {
   assert(ptr != NULL);
   assert(size > 0);
+  assert(nmemb > 0);
   assert(userdata != NULL);
-  __oph_libcurl_write_data* pWriteData = (__oph_libcurl_write_data*)userdata;
+  __oph_libcurl_write_data_t* pWriteData = (__oph_libcurl_write_data_t*)userdata;
   size_t nWrite = size * nmemb;
   if (nWrite + pWriteData->pos > __OPH_LIBCURL_WRITE_DATA_MAX) {
     LOG_E("__oph_libcurl_write: Received data exceeds buffer size (%d). Truncating to %d bytes", __OPH_LIBCURL_WRITE_DATA_MAX, pWriteData->pos);
@@ -103,7 +104,7 @@ int oph_trigger_embodiment(oph_t* pOph, const char* epc, const char* apwd, const
   const char* endpoint_url = oph_endpoint_url(pOph, "/api/ite");
   assert(CURLE_OK == curl_easy_setopt(pOph->pCurl, CURLOPT_URL, endpoint_url));
   assert(CURLE_OK == curl_easy_setopt(pOph->pCurl, CURLOPT_POSTFIELDS, reqText));
-  __oph_libcurl_write_data writeData = {0};
+  __oph_libcurl_write_data_t writeData = {0};
   for (int i = 0; i < __OPH_LIBCURL_WRITE_DATA_MAX; i++) {
     assert(writeData.data[i] == 0);
   }

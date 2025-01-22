@@ -1522,7 +1522,7 @@ static int db_inventory_get_multi_by_x(db_t* pDb,
   assert(pN_out != NULL);
 
   db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
-  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, nParams, NULL, pParams, NULL, NULL, 0);
   if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
     LOG_E("db_inventory_get_multi_by_x: Failed to get inventory items: %s", PQerrorMessage(pDbConnection->pConn));
     PQclear(pResult);
@@ -1660,6 +1660,17 @@ int db_inventory_get_by_lab_id(db_t* pDb, const char* lab_id_in, db_inventory_it
   const char* pQuery = "SELECT * FROM public.inventory WHERE lab_id = $1";
   const char* pParams[1] = {lab_id_in};
   return db_inventory_get_multi_by_x(pDb, pQuery, pParams, 1, ppInventoryItems_out, pN_out);
+}
+
+int db_inventory_get_by_lab_id_filter_embodied(db_t* pDb, const char* lab_id_in, const int is_embodied_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out) {
+  assert(pDb != NULL);
+  assert(lab_id_in != NULL);
+  assert((is_embodied_in == 0) || (is_embodied_in == 1));
+  assert(ppInventoryItems_out != NULL);
+  assert(pN_out != NULL);
+  const char* pQuery = "SELECT * FROM public.inventory WHERE lab_id = $1 AND is_embodied = $2";
+  const char* pParams[2] = {lab_id_in, is_embodied_in ? "true" : "false"};
+  return db_inventory_get_multi_by_x(pDb, pQuery, pParams, 2, ppInventoryItems_out, pN_out);
 }
 
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id) {

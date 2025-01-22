@@ -245,6 +245,8 @@ int db_inventory_get_by_lab_host(db_t* pDb, const char* lab_host_in, db_inventor
  */
 int db_inventory_get_by_lab_id(db_t* pDb, const char* lab_id_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out);
 
+int db_inventory_get_by_lab_id_filter_embodied(db_t* pDb, const char* lab_id_in, const int is_embodied_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out);
+
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id);
 
 int db_antenna_insert(db_t* pDb, 

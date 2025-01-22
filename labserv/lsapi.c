@@ -2069,7 +2069,7 @@ static int __lsapi_endpoint_inven_ld_post(h2o_handler_t* pH2oHandler, h2o_req_t*
     db_inventory_item_t* pInventoryItems = NULL;
     size_t nInventoryItems = 0;
     char* lid_str = __lsapi_itoa(lab.lab_id);
-    rv = db_inventory_get_by_lab_id(pLsapi->pDb, lid_str, &pInventoryItems, &nInventoryItems);
+    rv = db_inventory_get_by_lab_id_filter_embodied(pLsapi->pDb, lid_str, 1, &pInventoryItems, &nInventoryItems);
     if ((0 != rv) && (-2 != rv)) {
         yyjson_doc_free(pJson);
         db_lab_free(&lab);

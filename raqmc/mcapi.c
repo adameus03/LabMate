@@ -157,22 +157,27 @@ static int __mcapi_endpoint_ite_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
   }
   if (0 != rscall_ie_set_epc(iePath, epc)) {
     yyjson_doc_free(pJson);
+    free((void*)iePath);
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set EPC");
   }
   if (0 != rscall_ie_set_access_passwd(iePath, apwd)) {
     yyjson_doc_free(pJson);
+    free((void*)iePath);
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set access password");
   }
   if (0 != rscall_ie_set_kill_passwd(iePath, kpwd)) {
     yyjson_doc_free(pJson);
+    free((void*)iePath);
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set kill password");
   }
   if (0 != rscall_ie_set_flags(iePath, "00")) {
     yyjson_doc_free(pJson);
+    free((void*)iePath);
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set flags");
   }
   if (0 != rscall_ie_drv_embody(iePath)) {
     yyjson_doc_free(pJson);
+    free((void*)iePath);
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to embody inventory element"); // TODO: Consider using 503 Service Unavailable ?
   }
 
@@ -205,6 +210,7 @@ static int __mcapi_endpoint_ite_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
   free((void*)respText);
   yyjson_doc_free(pJson);
   yyjson_mut_doc_free(pJsonResp);
+  free((void*)iePath);
   return 0;
 }
 

@@ -265,10 +265,262 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
   free((void*)iePath);
 }
 
+#define __WALKER_LIBCURL_WRITE_DATA_CAPACITY_INITIAL 1024
+typedef struct __walker_libcurl_write_data {
+  char* data;
+  size_t pos;
+  size_t capacity;
+  size_t realloc_counter;
+} __walker_libcurl_write_data_t;
+
+static size_t __walker_libcurl_write(void* ptr, size_t size, size_t nmemb, void* userdata) {
+  assert(ptr != NULL);
+  assert(size > 0);
+  assert(nmemb > 0);
+  assert(userdata != NULL);
+  __walker_libcurl_write_data_t* pWriteData = (__walker_libcurl_write_data_t*)userdata;
+  size_t nWrite = size * nmemb;
+  if (nWrite + pWriteData->pos > pWriteData->capacity) {
+    //increase capacity
+    size_t newCapacity = nWrite + pWriteData->pos + __WALKER_LIBCURL_WRITE_DATA_CAPACITY_INITIAL * (1 << pWriteData->realloc_counter); //additional space to reduce reallocations
+    pWriteData->realloc_counter++;
+    LOG_D("__walker_libcurl_write: Reallocating data buffer to %d bytes", newCapacity);
+    char* newData = (char*)realloc(pWriteData->data, newCapacity);
+    if (newData == NULL) {
+      LOG_E("__walker_libcurl_write: realloc failed");
+      assert(0);
+    }
+    pWriteData->data = newData;
+    LOG_V("__walker_libcurl_write: Done reallocating data buffer to %d bytes", newCapacity);
+    for (size_t i = pWriteData->capacity; i < newCapacity; i++) {
+      pWriteData->data[i] = 0;
+    }
+    pWriteData->capacity = newCapacity;
+  }
+  memcpy(pWriteData->data + pWriteData->pos, ptr, nWrite);
+  pWriteData->pos += nWrite;
+  return nWrite;
+}
+
+static int walker_load_inventory(walker_t* pWalker, size_t* nItems_out) {
+  assert(pWalker != NULL);
+
+  //Construct request to labserv
+  yyjson_mut_doc* pJsonReq = yyjson_mut_doc_new(NULL);
+  yyjson_mut_val* pRootReq = yyjson_mut_obj(pJsonReq);
+  yyjson_mut_doc_set_root(pJsonReq, pRootReq);
+  const char* host = RAQMC_HOST_URL;
+  const char* lbToken = RAQMC_SERVER_PRE_SHARED_BEARER_TOKEN;
+  yyjson_mut_obj_add_str(pJsonReq, pRootReq, "host", host);
+  yyjson_mut_obj_add_str(pJsonReq, pRootReq, "lbtoken", lbToken);
+  char* reqText = yyjson_mut_write(pJsonReq, 0, NULL);
+  yyjson_mut_doc_free(pJsonReq);
+  if (reqText == NULL) {
+    LOG_E("walker_load_inventory: yyjson_mut_write failed");
+    assert(0);
+  }
+
+  //Send request to labserv
+  CURL* pCurl = curl_easy_init();
+  assert(pCurl != NULL);
+  assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, RAQMC_LABSERV_HOST "/api/inven-ld"));
+  assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_POSTFIELDS, reqText));
+  __walker_libcurl_write_data_t writeData = {0};
+  writeData.capacity = __WALKER_LIBCURL_WRITE_DATA_CAPACITY_INITIAL;
+  writeData.pos = 0;
+  writeData.realloc_counter = 0;
+  writeData.data = (char*)malloc(writeData.capacity);
+  assert(writeData.data != NULL);
+  for (int i = 0; i < writeData.capacity; i++) {
+    writeData.data[i] = 0;
+  }
+  assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_WRITEFUNCTION, __walker_libcurl_write));
+  assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_WRITEDATA, &writeData));
+  CURLcode res = curl_easy_perform(pCurl);
+  if (res != CURLE_OK) {
+    LOG_E("walker_load_inventory: curl_easy_perform() failed: %s (res=%d)", curl_easy_strerror(res), res);
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -1;
+  }
+  if (writeData.pos == 0) {
+    LOG_E("walker_load_inventory: No response received");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -2;
+  }
+
+  //Parse response
+  yyjson_doc* pJsonResp = yyjson_read(writeData.data, writeData.pos, 0);
+  if (pJsonResp == NULL) {
+    LOG_E("walker_load_inventory: yyjson_read failed");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -3;
+  }
+  yyjson_val* pRootResp = yyjson_doc_get_root(pJsonResp);
+  if (pRootResp == NULL) {
+    LOG_E("walker_load_inventory: yyjson_doc_get_root failed");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -4;
+  }
+
+  //parse status
+  yyjson_val* pStatus = yyjson_obj_get(pRootResp, "status");
+  if (pStatus == NULL || !yyjson_is_str(pStatus)) {
+    LOG_E("walker_load_inventory: Failed to obtain status from json response");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -17;
+  }
+  const char* status = yyjson_get_str(pStatus);
+  if (strcmp(status, "success") != 0) {
+    LOG_E("walker_load_inventory: Status is not \"success\", but \"%s\"", status);
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -18;
+  }
+
+  //parse inventory array
+  yyjson_val* pInventory = yyjson_obj_get(pRootResp, "inventory");
+  if (pInventory == NULL) {
+    LOG_E("walker_load_inventory: Failed to obtain inventory array from json response");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -5;
+  }
+  if (!yyjson_is_arr(pInventory)) {
+    LOG_E("walker_load_inventory: Inventory is not an array");
+    free(reqText);
+    free(writeData.data);
+    curl_easy_cleanup(pCurl);
+    return -6;
+  }
+  size_t inventoryLen = yyjson_arr_size(pInventory);
+  *nItems_out = inventoryLen;
+  for (size_t i = 0; i < inventoryLen; i++) {
+    // Each array element is expected to be of form {"epc": "<epc>", "apwd": "<apwd>", "kpwd": "<kpwd>"}
+    yyjson_val* pInventoryItem = yyjson_arr_get(pInventory, i);
+    if (pInventoryItem == NULL) {
+      LOG_E("walker_load_inventory: Failed to obtain inventory item (index: %d) from inventory array", i);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      return -7;
+    }
+    if (!yyjson_is_obj(pInventoryItem)) {
+      LOG_E("walker_load_inventory: Inventory item (index: %d) is not an object", i);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      return -8;
+    }
+    yyjson_val* pEpc = yyjson_obj_get(pInventoryItem, "epc");
+    if (pEpc == NULL || !yyjson_is_str(pEpc)) {
+      LOG_E("walker_load_inventory: Failed to obtain epc from inventory item (index: %d)", i);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      return -9;
+    }
+    yyjson_val* pApwd = yyjson_obj_get(pInventoryItem, "apwd");
+    if (pApwd == NULL || !yyjson_is_str(pApwd)) {
+      LOG_E("walker_load_inventory: Failed to obtain apwd from inventory item (index: %d)", i);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      return -10;
+    }
+    yyjson_val* pKpwd = yyjson_obj_get(pInventoryItem, "kpwd");
+    if (pKpwd == NULL || !yyjson_is_str(pKpwd)) {
+      LOG_E("walker_load_inventory: Failed to obtain kpwd from inventory item (index: %d)", i);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      return -11;
+    }
+    const char* epc = yyjson_get_str(pEpc);
+    const char* apwd = yyjson_get_str(pApwd);
+    const char* kpwd = yyjson_get_str(pKpwd);
+    const char* flags = "02"; //embodied
+
+    //Register via rscall
+    char* iePath = rscall_ie_dir_create();
+    if (iePath == NULL) {
+      LOG_E("walker_load_inventory: rscall_ie_dir_create() returned NULL");
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      return -12;
+    }
+    int rv = rscall_ie_set_epc(iePath, epc);
+    if (rv != 0) {
+      LOG_E("walker_load_inventory: rscall_ie_set_epc failed: %d", rv);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      free(iePath);
+      return -13;
+    }
+    rv = rscall_ie_set_access_passwd(iePath, apwd);
+    if (rv != 0) {
+      LOG_E("walker_load_inventory: rscall_ie_set_access_passwd failed: %d", rv);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      free(iePath);
+      return -14;
+    }
+    rv = rscall_ie_set_kill_passwd(iePath, kpwd);
+    if (rv != 0) {
+      LOG_E("walker_load_inventory: rscall_ie_set_kill_passwd failed: %d", rv);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      free(iePath);
+      return -15;
+    }
+    rv = rscall_ie_set_flags(iePath, flags);
+    if (rv != 0) {
+      LOG_E("walker_load_inventory: rscall_ie_set_flags failed: %d", rv);
+      free(reqText);
+      free(writeData.data);
+      curl_easy_cleanup(pCurl);
+      free(iePath);
+      return -16;
+    }
+    free(iePath);
+  }
+
+  free(reqText);
+  free(writeData.data);
+  curl_easy_cleanup(pCurl);
+  return 0;
+}
+
 static void* walker_task(void* pArg) {
   LOG_I("walker_task: Started");
   walker_t* pWalker = (walker_t*)pArg;
   assert(pWalker != NULL);
+
+  // Load inventory
+  LOG_I("walker_task: Loading inventory");
+  size_t nLoadedItems = 0;
+  int rv = walker_load_inventory(pWalker, &nLoadedItems);
+  if (rv != 0) {
+    LOG_E("walker_task: walker_load_inventory failed: rv=%d, nLoadedItems=%d", rv, nLoadedItems);
+    assert(0);
+  }
+  LOG_I("walker_task: Inventory loaded (%d items), proceeding to walker inventory cycles", nLoadedItems);
+
   puint64 inventory_cycle_counter = 0;
   while (!walker_flags_get_should_die(pWalker)) {
     inventory_cycle_counter++;

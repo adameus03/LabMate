@@ -4,6 +4,7 @@
 #define RAQMC_USE_HTTPS 0
 #define RAQMC_USE_MEMCACHED 0
 #define RAQMC_IPV4_ADDR "0.0.0.0"
+#define RAQMC_HOST_URL "http://raspberrypi.local:7891"
 #define RAQMC_IP_PORT 7891
 #define RAQMC_H2O_ACCESS_LOG_FILE_PATH "/dev/stdout"
 //TODO Configure this token in a better place so that changing it doesn't require recompilation?
