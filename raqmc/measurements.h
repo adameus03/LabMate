@@ -17,4 +17,8 @@ int measurements_quick_perform(const int ieIndex, const int antNo, const int txP
  */
 int measurements_dual_perform(const int ieIndex, const int antNo, const int txPower, int* pRssi_out, int* pReadRate_out);
 
+void measurements_preemption_lock(void);
+
+void measurements_preemption_unlock(void);
+
 #endif // MEASUREMENTS_H

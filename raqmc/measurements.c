@@ -147,3 +147,13 @@ int measurements_dual_perform(const int ieIndex, const int antNo, const int txPo
 
   return 0;
 }
+
+void measurements_preemption_lock(void) {
+  assert(__pMeasurement_global_mtx != NULL);
+  assert(TRUE == p_mutex_lock(__pMeasurement_global_mtx));
+}
+
+void measurements_preemption_unlock(void) {
+  assert(__pMeasurement_global_mtx != NULL);
+  assert(TRUE == p_mutex_unlock(__pMeasurement_global_mtx));
+}

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "log.h"
 #include "rscall.h"
+#include "acall.h"
 #include "measurements.h"
 
 struct mcapi {
@@ -175,11 +176,45 @@ static int __mcapi_endpoint_ite_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
     free((void*)iePath);
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to set flags");
   }
-  if (0 != rscall_ie_drv_embody(iePath)) {
+
+  const char* antPath = acall_ant_get_path(RAQMC_EMBODIMENT_ANTNO);
+  if (antPath == NULL) {
     yyjson_doc_free(pJson);
     free((void*)iePath);
+    return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get path for embodiment antenna");
+  }
+
+  measurements_preemption_lock();
+
+  int rv = acall_ant_set_enabled(antPath);
+  if (0 != rv) {
+    yyjson_doc_free(pJson);
+    free((void*)iePath);
+    free((void*)antPath);
+    measurements_preemption_unlock();
+    if (-10 == rv) {
+      LOG_E("__mcapi_endpoint_ite_post: Embodiment antenna antno not found (antno=%d). Ensure that RAQMC_EMBODIMENT_ANTNO is correctly set in config.h and recompile RAQMC", RAQMC_EMBODIMENT_ANTNO);
+      assert(0);
+      return __mcapi_endpoint_error(pReq, 404, "Not Found", "Embodiment antenna antno not found");
+    } else {
+      LOG_E("__mcapi_endpoint_ite_post: Failed to enable embodiment antenna");
+      return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to enable embodiment antenna");
+    }
+  }
+  free((void*)antPath);
+
+  LOG_I("__mcapi_endpoint_ite_post: Performing embodiment for EPC %s", epc);
+  if (0 != rscall_ie_drv_embody(iePath)) {
+    measurements_preemption_unlock();
+    yyjson_doc_free(pJson);
+    free((void*)iePath);
+    LOG_E("__mcapi_endpoint_ite_post: Failed to embodiment for EPC %s", epc); //TODO Remove corresponding uhfX in RSCS ??? Or skip it in walker somehow (based on ignore/delete flag?) OR reuse the uhfX avoiding duplicate EPC by the way??
     return __mcapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to embody inventory element"); // TODO: Consider using 503 Service Unavailable ?
   }
+
+  measurements_preemption_unlock();
+
+  LOG_I("__mcapi_endpoint_ite_post: Done embodying EPC %s", epc);
 
   static h2o_generator_t generator = {NULL, NULL}; // TODO should we really have it static?
   pReq->res.status = 200;

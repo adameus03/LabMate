@@ -13,6 +13,7 @@
 #define RAQMC_LKEY_SALT "yyy"
 #define RAQMC_LABSERV_HOST "http://pc6.home:7890"
 #define RAQMC_ENABLE_WALKER 0
+#define RAQMC_EMBODIMENT_ANTNO 0
 
 /* RSCALL configuration */
 #define RSCALL_RSCS_MOUNT_PATH "/mnt/rscs"
