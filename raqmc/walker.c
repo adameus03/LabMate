@@ -201,7 +201,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
 
     char* jsonText = yyjson_mut_write(pJson, 0, NULL);
     assert(jsonText != NULL);
-    curl_easy_setopt(pCurl, CURLOPT_POSTFIELDS, jsonText);
+    curl_easy_setopt(pCurl, CURLOPT_COPYPOSTFIELDS, jsonText); //we use COPYPOSTFIELDS because we want to easily free jsonText in this function. The copy will be created, managed and freed by libcurl
     
     // LOG_V("walker_transmit_readings_buffered: Calling curl_easy_perform");
     // CURLcode res = curl_easy_perform(pCurl);
