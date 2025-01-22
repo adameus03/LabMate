@@ -1566,6 +1566,10 @@ int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_
   return db_inventory_get_by_x(pDb, pQuery, pParams, 1, pInventoryItem_out);
 }
 
+// int db_inventory_get_by_lab_bthash(db_t* pDb, const char* lab_bthash_in, db_inventory_item_t* pInventoryItems_out, size_t* pN_out) {
+
+// }
+
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id) {
   assert(pDb != NULL);
   assert(inventory_id != NULL);

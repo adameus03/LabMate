@@ -1,5 +1,6 @@
 #include "acall.h"
 #include "config.h"
+#include "log.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>

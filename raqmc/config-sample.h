@@ -21,7 +21,7 @@
 #define ACALL_ANTC_MOUNT_PATH "/mnt/antc"
 
 /* Logging configuration */
-#include "log.h"
+#include "log-levels.h"
 #define LOG_LEVEL LOG_VERBOSE
 
 #endif // RAQMC_CONFIG_H

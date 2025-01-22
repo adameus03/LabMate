@@ -19,6 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#include "config.h"
 #include <errno.h>
 #include <limits.h>
 #include <netinet/in.h>
@@ -34,7 +35,7 @@
 #include <plibsys/plibsys.h>
 #include <curl/curl.h>
 
-#include "config.h"
+#include "log.h"
 #include "mcapi.h"
 #include "measurements.h"
 #include "walker.h"

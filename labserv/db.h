@@ -231,6 +231,8 @@ int db_inventory_insert_ret(db_t* pDb,
 
 int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_item_t* pInventoryItem_out);
 
+//int db_inventory_get_by_lab_bthash(db_t* pDb, const char* lab_bthash_in, db_inventory_item_t* pInventoryItems_out, size_t* pN_out);
+
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id);
 
 int db_antenna_insert(db_t* pDb, 

@@ -1,10 +1,11 @@
 #include "rscall.h"
+#include "config.h"
+#include "log.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
 #include <plibsys/plibsys.h>
-#include "config.h"
 
 #ifndef RSCALL_RSCS_MOUNT_PATH
     #error "RSCALL_RSCS_MOUNT_PATH is not defined!"

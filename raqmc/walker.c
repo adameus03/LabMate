@@ -7,6 +7,7 @@
 #include "config.h"
 #include "measurements.h"
 #include "rscall.h"
+#include "log.h"
 
 #define WALKER_TRANSMIT_READINGS_ENDPOINT_URL RAQMC_LABSERV_HOST "/api/invm"
 #define WALKER_TRANSMIT_READINGS_BULK_ENDPOINT_URL RAQMC_LABSERV_HOST "/api/invm-bulk"
