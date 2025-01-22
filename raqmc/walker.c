@@ -169,6 +169,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
   LOG_V("walker_transmit_readings_buffered: Calling rscall_ie_get_epc");
   assert(0 == rscall_ie_get_epc(iePath, &pNewEntry->epc));
   assert(pNewEntry->epc != NULL);
+  LOG_V("walker_transmit_readings_buffered: rscall_ie_get_epc returned: %s", pNewEntry->epc);
   pWalker->__wt_readings_buffer_len++;
 
   assert(pWalker->__wt_readings_buffer_len >= 1); // >=1 because we already executed pWalker->__wt_readings_buffer_len++
