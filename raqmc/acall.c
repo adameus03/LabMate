@@ -55,7 +55,7 @@ static int __acall_ant_set_x(const char* path, const char* xPathEpilog, const ch
   // Write to x
   FILE* x_file = fopen(x_path, "w");
   if (x_file == NULL) {
-    LOG_E("__acall_ant_set_x: fopen (path: %s) failed with errno=%d", x_path, errno);
+    //LOG_E("__acall_ant_set_x: fopen (path: %s) failed with errno=%d", x_path, errno);
     //assert(0);
     return -1;
   }
