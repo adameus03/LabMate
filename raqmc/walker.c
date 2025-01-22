@@ -289,6 +289,7 @@ static void* walker_task(void* pArg) {
         // }
         int should_break_antenna_looper = 0;
         int rv;
+        LOG_V("walker_task: Calling measurements_quick_perform");
         rv = measurements_quick_perform(ieIndex, antNo, txPower, &rssi);
         if (0 == rv) {
           LOG_V("walker_task: measurements_quick_perform() succeeded: ieIndex %d, antNo %d, txPower %d, rssi %d", ieIndex, antNo, txPower, rssi);
@@ -305,6 +306,7 @@ static void* walker_task(void* pArg) {
           assert(0);
         }
 
+        // LOG_V("walker_task: Calling measurements_dual_perform");
         // rv = measurements_dual_perform(ieIndex, antNo, txPower, &rssi, &readRate);
         // if (0 == rv) {
         //   LOG_V("walker_task: measurements_dual_perform() succeeded: ieIndex %d, antNo %d, txPower %d, rssi %d, readRate %d", ieIndex, antNo, txPower, rssi, readRate);
