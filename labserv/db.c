@@ -1393,6 +1393,15 @@ int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out) {
   return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
 }
 
+int db_lab_get_by_host(db_t* pDb, const char* host_in, db_lab_t* pLab_out) {
+  assert(pDb != NULL);
+  assert(host_in != NULL);
+  assert(pLab_out != NULL);
+  const char* pQuery = "SELECT * FROM public.labs WHERE host = $1";
+  const char* pParams[1] = {host_in};
+  return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
+}
+
 int db_inventory_insert(db_t* pDb, 
                         const char* reagent_id, 
                         const char* date_added, 
@@ -1545,12 +1554,12 @@ static int db_inventory_get_multi_by_x(db_t* pDb,
   for (int i = 0; i < nTuples; i++) {
     pInventoryItems[i].inventory_id = atoi(PQgetvalue(pResult, i, 0));
     pInventoryItems[i].reagent_id = atoi(PQgetvalue(pResult, i, 1));
-    pInventoryItems[i].date_added = PQgetvalue(pResult, i, 2);
-    pInventoryItems[i].date_expire = PQgetvalue(pResult, i, 3);
+    pInventoryItems[i].date_added = p_strdup(PQgetvalue(pResult, i, 2));
+    pInventoryItems[i].date_expire = p_strdup(PQgetvalue(pResult, i, 3));
     pInventoryItems[i].lab_id = atoi(PQgetvalue(pResult, i, 4));
-    pInventoryItems[i].epc = PQgetvalue(pResult, i, 5);
-    pInventoryItems[i].apwd = PQgetvalue(pResult, i, 6);
-    pInventoryItems[i].kpwd = PQgetvalue(pResult, i, 7);
+    pInventoryItems[i].epc = p_strdup(PQgetvalue(pResult, i, 5));
+    pInventoryItems[i].apwd = p_strdup(PQgetvalue(pResult, i, 6));
+    pInventoryItems[i].kpwd = p_strdup(PQgetvalue(pResult, i, 7));
     pInventoryItems[i].is_embodied = PQgetvalue(pResult, i, 8)[0] == 't' ? 1 : 0;
     pInventoryItems[i].basepoint_id = atoi(PQgetvalue(pResult, i, 9));
   }
@@ -1640,6 +1649,16 @@ int db_inventory_get_by_lab_host(db_t* pDb, const char* lab_host_in, db_inventor
   assert(pN_out != NULL);
   const char* pQuery = "SELECT * FROM public.inventory i LEFT JOIN public.labs l ON i.lab_id = l.lab_id WHERE l.host = $1";
   const char* pParams[1] = {lab_host_in};
+  return db_inventory_get_multi_by_x(pDb, pQuery, pParams, 1, ppInventoryItems_out, pN_out);
+}
+
+int db_inventory_get_by_lab_id(db_t* pDb, const char* lab_id_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out) {
+  assert(pDb != NULL);
+  assert(lab_id_in != NULL);
+  assert(ppInventoryItems_out != NULL);
+  assert(pN_out != NULL);
+  const char* pQuery = "SELECT * FROM public.inventory WHERE lab_id = $1";
+  const char* pParams[1] = {lab_id_in};
   return db_inventory_get_multi_by_x(pDb, pQuery, pParams, 1, ppInventoryItems_out, pN_out);
 }
 

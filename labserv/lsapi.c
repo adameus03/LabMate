@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <h2o/websocket.h>
 #include <plibsys/plibsys.h>
+#include <curl/curl.h>
 #include "config.h"
 #include "log.h"
 #include "db.h"
@@ -193,6 +194,8 @@ static int __lsapi_username_check(const char* username) {
     return 1;
 }
 
+#define __LSAPI_IP_LEN (INET6_ADDRSTRLEN > INET_ADDRSTRLEN ? INET6_ADDRSTRLEN : INET_ADDRSTRLEN)
+
 static int __lsapi_endpoint_user_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -279,7 +282,6 @@ static int __lsapi_endpoint_user_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq
 
     struct sockaddr sa;
     pReq->conn->callbacks->get_peername(pReq->conn, &sa);
-#define __LSAPI_IP_LEN INET6_ADDRSTRLEN > INET_ADDRSTRLEN ? INET6_ADDRSTRLEN : INET_ADDRSTRLEN
     char ip[__LSAPI_IP_LEN];
     memset(ip, 0, __LSAPI_IP_LEN);
     switch(sa.sa_family) {
@@ -1940,6 +1942,198 @@ int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
         return __lsapi_endpoint_inventory_put(pH2oHandler, pReq, pLsapi);
     } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
         return __lsapi_endpoint_inventory_post(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+/**
+ * @brief Obtain IP address from provided URL.
+ * @note Uses libcurl under the hood.
+ * @note Caller is responsible for freeing *pIp_out after use.
+ */
+static int __lsapi_resolve_url(const char* url_in, char** pIp_out) {
+    assert(url_in != NULL);
+    assert(pIp_out != NULL);
+    CURL* pCurl = curl_easy_init();
+    assert(pCurl != NULL);
+    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4));
+    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, url_in));
+    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_NOBODY, 1L)); // Do not fetch the body
+    CURLcode res = curl_easy_perform(pCurl);
+    if (res != CURLE_OK) {
+        curl_easy_cleanup(pCurl);
+        return -1;
+    }
+    // Get the IP address
+    char* ip = NULL;
+    assert(CURLE_OK == curl_easy_getinfo(pCurl, CURLINFO_PRIMARY_IP, &ip));
+    *pIp_out = p_strdup(ip);
+    
+    curl_easy_cleanup(pCurl);
+    return 0;
+}
+
+// curl -X POST -d '{"host": "<host>", "lbtoken": "<lbtoken>"}'
+static int __lsapi_endpoint_inven_ld_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pHost = yyjson_obj_get(pRoot, "host");
+    if (pHost == NULL || !yyjson_is_str(pHost)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid host param");
+    }
+    yyjson_val* pLbToken = yyjson_obj_get(pRoot, "lbtoken");
+    if (pLbToken == NULL || !yyjson_is_str(pLbToken)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid lbtoken (lab token)");
+    }
+
+    const char* host = yyjson_get_str(pHost);
+    const char* lbToken = yyjson_get_str(pLbToken);
+    assert(host != NULL);
+    assert(lbToken != NULL);
+
+    // Obtain client IP address
+    struct sockaddr sa;
+    pReq->conn->callbacks->get_peername(pReq->conn, &sa);
+    char ip[__LSAPI_IP_LEN];
+    memset(ip, 0, __LSAPI_IP_LEN);
+    switch(sa.sa_family) {
+        case AF_INET:
+            inet_ntop(AF_INET, &((struct sockaddr_in*)&sa)->sin_addr, ip, INET_ADDRSTRLEN);
+            break;
+        case AF_INET6:
+            inet_ntop(AF_INET6, &((struct sockaddr_in6*)&sa)->sin6_addr, ip, INET6_ADDRSTRLEN);
+            break;
+        default:
+            break;
+    }
+
+    // Check if host param matches client IP address
+    char* resolved_ip = NULL;
+    if (0 != __lsapi_resolve_url(host, &resolved_ip)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to resolve URL provided in host param");
+    }
+    assert(resolved_ip != NULL);
+    if (0 != strcmp(ip, resolved_ip)) {
+        free(resolved_ip);
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Host param does not match client IP address");
+    }
+    free(resolved_ip);
+
+    // get lab data from database so that we can use it for lbtoken verification and querying inventory
+    db_lab_t lab;
+    int rv = db_lab_get_by_host(pLsapi->pDb, host, &lab);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "Lab not found");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get lab data from database");
+        }
+    }
+
+    //Verify lbtoken
+    char lbTokenHash[BCRYPT_HASHSIZE];
+    assert(lab.bearer_token_hash != NULL);
+    assert(strlen(lab.bearer_token_hash) == BCRYPT_HASHSIZE - 4);
+    assert(lab.bearer_token_salt != NULL);
+    assert(strlen(lab.bearer_token_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+    assert(0 == bcrypt_hashpw(lbToken, lab.bearer_token_salt, lbTokenHash));
+    assert(lbTokenHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(lbTokenHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_inven_ld_post: lab-provided bearer token: %s", lbToken);
+    LOG_V("__lsapi_endpoint_invm_put: lbTokenHash (lab-provided): %s, lab.bearer_token_hash: %s, lab.bearer_token_salt: %s", lbTokenHash, lab.bearer_token_hash, lab.bearer_token_salt);
+
+    if (0 != strcmp(lbTokenHash, lab.bearer_token_hash)) {
+        yyjson_doc_free(pJson);
+        db_lab_free(&lab);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid lbtoken");
+    }
+
+    // get inventory data from database
+    db_inventory_item_t* pInventoryItems = NULL;
+    size_t nInventoryItems = 0;
+    char* lid_str = __lsapi_itoa(lab.lab_id);
+    rv = db_inventory_get_by_lab_id(pLsapi->pDb, lid_str, &pInventoryItems, &nInventoryItems);
+    if ((0 != rv) && (-2 != rv)) {
+        yyjson_doc_free(pJson);
+        db_lab_free(&lab);
+        free(lid_str);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get inventory data from database");
+    }
+    free(lid_str);
+    if (-2 == rv) {
+        LOG_D("__lsapi_endpoint_inven_ld_post: No inventory items found for lab %d", lab.lab_id);
+        assert(nInventoryItems == 0);
+        assert(pInventoryItems == NULL);
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Inventory load successful";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", "success");
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", "Inventory load successful");
+    yyjson_mut_val* pInventoryItemsArr = yyjson_mut_arr(pJsonResp);
+    for (size_t i = 0; i < nInventoryItems; i++) {
+        yyjson_mut_val* pInventoryItem = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_str(pJsonResp, pInventoryItem, "epc", pInventoryItems[i].epc);
+        yyjson_mut_obj_add_str(pJsonResp, pInventoryItem, "apwd", pInventoryItems[i].apwd);
+        yyjson_mut_obj_add_str(pJsonResp, pInventoryItem, "kpwd", pInventoryItems[i].kpwd);
+        yyjson_mut_arr_add_val(pInventoryItemsArr, pInventoryItem);
+    }
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "inventory", pInventoryItemsArr);
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    db_lab_free(&lab);
+    if (pInventoryItems != NULL) {
+        for (size_t i = 0; i < nInventoryItems; i++) {
+            if (pInventoryItems[i].epc == NULL || pInventoryItems[i].apwd == NULL || pInventoryItems[i].kpwd == NULL) {
+                assert(0); //just a sanity check
+            }
+            db_inventory_item_free(&pInventoryItems[i]);
+        }
+        free(pInventoryItems);
+    }
+    return 0;
+}
+
+int lsapi_endpoint_inven_ld(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_inven_ld_post(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }

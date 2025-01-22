@@ -208,6 +208,8 @@ int db_lab_get_by_id(db_t* pDb, const char* lab_id_in, db_lab_t* pLab_out);
 
 int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out);
 
+int db_lab_get_by_host(db_t* pDb, const char* host_in, db_lab_t* pLab_out);
+
 //int db_lab_
 
 int db_inventory_insert(db_t* pDb, 
@@ -237,6 +239,11 @@ int db_inventory_get_by_id(db_t* pDb, const char* inventory_id_in, db_inventory_
  * @note This function allocates memory for `*ppInventoryItems_out` which must be freed by the caller after use
  */
 int db_inventory_get_by_lab_host(db_t* pDb, const char* lab_host_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out);
+
+/**
+ * @note This function allocates memory for `*ppInventoryItems_out` which must be freed by the caller after use
+ */
+int db_inventory_get_by_lab_id(db_t* pDb, const char* lab_id_in, db_inventory_item_t** ppInventoryItems_out, size_t* pN_out);
 
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id);
 

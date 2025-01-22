@@ -252,6 +252,7 @@ int main(int argc, char **argv)
     pathconf = register_handler(hostconf, "/api/invm", lsapi_endpoint_invm, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/invm-bulk", lsapi_endpoint_invm_bulk, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/inventory", lsapi_endpoint_inventory, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/inven-ld", lsapi_endpoint_inven_ld, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/lab", lsapi_endpoint_lab, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/reagent", lsapi_endpoint_reagent, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/reagents", lsapi_endpoint_reagents, (void*)pLsapi, logfh);

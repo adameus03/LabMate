@@ -85,6 +85,11 @@ int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
 /**
+ * @brief Handle LSAPI INVENtory LoaD endpoint
+ */
+int lsapi_endpoint_inven_ld(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
  * @brief Handle LSAPI antenna endpoint
  */
 int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
