@@ -164,7 +164,9 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
   pNewEntry->mt = mt;
   pNewEntry->timestamp = walker_get_timestamp_precise_now();
   pNewEntry->epc = NULL;
+  LOG_V("walker_transmit_readings_buffered: Calling rscall_ie_get_path");
   const char* iePath = rscall_ie_get_path(ieIndex);
+  LOG_V("walker_transmit_readings_buffered: Calling rscall_ie_get_epc");
   assert(0 == rscall_ie_get_epc(iePath, &pNewEntry->epc));
   assert(pNewEntry->epc != NULL);
   pWalker->__wt_readings_buffer_len++;
@@ -177,7 +179,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
 
     assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_CUSTOMREQUEST, "PUT")); // PUT request
     assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_URL, WALKER_TRANSMIT_READINGS_BULK_ENDPOINT_URL));
-    assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_WRITEFUNCTION, walker_libcurl_write_data_null));
+    //assert(CURLE_OK == curl_easy_setopt(pCurl, CURLOPT_WRITEFUNCTION, walker_libcurl_write_data_null));
     
     yyjson_mut_doc* pJson = yyjson_mut_doc_new(NULL);
     yyjson_mut_val* pRoot = yyjson_mut_obj(pJson);
@@ -205,6 +207,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     }
     yyjson_mut_obj_add_val(pJson, pRoot, "invms", pInvms);
 
+    LOG_V("walker_transmit_readings_buffered: Calling yyjson_mut_write");
     char* jsonText = yyjson_mut_write(pJson, 0, NULL);
     assert(jsonText != NULL);
     curl_easy_setopt(pCurl, CURLOPT_COPYPOSTFIELDS, jsonText); //we use COPYPOSTFIELDS because we want to easily free jsonText in this function. The copy will be created, managed and freed by libcurl (at least as long as we use the library provided cleanup functions)
@@ -217,9 +220,10 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     //   LOG_V("walker_transmit_readings_buffered: curl_easy_perform() succeeded");
     // }
 
+    LOG_V("walker_transmit_readings_buffered: Calling curl_multi_add_handle");
     assert(CURLE_OK == curl_multi_add_handle(pWalker->pCurlMulti, pCurl));
-    LOG_V("walker_transmit_readings_buffered: Calling curl_multi_perform");
     int runningHandles;
+    LOG_V("walker_transmit_readings_buffered: Calling curl_multi_perform");
     CURLMcode mres = curl_multi_perform(pWalker->pCurlMulti, &runningHandles);
     if (mres != CURLM_OK) {
       LOG_E("walker_transmit_readings_buffered: curl_multi_perform() failed: %d", mres);
@@ -229,6 +233,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     }
     CURLMsg* pMsg = NULL;
     int msgsLeft;
+    LOG_V("walker_transmit_readings_buffered: Entering curl_multi_info_read loop");
     while ((pMsg = curl_multi_info_read(pWalker->pCurlMulti, &msgsLeft))) {
       if (pMsg->msg == CURLMSG_DONE) {
         CURL* pDone = pMsg->easy_handle;
@@ -249,6 +254,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
       free(pEntry->epc);
     }
     
+    LOG_V("walker_transmit_readings_buffered: Doing json-related cleanup");
     free(jsonText);
     yyjson_mut_doc_free(pJson);
     //curl_easy_cleanup(pCurl);
