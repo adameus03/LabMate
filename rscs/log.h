@@ -12,7 +12,7 @@
 #include <string.h>
 #include <time.h>
 
-#define LOG_LEVEL LOG_ERR
+#define LOG_LEVEL LOG_WARN
 
 static inline void log_timestamp(FILE* stream) {
     char buff[20];
