@@ -727,9 +727,10 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_pow
     uint8_t rssi = 0;
     err = uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
     if (UHFMAN_SINGLE_POLLING_ERR_SUCCESS != err) {
-        LOG_E("uhfd_quick_measure_dev_rssi: uhfman_single_polling failed with error %d", err);
-        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
-        return -1;
+        //LOG_E("uhfd_quick_measure_dev_rssi: uhfman_single_polling failed with error %d", err);
+        // assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        // return -1;
+        assert(0 == rssi);
     }
 
     ///<debug>
