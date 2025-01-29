@@ -156,6 +156,14 @@ static size_t walker_libcurl_write_data_null(void *buffer, size_t size, size_t n
 //TODO use async curl (multi interface) - then we need to memcpy the buffer first
 static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
   assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
+  
+  ///<debug>
+  if (rssi > 0) {
+    LOG_D("walker_transmit_readings: RSSI for ieIndex %d, antNo %d is %d", ieIndex, antNo, rssi);
+    assert(0 == ieIndex);
+  }
+  ///</debug>
+  
   struct walker_transmit_readings_buffer_entry* pNewEntry = &pWalker->__wt_readings_buffer[pWalker->__wt_readings_buffer_len];
   pNewEntry->antNo = antNo;
   pNewEntry->txp = txp;
@@ -565,7 +573,7 @@ static void* walker_task(void* pArg) {
         } else if (-10 == rv) {
           should_break_antenna_looper = 1;
         } else {
-          LOG_E("walker_task: measurements_quick_perform() failed with unexpected return value: %d", rv);
+          LOG_E("walker_task: measurements_quick_perform() failed with unexpected return value: %d (ieIndex %d, antNo %d)", rv, ieIndex, antNo);
           assert(0);
         }
 

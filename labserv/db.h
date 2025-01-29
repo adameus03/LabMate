@@ -167,7 +167,8 @@ int db_reagents_read_page(db_t* pDb, const char* offset, const char* page_size, 
 typedef enum db_reagent_filter_type {
   DB_REAGENT_FILTER_TYPE_NONE,
   DB_REAGENT_FILTER_TYPE_NAME,
-  DB_REAGENT_FILTER_TYPE_VENDOR
+  DB_REAGENT_FILTER_TYPE_VENDOR,
+  DB_REAGENT_FILTER_TYPE_REAGTYPE_ID
 } db_reagent_filter_type_t;
 
 /**

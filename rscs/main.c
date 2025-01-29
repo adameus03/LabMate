@@ -209,8 +209,8 @@ static int main_hex_from_u8buf(const uint8_t* buf, size_t buf_len, char* hex, si
 
 static int do_getattr( const char *path, struct stat *st, struct fuse_file_info *fi )
 {
-	printf( "[getattr] Called\n" );
-	printf( "\tAttributes of %s requested\n", path );
+	LOG_V( "[getattr] Called" );
+	LOG_V( "\tAttributes of %s requested", path );
 	
 	const int file_flag = 1;
 	const int dir_flag = 2;

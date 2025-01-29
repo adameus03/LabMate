@@ -632,7 +632,8 @@ static int ypdr200_x0b_resp_param_set_mask(uint8_t* pMask, ypdr200_x0b_resp_para
         errno = ENOMEM;
         return -1;
     }
-    memcpy(pRespParam->pMask, pMask, pRespParam->hdr.maskLen);
+    LOG_V("Copying mask data of length %d bytes", pRespParam->hdr.maskLen >> 3);
+    memcpy(pRespParam->pMask, pMask, pRespParam->hdr.maskLen >> 3);
     return 0;
 }
 
@@ -943,6 +944,14 @@ int ypdr200_x22(uhfman_ctx_t* pCtx, ypdr200_resp_err_code_t* pRespErrCode, ypdr2
         ypdr200_frame_dispose(&frameIn);
         return YPDR200_X22_ERR_READ_NOTIFICATION;
     }
+
+    ///<debug>
+    if (ntfParam.epc[0] == 0xAA) {
+        LOG_W("Received notification with EPC starting with AA");
+    } else {
+        LOG_D("Received notification with EPC starting with %02X", ntfParam.epc[0]);
+    }
+    ///</debug>
 
     if (cb != NULL) {
         cb(ntfParam, pCbUserData);

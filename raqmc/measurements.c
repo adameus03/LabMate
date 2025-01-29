@@ -1,6 +1,7 @@
 #include "measurements.h"
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include "log.h"
 #include "rscall.h"
 #include "acall.h"
@@ -76,6 +77,14 @@ int measurements_quick_perform(const int ieIndex, const int antNo, const int txP
   }
 
   p_mutex_unlock(__pMeasurement_global_mtx);
+
+  ///<debug>
+  if (*pRssi_out > 0) {
+    LOG_D("measurements_quick_perform: RSSI for iePath \"%s\" is %d", iePath, *pRssi_out);
+    assert(0 == strcmp(iePath, "/mnt/rscs/uhf0"));
+  }
+  ///</debug>
+
   free((void*)iePath);
   free((void*)antPath);
 

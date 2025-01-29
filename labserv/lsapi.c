@@ -1218,23 +1218,245 @@ static int __lsapi_endpoint_reagent_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     return 0;
 }
 
+static int __lsapi_endpoint_reagent_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    if (pReq->query_at == SIZE_MAX) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing query string");
+    }
+    char* queryStr = pReq->path.base + pReq->query_at + 1;
+    size_t queryStrLen = pReq->path.len - pReq->query_at - 1;
+    LOG_D("__lsapi_endpoint_reagent_get: queryStrLen = %lu", queryStrLen);
+    LOG_D("__lsapi_endpoint_reagent_get: queryStr = %.*s", (int)queryStrLen, queryStr);
+
+    const char* reagentIdParamName = "reagent_id";
+    size_t reagentIdParamNameLen = strlen(reagentIdParamName);
+    if (queryStrLen < 1) {
+        LOG_D("__lsapi_endpoint_reagent_get: Empty query string (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Empty query string");
+    } else if (queryStrLen < reagentIdParamNameLen + 2) { // reagent_id=d is the shortest possible query string (where d is a decimal digit)
+        LOG_D("__lsapi_endpoint_reagent_get: Query string too short (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Query string too short");
+    }
+    char* reagentIdParamNameAddr = strstr(queryStr, reagentIdParamName);
+    if (reagentIdParamNameAddr == NULL) {
+        LOG_D("__lsapi_endpoint_reagent_get: Missing reagent_id parameter in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing reagent_id parameter in query string");
+    } else if (reagentIdParamNameAddr != queryStr) {
+        LOG_D("__lsapi_endpoint_reagent_get: reagent_id parameter not at the beginning of query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "reagent_id parameter not at the beginning of query string");
+    }
+    char* reagentIdParamNVSeparatorAddr = reagentIdParamNameAddr + reagentIdParamNameLen;
+    if (*reagentIdParamNVSeparatorAddr != '=') {
+        LOG_D("__lsapi_endpoint_reagent_get: Missing = after reagent_id in query string");
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing = after reagent_id in query string");
+    }
+    char* reagentIdParamValue = reagentIdParamNVSeparatorAddr + 1;
+    size_t reagentIdParamValueLen = queryStr + queryStrLen - reagentIdParamValue;
+    assert(reagentIdParamValueLen >= 1);
+    for (size_t i = 0; i < reagentIdParamValueLen; i++) {
+        if (!isdigit(reagentIdParamValue[i])) {
+            LOG_D("__lsapi_endpoint_reagent_get: Invalid reagent_id value in query string (non-digit character at position %lu in string %.*s)", i, (int)reagentIdParamValueLen, reagentIdParamValue);
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid reagent_id value in query string");
+        }
+    }
+    char* reagentIdParamValueNt = (char*)malloc(reagentIdParamValueLen + 1);
+    if (reagentIdParamValueNt == NULL) {
+        LOG_E("__lsapi_endpoint_reagent_get: Failed to allocate memory for reagentIdParamValueNt");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(reagentIdParamValueNt, reagentIdParamValue, reagentIdParamValueLen);
+    reagentIdParamValueNt[reagentIdParamValueLen] = '\0';
+    int reagentId = atoi(reagentIdParamValueNt);
+    LOG_V("__lsapi_endpoint_reagent_get: reagentId = %d", reagentId);
+    assert(reagentId >= 0);
+
+    // get reagent data from database so that we can use it for the http response
+    db_reagent_t reagent;
+    int rv = db_reagent_get_by_id(pLsapi->pDb, reagentIdParamValueNt, &reagent);
+    if (0 != rv) {
+        if (rv == -2) {
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "Reagent not found");
+        } else {
+            LOG_E("__lsapi_endpoint_reagent_get: Failed to get reagent data from database (db_reagent_get_by_id returned %d)", rv);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get reagent data from database");
+        }
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Reagent data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add reagent data as sub-object
+    yyjson_mut_val* pReagent = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_int(pJsonResp, pReagent, "reagent_id", reagent.reagent_id);
+    yyjson_mut_obj_add_str(pJsonResp, pReagent, "name", reagent.name);
+    yyjson_mut_obj_add_str(pJsonResp, pReagent, "vendor", reagent.vendor);
+    yyjson_mut_obj_add_int(pJsonResp, pReagent, "reagtype_id", reagent.reagent_type_id);
+    // add reagent object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "reagent", pReagent);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free(reagentIdParamValueNt);
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    db_reagent_free(&reagent);
+    return 0;
+}
+
 int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
         return __lsapi_endpoint_reagent_put(pH2oHandler, pReq, pLsapi);
-    } else {
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_reagent_get(pH2oHandler, pReq, pLsapi); 
+    }
+    else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
 }
 
-// CURL -X POST -d '{?}'
+// Obtain list of reagents
+//TODO Authentication & authorization?
+// CURL -X POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/reagents
 static int __lsapi_endpoint_reagents_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     assert(pLsapi != NULL);
-    return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pFilter = yyjson_obj_get(pRoot, "filter");
+    if (pFilter == NULL || !yyjson_is_str(pFilter)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid filter");
+    }
+    yyjson_val* pValue = yyjson_obj_get(pRoot, "value");
+    if (pValue == NULL || !yyjson_is_str(pValue)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid value");
+    }
+    yyjson_val* pPOffset = yyjson_obj_get(pRoot, "p_offset");
+    if (pPOffset == NULL || !yyjson_is_int(pPOffset)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_offset");
+    }
+    yyjson_val* pPSize = yyjson_obj_get(pRoot, "p_size");
+    if (pPSize == NULL || !yyjson_is_int(pPSize)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_size");
+    }
+    
+    const char* filter = yyjson_get_str(pFilter);
+    const char* value = yyjson_get_str(pValue);
+    int page_offset = yyjson_get_int(pPOffset);
+    int page_size = yyjson_get_int(pPSize);
+
+    assert(filter != NULL && value != NULL);
+    if (page_offset < 0 || page_size < 1) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid p_offset or p_size");
+    }
+
+    // get reagents data from database so that we can use it for the http response
+    db_reagent_t* reagents = NULL;
+    int reagents_count = 0;
+
+    char* page_offset_str = __lsapi_itoa(page_offset);
+    char* page_size_str = __lsapi_itoa(page_size);
+    db_reagent_filter_type_t filter_type = DB_REAGENT_FILTER_TYPE_NONE;
+    if (0 == strcmp(filter, "none")) {
+        filter_type = DB_REAGENT_FILTER_TYPE_NONE;
+    } else if (0 == strcmp(filter, "name")) {
+        filter_type = DB_REAGENT_FILTER_TYPE_NAME;
+    } else if (0 == strcmp(filter, "vendor")) {
+        filter_type = DB_REAGENT_FILTER_TYPE_VENDOR;
+    } else if (0 == strcmp(filter, "reagtype_id")) {
+        filter_type = DB_REAGENT_FILTER_TYPE_REAGTYPE_ID;
+    } else {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid filter");
+    }
+    int rv = db_reagents_read_page_filtered(pLsapi->pDb, page_offset_str, page_size_str, &reagents, &reagents_count, filter_type, value);
+    free(page_offset_str);
+    free(page_size_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "No reagents found");
+        } else {
+            LOG_E("__lsapi_endpoint_reagents_post: Failed to get reagents data from database (db_reagents_read_page_filtered returned %d)", rv);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get reagents data from database");
+        }
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Reagents data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add reagents data as array
+    yyjson_mut_val* pReagents = yyjson_mut_arr(pJsonResp);
+    for (int i = 0; i < reagents_count; i++) {
+        yyjson_mut_val* pReagent = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_int(pJsonResp, pReagent, "reagent_id", reagents[i].reagent_id);
+        yyjson_mut_obj_add_str(pJsonResp, pReagent, "name", reagents[i].name);
+        yyjson_mut_obj_add_str(pJsonResp, pReagent, "vendor", reagents[i].vendor);
+        yyjson_mut_obj_add_int(pJsonResp, pReagent, "reagtype_id", reagents[i].reagent_type_id);
+        yyjson_mut_arr_add_val(pReagents, pReagent);
+    }
+    // add reagents array to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "reagents", pReagents);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    assert(reagents != NULL);
+    for (int i = 0; i < reagents_count; i++) {
+        db_reagent_free(&reagents[i]);
+    }
+    free(reagents);
+    return 0;
 }
 
 int lsapi_endpoint_reagents(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {

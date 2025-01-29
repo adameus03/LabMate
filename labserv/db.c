@@ -1050,6 +1050,9 @@ int db_reagents_read_page_filtered(db_t* pDb,
     case DB_REAGENT_FILTER_TYPE_VENDOR:
       pQuery = "SELECT * FROM public.reagents WHERE vendor ~* $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
       break;
+    case DB_REAGENT_FILTER_TYPE_REAGTYPE_ID:
+      pQuery = "SELECT * FROM public.reagents WHERE reagent_type_id = $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
+      break;
     default:
       LOG_E("db_reagents_read_page_filtered: Unexpected filter type: %d", filter_type);
       exit(EXIT_FAILURE);

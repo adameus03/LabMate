@@ -519,7 +519,7 @@ static int uhfman_config_select_params_cache_cmp(uhfman_ctx_t* pCtx,
     || (pCtx->_config.select_params.truncate != truncate)) {
         return 1;
     } else {
-        if (!memcmp(pCtx->_config.select_params.pMask, pMask, maskLen >> 3)) {
+        if (0 != memcmp(pCtx->_config.select_params.pMask, pMask, maskLen >> 3)) {
             return 1;
         } else if (maskLen & 0x07) {
             if (pCtx->_config.select_params.pMask[maskLen >> 3] != pMask[maskLen >> 3]) {
@@ -540,9 +540,10 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
                                      const uint8_t* pMask) {
     assert((pCtx->_config.flags & UHFMAN_CTX_CONFIG_FLAG_IS_MPOLL_BUSY) == 0);
     #if UHFMAN_DEVICE_MODEL == UHFMAN_DEVICE_MODEL_YDPR200
-    if (!uhfman_config_select_params_cache_cmp(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask)) {
-        return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
-    }
+    // if (!uhfman_config_select_params_cache_cmp(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask)) {
+    //     LOG_D("Select parameters are already set to the desired values, skipping command");
+    //     return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
+    // }
     ypdr200_x0c_req_param_t reqParam = {
         .hdr = {
             .target = target,
@@ -561,9 +562,10 @@ uhfman_err_t uhfman_set_select_param(uhfman_ctx_t* pCtx,
     };
     ypdr200_resp_err_code_t rerr = 0;
     int rv = ypdr200_x0c(pCtx, &reqParam, &rerr);
+    uhfman_config_select_params_update(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask); //
     switch (rv) {
         case YPDR200_X0C_ERR_SUCCESS:
-            uhfman_config_select_params_update(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask);
+            //uhfman_config_select_params_update(pCtx, target, action, memBank, ptr, maskLen, truncate, pMask);
             return UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS;
         case YPDR200_X0C_ERR_SEND_COMMAND:
             return UHFMAN_SET_SELECT_PARAM_ERR_SEND_COMMAND;
@@ -1019,6 +1021,7 @@ static void __uhfman_tag_submit_read(uint8_t* epc, uint8_t rssi, void* pUserData
         __uhfman_tag_anonymous.rssi[__uhfman_tag_anonymous.num_reads] = rssi;
         __uhfman_tag_anonymous.read_times[__uhfman_tag_anonymous.num_reads] = time_xs;
         __uhfman_tag_anonymous.num_reads++;
+        assert(__uhfman_tag_anonymous.num_reads <= UHFMAN_TAG_PERIOD_NREADS); //
         // note: num_reads should be reset by user when needed (using uhfman_tag_anonymous_forget)
         assert(__uhfman_tag_anonymous.handle == UHFMAN_TAG_HANDLE_ANONYMOUS);
         if (__uhfman_poll_handler != NULL) {

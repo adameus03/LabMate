@@ -511,6 +511,9 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     return 0;
 }
 
+///<debug>
+static unsigned long __devno_pending = -1U;
+///</debug>
 static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
     LOG_D("uhfd_uhfman_poll_handler_quick: handle = %d", handle);
     uhfman_tag_t tag = uhfman_tag_get(handle);
@@ -519,23 +522,24 @@ static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
     for (size_t i=0; i<sizeof(tag.epc); i++) {
         LOG_D_CTBC("%02X ", tag.epc[i]);
     }
-    LOG_D_CFIN("], RSSI: %d", tag.rssi);
+    LOG_D_CFIN("], RSSI: %d", tag.rssi[0]);
     uint8_t* pRSSI = (uint8_t*)pUserData;
     *pRSSI = tag.rssi[tag.num_reads - 1];
+
+    ///<debug>
+    assert(__devno_pending == 0U || __devno_pending == 1U);
+    if (__devno_pending != 0U) {
+        if (*pRSSI != 0x00) {
+            LOG_E("uhfd_uhfman_poll_handler_quick: *pRSSI=%d for devno %lu", *pRSSI, __devno_pending);
+            assert(0);
+        }
+    }
+    ///</debug>
 }
 
 static void uhfd_uhfman_poll_handler(uint16_t handle, void* pUserData) {
-    LOG_D("uhfd_uhfman_poll_handler_quick: handle = %d", handle);
+    LOG_D("uhfd_uhfman_poll_handler: handle = %d", handle);
     uhfman_tag_t tag = uhfman_tag_get(handle);
-    LOG_D_TBC("uhfd_uhfman_poll_handler_quick: EPC: [");
-    for (size_t i=0; i<sizeof(tag.epc); i++) {
-        LOG_D_CTBC("%02X ", tag.epc[i]);
-    }
-    LOG_D_CTBC("], RSSI: %d, num_reads: %d, read_times: [", tag.rssi, tag.num_reads);
-    for (size_t i=0; i<tag.num_reads; i++) {
-        LOG_D_CTBC("%lu ", tag.read_times[i]);
-    }
-    LOG_D_CFIN("]");
     uhfd_dev_m_t* pMeasurement = (uhfd_dev_m_t*)pUserData;
     uint32_t sum_rssi = 0;
     for (uint32_t i=0; i<tag.num_reads; i++) {
@@ -544,6 +548,17 @@ static void uhfd_uhfman_poll_handler(uint16_t handle, void* pUserData) {
     uint8_t avg_rssi = (uint8_t)(sum_rssi / tag.num_reads); // TODO make float/double ?
     pMeasurement->rssi = avg_rssi;
     pMeasurement->read_rate = tag.num_reads;
+
+    LOG_D_TBC("uhfd_uhfman_poll_handler: EPC: [");
+    for (size_t i=0; i<sizeof(tag.epc); i++) {
+        LOG_D_CTBC("%02X ", tag.epc[i]);
+    }
+    LOG_D_CTBC("], RSSI (AVG): %d, num_reads: %d, read_times: [", avg_rssi, tag.num_reads);
+    for (size_t i=0; i<tag.num_reads; i++) {
+        LOG_D_CTBC("%lu ", tag.read_times[i]);
+    }
+    LOG_D_CFIN("]");
+
     // TODO handle read times and individual rssi values if needed (would need changing the uhfd_dev_m_t struct and also the FUSE interface in main.c)
 }
 
@@ -707,9 +722,40 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_pow
     uhfman_tag_anonymous_forget();
     uhfman_set_time_precision(UHFMAN_TIME_PRECISION_US);
     uhfman_set_poll_mode(UHFMAN_POLL_MODE_RAW);
+    __devno_pending = devno;
     uhfman_set_poll_handler((uhfman_poll_handler_t)uhfd_uhfman_poll_handler_quick);
     uint8_t rssi = 0;
-    uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
+    err = uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
+    if (UHFMAN_SINGLE_POLLING_ERR_SUCCESS != err) {
+        LOG_E("uhfd_quick_measure_dev_rssi: uhfman_single_polling failed with error %d", err);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -1;
+    }
+
+    ///<debug>
+    LOG_D("uhfd_quick_measure_dev_rssi: RSSI: %d, devno: %lu", rssi, devno);
+
+    if (devno != 0) {
+        assert(dev.epc[0] != 'a' && dev.epc[0] != 'A');
+    }
+
+    if (devno != 0) {
+        if (0 != rssi) {
+            LOG_E("DETECTED UNEXPECTED NON-ZERO RSSI FOR DEVNO %lu", devno);
+            LOG_D("CALLING DEBUG GET SELECT PARAM, QUERY PARAM");
+            LOG_D("---select param---");
+            uhfman_dbg_get_select_param(&pUHFD->uhfmanCtx);
+            LOG_D("---query param---");
+            uhfman_dbg_get_query_params(&pUHFD->uhfmanCtx);
+            // LOG_D("---select mode---");
+            // uhfman_dbg_get_select_mode(&pUHFD->uhfmanCtx);
+            LOG_D("DEBUG GET SELECT PARAM DONE");
+            assert(0);
+        }
+        //assert(0 == rssi);
+    }
+    ///</debug>
+
     uhfman_unset_poll_handler();
     // no need to stop polling as it is single polling
     // update the dev's rssi
