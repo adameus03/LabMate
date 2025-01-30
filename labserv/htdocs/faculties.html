@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>LabMate Faculties</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    Note: This is a placeholder for the faculties page.
+    <script>
+      function __parentCheck() {
+        if (window.self == window.parent) {
+          alert('You tinkered with the website, so now it won\'t work. Bye bye');
+          window.location.href = 'logged-common.html?c=chat';
+          return;
+        }
+      }
+      window.onload = function() {
+        __parentCheck();
+      }
+    </script>
+  </body>
+</html>
