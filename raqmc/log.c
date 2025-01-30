@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <assert.h>
 #include <plibsys/plibsys.h>
 #include "log.h"
@@ -38,7 +39,7 @@ void log_end() {
     assert(TRUE == p_mutex_unlock(__log_global_pMutex));
 }
 
-void log_timestamp(FILE* stream) {
+static void log_timestamp_s(FILE* stream) {
     char buff[20];
     struct tm *sTm;
 
@@ -47,6 +48,21 @@ void log_timestamp(FILE* stream) {
 
     strftime (buff, sizeof(buff), "%Y-%m-%d %H:%M:%S", sTm);
     fprintf(stream, "%s ", buff);
+}
+
+static void log_timestamp_precise(FILE* stream) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    struct tm* pTm = localtime(&tv.tv_sec);
+    assert(pTm != NULL);
+    char pTimestamp[30];
+    assert(pTm->tm_year < 10000); //We don't want to overflow the buffer. Sorry for the Y10K bug //TODO Fix this before Y10K (:D)
+    strftime(pTimestamp, 20, "%Y-%m-%d %H:%M:%S", pTm);
+    fprintf(stream, "%s.%06ld ", pTimestamp, tv.tv_usec);
+}
+
+void log_timestamp(FILE* stream) {
+    log_timestamp_precise(stream);
 }
 
 void log_level_str(int level, FILE* stream) {
