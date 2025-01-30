@@ -228,14 +228,17 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for response prolog: poll_rv=%d", poll_rv);
+            assert(0);
             return YPDR200_FRAME_RECV_ERR_READ;
         } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
             LOG_W("Error polling for response prolog: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
+            assert(0);
             return YPDR200_FRAME_RECV_ERR_READ;
         }
         ssize_t nread = read(pCtx->fd, prologIn.raw, YPDR200_FRAME_PROLOG_SIZE - actual_size_received);
         if (nread <= 0) {
             LOG_W("Error reading response prolog: YPD200_FRAME_PROLOG_SIZE=%d, actual_size_received=%d, nread=%d", YPDR200_FRAME_PROLOG_SIZE, actual_size_received, nread);
+            assert(0);
             return YPDR200_FRAME_RECV_ERR_READ;
         }
         actual_size_received += nread;
@@ -282,9 +285,11 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
             int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
             if (poll_rv == -1 || poll_rv == 0) {
                 LOG_W("Error polling for param data: poll_rv=%d", poll_rv);
+                assert(0);
                 return YPDR200_FRAME_RECV_ERR_READ;
             } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
                 LOG_W("Error polling for param data: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
+                assert(0);
                 return YPDR200_FRAME_RECV_ERR_READ;
             }
             ssize_t nread = read(pCtx->fd, pParamIn, paramInLen - actual_size_received);
@@ -334,9 +339,11 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for response epilog: poll_rv=%d", poll_rv);
+            assert(0);
             return YPDR200_FRAME_RECV_ERR_READ;
         } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
             LOG_W("Error polling for response epilog: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
+            assert(0);
             return YPDR200_FRAME_RECV_ERR_READ;
         }
         ssize_t nread = read(pCtx->fd, epilogIn.raw, YPDR200_FRAME_EPILOG_SIZE - actual_size_received);
@@ -493,9 +500,11 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
         int poll_rv = poll(&pCtx->pollout_fd, 1, pCtx->pollout_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for frame write: pollout_rv=%d", poll_rv);
+            assert(0);
             return YPDR200_FRAME_SEND_ERR_SEND;
         } else if (!(pCtx->pollout_fd.revents & POLLOUT)) {
             LOG_W("Error polling for frame write: pCtx->pollout_fd.revents=%d", pCtx->pollout_fd.revents);
+            assert(0);
             return YPDR200_FRAME_SEND_ERR_SEND;
         }
         ssize_t nwritten = write(pCtx->fd, pDataOut, dataOutLen - actual_size_transmitted);

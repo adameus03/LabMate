@@ -511,13 +511,12 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
     return 0;
 }
 
-///<debug>
-static unsigned long __devno_pending = -1U;
-///</debug>
+static uhfd_dev_t __dev_pending = {0};
 static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
     LOG_D("uhfd_uhfman_poll_handler_quick: handle = %d", handle);
     uhfman_tag_t tag = uhfman_tag_get(handle);
     assert(tag.num_reads == 1);
+
     LOG_D_TBC("uhfd_uhfman_poll_handler_quick: EPC: [");
     for (size_t i=0; i<sizeof(tag.epc); i++) {
         LOG_D_CTBC("%02X ", tag.epc[i]);
@@ -526,15 +525,10 @@ static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
     uint8_t* pRSSI = (uint8_t*)pUserData;
     *pRSSI = tag.rssi[tag.num_reads - 1];
 
-    ///<debug>
-    assert(__devno_pending == 0U || __devno_pending == 1U);
-    if (__devno_pending != 0U) {
-        if (*pRSSI != 0x00) {
-            LOG_E("uhfd_uhfman_poll_handler_quick: *pRSSI=%d for devno %lu", *pRSSI, __devno_pending);
-            assert(0);
-        }
+    if (0 != memcmp(tag.epc, __dev_pending.epc, sizeof(tag.epc))) {
+        LOG_E("uhfd_uhfman_poll_handler_quick: EPC mismatch possibly due to previously missed pollin_timeout and uncleared buffer");
+        assert(0);
     }
-    ///</debug>
 }
 
 static void uhfd_uhfman_poll_handler(uint16_t handle, void* pUserData) {
@@ -722,7 +716,8 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_pow
     uhfman_tag_anonymous_forget();
     uhfman_set_time_precision(UHFMAN_TIME_PRECISION_US);
     uhfman_set_poll_mode(UHFMAN_POLL_MODE_RAW);
-    __devno_pending = devno;
+    //__devno_pending = devno;
+    __dev_pending = dev;
     uhfman_set_poll_handler((uhfman_poll_handler_t)uhfd_uhfman_poll_handler_quick);
     uint8_t rssi = 0;
     err = uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
