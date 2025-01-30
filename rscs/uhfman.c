@@ -335,10 +335,18 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         pCtx_out->fd = fd;
         pCtx_out->pollin_fd.fd = fd;
         pCtx_out->pollin_fd.events = POLLIN | POLLPRI;
+#if UHFMAN_GREEDY_MODE == 1
+        pCtx_out->pollin_timeout = 100; //100ms timeout
+#else 
         pCtx_out->pollin_timeout = 3200; // 3200ms timeout
+#endif
         pCtx_out->pollout_fd.fd = fd;
         pCtx_out->pollout_fd.events = POLLOUT;
+#if UHFMAN_GREEDY_MODE == 1
+        pCtx_out->pollout_timeout = 100; // 100ms timeout
+#else
         pCtx_out->pollout_timeout = 3200; // 3200ms timeout
+#endif
 
         uhfman_ctx_config_init(pCtx_out);
         

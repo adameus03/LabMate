@@ -19,7 +19,11 @@
 
 #define YPDR200_BULK_TRANSFER_TIMEOUT_MS 5000
 
-#define YPDR200_OUT_DELAY_MS 40
+#if UHFMAN_GREEDY_MODE == 1
+    #define YPDR200_OUT_DELAY_MS 0
+#else 
+    #define YPDR200_OUT_DELAY_MS 40
+#endif
 
 #define YPDR200_FRAME_PROLOG_SIZE 5
 typedef union _ypdr200_frame_prolog {
@@ -231,7 +235,9 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for response prolog: poll_rv=%d", poll_rv);
+#if UHFMAN_GREEDY_MODE == 0            
             assert(0);
+#endif
             return YPDR200_FRAME_RECV_ERR_READ;
         } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
             LOG_W("Error polling for response prolog: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
@@ -288,7 +294,9 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
             int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
             if (poll_rv == -1 || poll_rv == 0) {
                 LOG_W("Error polling for param data: poll_rv=%d", poll_rv);
+#if UHFMAN_GREEDY_MODE == 0
                 assert(0);
+#endif
                 return YPDR200_FRAME_RECV_ERR_READ;
             } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
                 LOG_W("Error polling for param data: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
@@ -343,7 +351,9 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         int poll_rv = poll(&pCtx->pollin_fd, 1, pCtx->pollin_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for response epilog: poll_rv=%d", poll_rv);
+#if UHFMAN_GREEDY_MODE == 0
             assert(0);
+#endif
             return YPDR200_FRAME_RECV_ERR_READ;
         } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
             LOG_W("Error polling for response epilog: pCtx->pollin_fd.revents=%d", pCtx->pollin_fd.revents);
