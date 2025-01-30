@@ -32,6 +32,10 @@
  */
 uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out);
 
+#define UHFMAN_FLUSH_INPUT_ERR_SUCCESS UHFMAN_ERR_SUCCESS
+#define UHFMAN_FLUSH_INPUT_ERR_CLEAR_HALT UHFMAN_ERR_CLEAR_HALT
+uhfman_err_t uhfman_device_flush_input(uhfman_ctx_t *pCtx);
+
 /**
  * @brief Releases the interface and closes the device
  */

@@ -160,7 +160,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
   ///<debug>
   if (rssi > 0) {
     LOG_D("walker_transmit_readings: RSSI for ieIndex %d, antNo %d is %d", ieIndex, antNo, rssi);
-    assert(0 == ieIndex);
+    //assert(0 == ieIndex);
   }
   ///</debug>
   

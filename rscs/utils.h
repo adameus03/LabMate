@@ -21,3 +21,9 @@ uint16_t utils_crc_ccitt(uint16_t crc, uint8_t const *buffer, size_t len);
 void utils_buf_u8_to_u16_big_endian(uint16_t *dst, const uint8_t *src, size_t u8len);
 
 // void utils_rand_bytes(uint8_t *dst, size_t len);
+
+/** 
+  @brief Sleep for the requested number of milliseconds.
+  @source https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
+*/
+int msleep(long msec);

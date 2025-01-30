@@ -304,7 +304,8 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         // config.c_cc[VTIME] = 0; // No timeout
         config.c_cflag |= CRTSCTS;
 
-        uhfman_usbserial_set_blocking(fd, 0); // set no blocking
+        //uhfman_usbserial_set_blocking(fd, 0); // set no blocking
+        uhfman_usbserial_set_blocking(fd, 1); // set blocking
 
         ///<Print all termios attributes in binary for debugging>
         LOG_V("Termios attributes (binary): ");
@@ -333,11 +334,11 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
 
         pCtx_out->fd = fd;
         pCtx_out->pollin_fd.fd = fd;
-        pCtx_out->pollin_fd.events = POLLIN;
-        pCtx_out->pollin_timeout = 100; // 100 ms timeout
+        pCtx_out->pollin_fd.events = POLLIN | POLLPRI;
+        pCtx_out->pollin_timeout = 3200; // 3200 ms timeout
         pCtx_out->pollout_fd.fd = fd;
         pCtx_out->pollout_fd.events = POLLOUT;
-        pCtx_out->pollout_timeout = 100; // 100 ms timeout
+        pCtx_out->pollout_timeout = 3200; // 3200 ms timeout
 
         uhfman_ctx_config_init(pCtx_out);
         
@@ -353,6 +354,29 @@ uhfman_err_t uhfman_device_take(uhfman_ctx_t *pCtx_out) {
         return UHFMAN_TAKE_ERR_SUCCESS;
     #else
     #error "Invalid value of UHFMAN_CH340_USE_KERNEL_DRIVER"pCtx_out
+    #endif
+#else
+#error "Unknown UHFMAN_DEVICE_CONNECTION_TYPE"
+#endif
+}
+
+uhfman_err_t uhfman_device_flush_input(uhfman_ctx_t *pCtx) {
+#if UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_UART
+#error "UHFMAN_DEVICE_CONNECTION_TYPE_UART not supported for now"
+#elif UHFMAN_DEVICE_CONNECTION_TYPE == UHFMAN_DEVICE_CONNECTION_TYPE_CH340_USB
+    #if UHFMAN_CH340_USE_KERNEL_DRIVER == 0
+    // TODO check this
+    int r = libusb_clear_halt(pCtx->handle, UHFMAN_CH340_USB_IFACE_IX);
+    if (r != 0) {
+        LOG_E("Error clearing halt: %s", libusb_error_name(r));
+        return UHFMAN_FLUSH_INPUT_ERR_CLEAR_HALT;
+    }
+    return UHFMAN_FLUSH_INPUT_ERR_SUCCESS;
+    #elif UHFMAN_CH340_USE_KERNEL_DRIVER == 1
+    tcflush(pCtx->fd, TCIFLUSH);
+    return UHFMAN_FLUSH_INPUT_ERR_SUCCESS;
+    #else
+    #error "Invalid value of UHFMAN_CH340_USE_KERNEL_DRIVER"
     #endif
 #else
 #error "Unknown UHFMAN_DEVICE_CONNECTION_TYPE"

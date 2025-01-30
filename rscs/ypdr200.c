@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <termios.h>
 
+#include "utils.h"
 #include "log.h"
 
 // lsusb -d1a86:7523 -v
@@ -17,6 +18,8 @@
 #define YPDR200_INTERRUPT_ENDPOINT_ADDR_IN 0x81U
 
 #define YPDR200_BULK_TRANSFER_TIMEOUT_MS 5000
+
+#define YPDR200_OUT_DELAY_MS 40
 
 #define YPDR200_FRAME_PROLOG_SIZE 5
 typedef union _ypdr200_frame_prolog {
@@ -296,6 +299,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
             if (nread <= 0) {
                 LOG_W("Error reading param data: paramInLen=%d, actual_size_received=%d, nread=%d", paramInLen, actual_size_received, nread);
                 free(pParamIn);
+                assert(0);
                 return YPDR200_FRAME_RECV_ERR_READ;
             }
             actual_size_received += nread;
@@ -352,6 +356,7 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
             if (pParamIn != (uint8_t*)0) {
                 free(pParamIn);
             }
+            assert(0);
             return YPDR200_FRAME_RECV_ERR_READ;
         }
         actual_size_received += nread;
@@ -497,6 +502,8 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
 #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     //actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
     while (actual_size_transmitted < dataOutLen) {
+        // Timeout to prevent overwhelming the device
+        msleep(YPDR200_OUT_DELAY_MS);
         int poll_rv = poll(&pCtx->pollout_fd, 1, pCtx->pollout_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for frame write: pollout_rv=%d", poll_rv);
@@ -511,6 +518,7 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
         if (nwritten <= 0) {
             LOG_W("Error sending cmd 0x%02X: dataOutLen=%d, actual_size_transmitted=%d, nwritten=%d", pFrameSnd->prolog.cmd, dataOutLen, actual_size_transmitted, nwritten);
             free(pDataOut);
+            assert(0);
             return YPDR200_FRAME_SEND_ERR_SEND;
         }
         actual_size_transmitted += nwritten;

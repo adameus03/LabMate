@@ -81,7 +81,14 @@ int measurements_quick_perform(const int ieIndex, const int antNo, const int txP
   ///<debug>
   if (*pRssi_out > 0) {
     LOG_D("measurements_quick_perform: RSSI for iePath \"%s\" is %d", iePath, *pRssi_out);
-    assert(0 == strcmp(iePath, "/mnt/rscs/uhf0"));
+    const char* expectedPathProlog = "/mnt/rscs/uhf";
+    size_t expectedPathPrologStrlen = strlen(expectedPathProlog);
+    char* expectedPath = (char*)malloc(expectedPathPrologStrlen + 128);
+    assert(expectedPath != NULL);
+    assert(expectedPathPrologStrlen + 128 > snprintf(expectedPath, expectedPathPrologStrlen + 128, "%s%d", expectedPathProlog, ieIndex));
+    assert(0 == strcmp(iePath, expectedPath));
+    free(expectedPath);
+    //assert(0 == strcmp(iePath, "/mnt/rscs/uhf0"));
   }
   ///</debug>
 

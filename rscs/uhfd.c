@@ -512,6 +512,7 @@ int uhfd_embody_dev(uhfd_t* pUHFD, /*uhfd_dev_t* pDev*/unsigned long devno) {
 }
 
 static uhfd_dev_t __dev_pending = {0};
+static int __devs_matched = 0;
 static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
     LOG_D("uhfd_uhfman_poll_handler_quick: handle = %d", handle);
     uhfman_tag_t tag = uhfman_tag_get(handle);
@@ -527,7 +528,10 @@ static void uhfd_uhfman_poll_handler_quick(uint16_t handle, void* pUserData) {
 
     if (0 != memcmp(tag.epc, __dev_pending.epc, sizeof(tag.epc))) {
         LOG_E("uhfd_uhfman_poll_handler_quick: EPC mismatch possibly due to previously missed pollin_timeout and uncleared buffer");
-        assert(0);
+        //assert(0);
+        __devs_matched = 0;
+    } else {
+        __devs_matched = 1;
     }
 }
 
@@ -718,6 +722,7 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_pow
     uhfman_set_poll_mode(UHFMAN_POLL_MODE_RAW);
     //__devno_pending = devno;
     __dev_pending = dev;
+    __devs_matched = 1;
     uhfman_set_poll_handler((uhfman_poll_handler_t)uhfd_uhfman_poll_handler_quick);
     uint8_t rssi = 0;
     err = uhfman_single_polling(&pUHFD->uhfmanCtx, (void*)&rssi);
@@ -728,37 +733,47 @@ int uhfd_quick_measure_dev_rssi(uhfd_t* pUHFD, unsigned long devno, float tx_pow
         assert(0 == rssi);
     }
 
-    ///<debug>
-    LOG_D("uhfd_quick_measure_dev_rssi: RSSI: %d, devno: %lu", rssi, devno);
 
-    if (devno != 0) {
-        assert(dev.epc[0] != 'a' && dev.epc[0] != 'A');
-    }
 
-    if (devno != 0) {
-        if (0 != rssi) {
-            LOG_E("DETECTED UNEXPECTED NON-ZERO RSSI FOR DEVNO %lu", devno);
-            LOG_D("CALLING DEBUG GET SELECT PARAM, QUERY PARAM");
-            LOG_D("---select param---");
-            uhfman_dbg_get_select_param(&pUHFD->uhfmanCtx);
-            LOG_D("---query param---");
-            uhfman_dbg_get_query_params(&pUHFD->uhfmanCtx);
-            // LOG_D("---select mode---");
-            // uhfman_dbg_get_select_mode(&pUHFD->uhfmanCtx);
-            LOG_D("DEBUG GET SELECT PARAM DONE");
-            assert(0);
-        }
-        //assert(0 == rssi);
-    }
-    ///</debug>
+    // ///<debug>
+    // LOG_D("uhfd_quick_measure_dev_rssi: RSSI: %d, devno: %lu", rssi, devno);
+
+    // if (devno != 0) {
+    //     assert(dev.epc[0] != 'a' && dev.epc[0] != 'A');
+    // }
+
+    // if (devno != 0) {
+    //     if (0 != rssi) {
+    //         LOG_E("DETECTED UNEXPECTED NON-ZERO RSSI FOR DEVNO %lu", devno);
+    //         LOG_D("CALLING DEBUG GET SELECT PARAM, QUERY PARAM");
+    //         LOG_D("---select param---");
+    //         uhfman_dbg_get_select_param(&pUHFD->uhfmanCtx);
+    //         LOG_D("---query param---");
+    //         uhfman_dbg_get_query_params(&pUHFD->uhfmanCtx);
+    //         // LOG_D("---select mode---");
+    //         // uhfman_dbg_get_select_mode(&pUHFD->uhfmanCtx);
+    //         LOG_D("DEBUG GET SELECT PARAM DONE");
+    //         assert(0);
+    //     }
+    //     //assert(0 == rssi);
+    // }
+    // ///</debug>
 
     uhfman_unset_poll_handler();
     // no need to stop polling as it is single polling
-    // update the dev's rssi
-    assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
-    pUHFD->da.pDevs[devno].measurement.rssi = rssi;
-    assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
-    assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+    assert(__devs_matched == 0 || __devs_matched == 1);
+    if (__devs_matched == 1) {
+        // update the dev's rssi
+        assert(TRUE == p_rwlock_writer_lock(pUHFD->pDaRWLock));
+        pUHFD->da.pDevs[devno].measurement.rssi = rssi;
+        assert(TRUE == p_rwlock_writer_unlock(pUHFD->pDaRWLock));
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));  
+    } else {
+        uhfman_device_flush_input(&pUHFD->uhfmanCtx);
+        assert(TRUE == p_mutex_unlock(pUHFD->pUhfmanCtxMutex));
+        return -2;
+    }
+    LOG_D("uhfd_quick_measure_dev_rssi: SUCCESS");
     return 0;
 }
 
