@@ -1059,12 +1059,341 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
     return 0;
 }
 
+// TODO use it for user and reagent too for consistency (reagent is in enum, but not used in __lsapi_endpoint_reagent_get for now)
+typedef enum __lsapi_x_type {
+    __LSAPI_X_TYPE_REAGTYPE,
+    __LSAPI_X_TYPE_REAGENT,
+    __LSAPI_X_TYPE_FACULTY,
+    __LSAPI_X_TYPE_LAB,
+    __LSAPI_X_TYPE_INVENTORY_ITEM,
+    __LSAPI_X_TYPE_ANTENNA,
+
+    __LSAPI_X_TYPE__FIRST = __LSAPI_X_TYPE_REAGTYPE,
+    __LSAPI_X_TYPE__LAST = __LSAPI_X_TYPE_ANTENNA
+} __lsapi_x_type_t;
+
+static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi, __lsapi_x_type_t xType) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    assert(xType >= __LSAPI_X_TYPE__FIRST && xType <= __LSAPI_X_TYPE__LAST);
+
+    const char* xName = NULL;
+    switch (xType) {
+        case __LSAPI_X_TYPE_REAGTYPE:
+            xName = "reagtype";
+            break;
+        case __LSAPI_X_TYPE_REAGENT:
+            xName = "reagent";
+            break;
+        case __LSAPI_X_TYPE_FACULTY:
+            xName = "faculty";
+            break;
+        case __LSAPI_X_TYPE_LAB:
+            xName = "lab";
+            break;
+        case __LSAPI_X_TYPE_INVENTORY_ITEM:
+            xName = "inventory_item";
+            break;
+        case __LSAPI_X_TYPE_ANTENNA:
+            xName = "antenna";
+            break;
+        default:
+            assert(0);
+    }
+
+    if (pReq->query_at == SIZE_MAX) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing query string");
+    }
+    char* queryStr = pReq->path.base + pReq->query_at + 1;
+    size_t queryStrLen = pReq->path.len - pReq->query_at - 1;
+    LOG_D("__lsapi_endpoint_x_get: queryStrLen = %lu", queryStrLen);
+    LOG_D("__lsapi_endpoint_x_get: queryStr = %.*s", (int)queryStrLen, queryStr);
+
+    size_t xNameLen = strlen(xName);
+    char* xIdParamNameEpilog = "_id";
+    size_t xIdParamNameEpilogLen = strlen(xIdParamNameEpilog);
+    char* xIdParamName = (char*)malloc(xNameLen + xIdParamNameEpilogLen + 1);
+    if (xIdParamName == NULL) {
+        LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for xIdParamName");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(xIdParamName, xName, xNameLen);
+    memcpy(xIdParamName + xNameLen, xIdParamNameEpilog, xIdParamNameEpilogLen);
+    xIdParamName[xNameLen + xIdParamNameEpilogLen] = '\0';
+    size_t xIdParamNameLen = strlen(xIdParamName);
+    assert(xIdParamNameLen == xNameLen +xIdParamNameEpilogLen);
+    if (queryStrLen < 1) {
+        LOG_D("__lsapi_endpoint_x_get: Empty query string (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Empty query string");
+    } else if (queryStrLen < xIdParamNameLen + 2) { // x_id=d is the shortest possible query string (where d is a decimal digit)
+        LOG_D("__lsapi_endpoint_reagent_get: Query string too short (queryStrLen = %lu)", queryStrLen);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Query string too short");
+    }
+    char* xIdParamNameAddr = strstr(queryStr, xIdParamName);
+    if (xIdParamNameAddr == NULL) {
+        LOG_D("__lsapi_endpoint_x_get: Missing x_id parameter in query string");
+        char* errMsgProlog = "Missing ";
+        char* errMsgEpilog = " parameter in query string";
+        size_t errMsgPrologStrlen = strlen(errMsgProlog);
+        size_t errMsgEpilogStrlen = strlen(errMsgEpilog);
+        char* errMsg = (char*)malloc(errMsgPrologStrlen + xIdParamNameLen + errMsgEpilogStrlen + 1);
+        if (errMsg == NULL) {
+            LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for errMsg");
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+        }
+        memcpy(errMsg, errMsgProlog, errMsgPrologStrlen);
+        memcpy(errMsg + errMsgPrologStrlen, xIdParamName, xIdParamNameLen);
+        memcpy(errMsg + errMsgPrologStrlen + xIdParamNameLen, errMsgEpilog, errMsgEpilogStrlen);
+        errMsg[errMsgPrologStrlen + xIdParamNameLen + errMsgEpilogStrlen] = '\0';
+        int rv = __lsapi_endpoint_error(pReq, 400, "Bad Request", errMsg);
+        free(errMsg);
+        return rv;
+    } else if (xIdParamNameAddr != queryStr) {
+        LOG_D("__lsapi_endpoint_x_get: x_id parameter not at the beginning of query string");
+        char* errMsgEpilog = " parameter not at the beginning of query string";
+        size_t errMsgEpilogStrlen = strlen(errMsgEpilog);
+        char* errMsg = (char*)malloc(xIdParamNameLen + errMsgEpilogStrlen + 1);
+        if (errMsg == NULL) {
+            LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for errMsg");
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+        }
+        memcpy(errMsg, xIdParamName, xIdParamNameLen);
+        memcpy(errMsg + xIdParamNameLen, errMsgEpilog, errMsgEpilogStrlen);
+        errMsg[xIdParamNameLen + errMsgEpilogStrlen] = '\0';
+        int rv = __lsapi_endpoint_error(pReq, 400, "Bad Request", errMsg);
+        free(errMsg);
+        return rv;
+    }
+    char* xIdParamNVSeparatorAddr = xIdParamNameAddr + xIdParamNameLen; // obtains Name-Value separator address
+    if (*xIdParamNVSeparatorAddr != '=') {
+        LOG_D("__lsapi_endpoint_x_get: Missing = after x_id in query string");
+        char* errMsgProlog = "Missing = after ";
+        char* errMsgEpilog = " in query string";
+        size_t errMsgPrologStrlen = strlen(errMsgProlog);
+        size_t errMsgEpilogStrlen = strlen(errMsgEpilog);
+        char* errMsg = (char*)malloc(errMsgPrologStrlen + xIdParamNameLen + errMsgEpilogStrlen + 1);
+        if (errMsg == NULL) {
+            LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for errMsg");
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+        }
+        memcpy(errMsg, errMsgProlog, errMsgPrologStrlen);
+        memcpy(errMsg + errMsgPrologStrlen, xIdParamName, xIdParamNameLen);
+        memcpy(errMsg + errMsgPrologStrlen + xIdParamNameLen, errMsgEpilog, errMsgEpilogStrlen);
+        errMsg[errMsgPrologStrlen + xIdParamNameLen + errMsgEpilogStrlen] = '\0';
+        int rv = __lsapi_endpoint_error(pReq, 400, "Bad Request", errMsg);
+        free(errMsg);
+        return rv;
+    }
+    char* xIdParamValue = xIdParamNVSeparatorAddr + 1;
+    size_t xIdParamValueLen = queryStr + queryStrLen - xIdParamValue;
+    assert(xIdParamValueLen >= 1);
+    for (size_t i = 0; i < xIdParamValueLen; i++) {
+        if (!isdigit(xIdParamValue[i])) {
+            LOG_D("__lsapi_endpoint_x_get: Invalid x_id value in query string (non-digit character at position %lu in string %.*s)", i, (int)xIdParamValueLen, xIdParamValue);
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid x_id value in query string");
+        }
+    }
+    char* xIdParamValueNt = (char*)malloc(xIdParamValueLen + 1); // xIdParamValueNt = xIdParamValue Null-terminated
+    if (xIdParamValueNt == NULL) {
+        LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for xIdParamValueNt");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(xIdParamValueNt, xIdParamValue, xIdParamValueLen);
+    xIdParamValueNt[xIdParamValueLen] = '\0';
+    int xId = atoi(xIdParamValueNt);
+    LOG_V("__lsapi_endpoint_reagent_get: xId = %d", xId);
+    assert(xId >= 0);
+
+    // get x data from database so that we can use it for the http response
+    void* pX = NULL;
+    int rv = -1;
+    switch (xType) {
+        case __LSAPI_X_TYPE_REAGTYPE:
+            pX = (void*)malloc(sizeof(db_reagent_type_t));
+            rv = db_reagent_type_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_reagent_type_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_REAGENT:
+            pX = (void*)malloc(sizeof(db_reagent_t));
+            rv = db_reagent_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_reagent_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_FACULTY:
+            pX = (void*)malloc(sizeof(db_faculty_t));
+            rv = db_faculty_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_faculty_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_LAB:
+            pX = (void*)malloc(sizeof(db_lab_t));
+            rv = db_lab_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_lab_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_INVENTORY_ITEM:
+            pX = (void*)malloc(sizeof(db_inventory_item_t));
+            rv = db_inventory_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_inventory_item_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_ANTENNA:
+            pX = (void*)malloc(sizeof(db_antenna_t));
+            rv = db_antenna_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_antenna_t*)pX);
+            break;
+        default:
+            assert(0);
+    }
+    if (0 != rv) {
+        if (rv == -2) {
+            char* errMsgEpilog = " not found";
+            size_t errMsgEpilogStrlen = strlen(errMsgEpilog);
+            char* errMsg = (char*)malloc(xNameLen + errMsgEpilogStrlen + 1);
+            if (errMsg == NULL) {
+                LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for errMsg");
+                return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+            }
+            memcpy(errMsg, xName, xNameLen);
+            memcpy(errMsg + xNameLen, errMsgEpilog, errMsgEpilogStrlen);
+            errMsg[xNameLen + errMsgEpilogStrlen] = '\0';
+            int rv = __lsapi_endpoint_error(pReq, 404, "Not Found", errMsg);
+            free(errMsg);
+            return rv;
+        } else {
+            LOG_E("__lsapi_endpoint_x_get: Failed to get x data from database (db_%s_get_by_id returned %d)", xName, rv);
+            char* errMsgProlog = "Failed to get ";
+            char* errMsgEpilog = " data from database";
+            size_t errMsgPrologStrlen = strlen(errMsgProlog);
+            size_t errMsgEpilogStrlen = strlen(errMsgEpilog);
+            char* errMsg = (char*)malloc(errMsgPrologStrlen + xNameLen + errMsgEpilogStrlen + 1);
+            if (errMsg == NULL) {
+                LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for errMsg");
+                return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+            }
+            memcpy(errMsg, errMsgProlog, errMsgPrologStrlen);
+            memcpy(errMsg + errMsgPrologStrlen, xName, xNameLen);
+            memcpy(errMsg + errMsgPrologStrlen + xNameLen, errMsgEpilog, errMsgEpilogStrlen);
+            errMsg[errMsgPrologStrlen + xNameLen + errMsgEpilogStrlen] = '\0';
+            int rv = __lsapi_endpoint_error(pReq, 500, "Internal Server Error", errMsg);
+            free(errMsg);
+            return rv;
+        }
+    }
+
+    const char* status = "success";
+    const char* messageEpilog = " data retrieved successfully";
+    size_t messageEpilogStrlen = strlen(messageEpilog);
+    char* message = (char*)malloc(xNameLen + messageEpilogStrlen + 1);
+    if (message == NULL) {
+        LOG_E("__lsapi_endpoint_x_get: Failed to allocate memory for message");
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Server ran out of memory. Poor server.");
+    }
+    memcpy(message, xName, xNameLen);
+    memcpy(message + xNameLen, messageEpilog, messageEpilogStrlen);
+    message[xNameLen + messageEpilogStrlen] = '\0';
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add x data as sub-object
+    yyjson_mut_val* pXObject = yyjson_mut_obj(pJsonResp);
+
+    switch (xType) {
+        case __LSAPI_X_TYPE_REAGTYPE:
+            db_reagent_type_t reagent_type = *((db_reagent_type_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "reagtype_id", reagent_type.reagtype_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "name", reagent_type.name);
+            break;
+        case __LSAPI_X_TYPE_REAGENT:
+            db_reagent_t reagent = *((db_reagent_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "reagent_id", reagent.reagent_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "name", reagent.name);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "vendor", reagent.vendor);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "reagtype_id", reagent.reagent_type_id);
+            break;
+        case __LSAPI_X_TYPE_FACULTY:
+            db_faculty_t faculty = *((db_faculty_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "faculty_id", faculty.faculty_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "name", faculty.name);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "email_domain", faculty.email_domain);
+            break;
+        case __LSAPI_X_TYPE_LAB:
+            db_lab_t lab = *((db_lab_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "lab_id", lab.lab_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "name", lab.name);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "faculty_id", lab.faculty_id);
+            break;
+        case __LSAPI_X_TYPE_INVENTORY_ITEM:
+            db_inventory_item_t inventory_item = *((db_inventory_item_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "inventory_item_id", inventory_item.inventory_id);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "reagent_id", inventory_item.reagent_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "date_added", inventory_item.date_added);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "date_expire", inventory_item.date_expire);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "lab_id", inventory_item.lab_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "epc", inventory_item.epc); // TODO remove to hide EPC from frontend?
+            break;
+        case __LSAPI_X_TYPE_ANTENNA:
+            db_antenna_t antenna = *((db_antenna_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "antenna_id", antenna.antenna_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "name", antenna.name);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "info", antenna.info);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "k", antenna.k);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "lab_id", antenna.lab_id);
+            break;
+        default:
+            assert(0);
+    }
+    // add x object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, xName, pXObject);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free(xIdParamValueNt);
+    free((void*)respText);
+    free(message);
+    yyjson_mut_doc_free(pJsonResp);
+
+    switch (xType) {
+        case __LSAPI_X_TYPE_REAGTYPE:
+            db_reagent_type_free((db_reagent_type_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_REAGENT:
+            db_reagent_free((db_reagent_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_FACULTY:
+            db_faculty_free((db_faculty_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_LAB:
+            db_lab_free((db_lab_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_INVENTORY_ITEM:
+            db_inventory_item_free((db_inventory_item_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_ANTENNA:
+            db_antenna_free((db_antenna_t*)pX);
+            break;
+        default:
+            assert(0);
+    }
+    return 0;
+}
+
+static int __lsapi_endpoint_reagtype_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_REAGTYPE);
+}
+
 int lsapi_endpoint_reagtype(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
         return __lsapi_endpoint_reagtype_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_reagtype_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
@@ -1594,12 +1923,18 @@ static int __lsapi_endpoint_faculty_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
     return 0;
 }
 
+static int __lsapi_endpoint_faculty_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_FACULTY);
+}
+
 int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
         return __lsapi_endpoint_faculty_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_faculty_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
@@ -1761,17 +2096,22 @@ static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq,
     return 0;
 }
 
+static int __lsapi_endpoint_lab_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_LAB);
+}
+
 int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
         return __lsapi_endpoint_lab_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_LAB);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
-    }
+    } 
 }
-
 
 /**
  * TODO should we really pass epc, apwd, kpwd instead of generate it? For now yes, as it seems to make debugging easier
@@ -2156,6 +2496,10 @@ static int __lsapi_endpoint_inventory_post(h2o_handler_t* pH2oHandler, h2o_req_t
     }
 }
 
+static int __lsapi_endpoint_inventory_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_INVENTORY_ITEM);
+}
+
 int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -2164,6 +2508,8 @@ int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
         return __lsapi_endpoint_inventory_put(pH2oHandler, pReq, pLsapi);
     } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
         return __lsapi_endpoint_inventory_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_inventory_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
@@ -2514,6 +2860,10 @@ static int __lsapi_endpoint_antenna_put(h2o_handler_t* pH2oHandler, h2o_req_t* p
 //     return __lsapi_endpoint_error(pReq, 501, "Not Implemented", "Not Implemented");
 // }
 
+static int __lsapi_endpoint_antenna_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_ANTENNA);
+}
+
 int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -2522,6 +2872,8 @@ int lsapi_endpoint_antenna(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
         return __lsapi_endpoint_antenna_put(pH2oHandler, pReq, pLsapi);
     // } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
     //     return __lsapi_endpoint_antenna_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_antenna_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }
