@@ -5,11 +5,27 @@ import matplotlib.animation as animation
 from tkinter import Tk, Checkbutton, Button, Label, StringVar, IntVar
 
 # Database connection parameters
-DB_NAME = 'labmate'
-DB_USER = 'lm_u_a6sd78as7d6f78'
-DB_PASSWORD = '8730fehoypd9ugcoa(&#*OuDId7&AT*WP8p9yp&W*DU&Gsd;oij;coduwe;yiouwdhfe'
-DB_HOST = 'labmate.v2024.pl'
-DB_PORT = '5432'
+DB_NAME = ''
+DB_USER = ''
+DB_PASSWORD = ''
+DB_HOST = ''
+DB_PORT = ''
+
+def load_env():
+    global DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+    with open('.env') as f:
+        for line in f:
+            key, value = line.strip().split('=')
+            if key == 'DB_NAME':
+                DB_NAME = value
+            elif key == 'DB_USER':
+                DB_USER = value
+            elif key == 'DB_PASSWORD':
+                DB_PASSWORD = value
+            elif key == 'DB_HOST':
+                DB_HOST = value
+            elif key == 'DB_PORT':
+                DB_PORT = value
 
 
 is_db_connected = False
@@ -45,6 +61,8 @@ def update_plot(frame):
     plt.ylim(175, None)  # Set the y-axis limit to 175 and the maximum value
     plt.title('Real-Time RX Signal Strength')
     plt.gcf().autofmt_xdate()
+
+load_env()
 
 # GUI setup
 root = Tk()
