@@ -547,7 +547,8 @@ static void* walker_task(void* pArg) {
 
     int ieIndex = 0; //in
     int antNo = 0; //in
-    int txPower = 10; //in
+    //int txPower = 10; //in
+    int txPower = 24; //in
     int rssi = 0; //out
     int readRate = 0; //out
 

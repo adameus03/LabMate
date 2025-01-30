@@ -481,6 +481,9 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
     if (pFrameSnd == NULL) { assert(0); }
     if (pCtx == NULL) { assert(0); }
 
+    // Timeout to prevent overwhelming the device
+    msleep(YPDR200_OUT_DELAY_MS);
+
     uint8_t* pDataOut = ypdr200_frame_raw(pFrameSnd);
     uint32_t dataOutLen = ypdr200_frame_length(pFrameSnd);
 
@@ -502,8 +505,7 @@ static int ypdr200_frame_send(ypdr200_frame_t* pFrameSnd, uhfman_ctx_t* pCtx) {
 #elif YPDR200_INTERFACE_TYPE == YPDR200_INTERFACE_TYPE_SERIAL
     //actual_size_transmitted = write(pCtx->fd, pDataOut, dataOutLen);
     while (actual_size_transmitted < dataOutLen) {
-        // Timeout to prevent overwhelming the device
-        msleep(YPDR200_OUT_DELAY_MS);
+        //msleep(YPDR200_OUT_DELAY_MS);
         int poll_rv = poll(&pCtx->pollout_fd, 1, pCtx->pollout_timeout);
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for frame write: pollout_rv=%d", poll_rv);
