@@ -160,6 +160,21 @@ int db_reagent_type_insert_ret(db_t* pDb, const char* name, db_reagent_type_t* p
 
 int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_type_t* pReagentType_out);
 
+int db_reagent_types_get_total_count(db_t* pDb, int* pCount_out);
+
+typedef enum db_reagent_type_filter_type {
+  DB_REAGENT_TYPE_FILTER_TYPE_NONE,
+  DB_REAGENT_TYPE_FILTER_TYPE_NAME
+} db_reagent_type_filter_type_t;
+
+int db_reagent_types_read_page_filtered(db_t* pDb, 
+                                        const char* offset, 
+                                        const char* page_size, 
+                                        db_reagent_type_t** ppReagentTypes_out, 
+                                        int* pN_out, 
+                                        db_reagent_type_filter_type_t filter_type, 
+                                        const char* filter_value);
+
 int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id);
 
 int db_reagent_insert_ret(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id, db_reagent_t* pReagent_out);

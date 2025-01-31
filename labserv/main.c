@@ -263,6 +263,7 @@ int main(int argc, char **argv)
     pathconf = register_handler(hostconf, "/api/vendor", lsapi_endpoint_vendor, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/vendors", lsapi_endpoint_vendors, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/reagtype", lsapi_endpoint_reagtype, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/reagtypes", lsapi_endpoint_reagtypes, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/faculty", lsapi_endpoint_faculty, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/antenna", lsapi_endpoint_antenna, (void*)pLsapi, logfh);
 

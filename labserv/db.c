@@ -469,6 +469,83 @@ void db_free(db_t* pDb) {
   free(pDb);
 }
 
+/********************************************/
+/* Table-pseudoagnostic helper definitions */
+/******************************************/
+typedef enum __db_x_type {
+    __DB_X_TYPE_REAGTYPE,
+    __DB_X_TYPE_REAGENT,
+    __DB_X_TYPE_VENDOR,
+    __DB_X_TYPE_FACULTY,
+    __DB_X_TYPE_LAB,
+    __DB_X_TYPE_INVENTORY_ITEM,
+    __DB_X_TYPE_ANTENNA,
+
+    __DB_X_TYPE__FIRST = __DB_X_TYPE_REAGTYPE,
+    __DB_X_TYPE__LAST = __DB_X_TYPE_ANTENNA
+} __db_x_type_t;
+
+int db_x_get_total_count(db_t* pDb, int* pCount_out, __db_x_type_t xType) {
+  assert(pDb != NULL);
+  assert(pCount_out != NULL);
+  assert(xType >= __DB_X_TYPE__FIRST && xType <= __DB_X_TYPE__LAST);
+  const char* pQuery = NULL;
+  switch (xType) {
+    case __DB_X_TYPE_REAGTYPE:
+      pQuery = "SELECT COUNT(*) FROM public.reagent_types";
+      break;
+    case __DB_X_TYPE_REAGENT:
+      pQuery = "SELECT COUNT(*) FROM public.reagents";
+      break;
+    case __DB_X_TYPE_VENDOR:
+      pQuery = "SELECT COUNT(*) FROM public.vendors";
+      break;
+    case __DB_X_TYPE_FACULTY:
+      pQuery = "SELECT COUNT(*) FROM public.faculties";
+      break;
+    case __DB_X_TYPE_LAB:
+      pQuery = "SELECT COUNT(*) FROM public.labs";
+      break;
+    case __DB_X_TYPE_INVENTORY_ITEM:
+      pQuery = "SELECT COUNT(*) FROM public.inventory_items";
+      break;
+    case __DB_X_TYPE_ANTENNA:
+      pQuery = "SELECT COUNT(*) FROM public.antennas";
+      break;
+    default:
+      LOG_E("db_x_get_total_count: Invalid xType: %d", xType);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[0] = {};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 0, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_x_get_total_count: Failed to get total count: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_x_get_total_count: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 1) {
+    LOG_E("db_x_get_total_count: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  *pCount_out = atoi(PQgetvalue(pResult, 0, 0));
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+/************************************************/
+/* END Table-pseudoagnostic helper definitions */
+/**********************************************/
+
 int db_user_insert_basic(db_t* pDb, 
                   const char* username,
                   const char* ip_addr,
@@ -815,6 +892,76 @@ int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_
   return db_reagent_type_get_by_x(pDb, pQuery, pParams, 1, pReagentType_out);
 }
 
+int db_reagent_types_get_total_count(db_t* pDb, int* pCount_out) {
+  return db_x_get_total_count(pDb, pCount_out, __DB_X_TYPE_REAGTYPE);
+}
+
+int db_reagent_types_read_page_filtered(db_t* pDb, 
+                                        const char* offset, 
+                                        const char* page_size, 
+                                        db_reagent_type_t** ppReagentTypes_out, 
+                                        int* pN_out, 
+                                        db_reagent_type_filter_type_t filter_type, 
+                                        const char* filter_value) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppReagentTypes_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_type >= DB_VENDOR_FILTER_TYPE_NONE && filter_type <= DB_VENDOR_FILTER_TYPE_NAME);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_VENDOR_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.reagent_types WHERE $1 = $1 ORDER BY reagent_type_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_VENDOR_FILTER_TYPE_NAME:
+      pQuery = "SELECT * FROM public.reagent_types WHERE name ~* $1 ORDER BY reagent_type_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_reagent_types_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_reagent_types_read_page_filtered: Failed to read reagent types page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_reagent_types_read_page_filtered: No reagent types found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No reagent types found
+  }
+  if (PQnfields(pResult) != 2) {
+    LOG_E("db_reagent_types_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_reagent_type_t* pReagentTypes = (db_reagent_type_t*)malloc(nTuples * sizeof(db_reagent_type_t));
+  if (pReagentTypes == NULL) {
+    LOG_E("db_reagent_types_read_page_filtered: Failed to allocate memory for reagent types");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pReagentTypes[i].reagtype_id = atoi(PQgetvalue(pResult, i, 0));
+    pReagentTypes[i].name = p_strdup(PQgetvalue(pResult, i, 1));
+  }
+  *ppReagentTypes_out = pReagentTypes;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
 int db_reagent_insert(db_t* pDb, const char* name, const char* vendor, const char* reagent_type_id) {
   assert(pDb != NULL);
   assert(name != NULL);
@@ -947,77 +1094,6 @@ int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pRe
   const char* pQuery = "SELECT * FROM public.reagents WHERE reagent_id = $1";
   const char* pParams[1] = {reagent_id_in};
   return db_reagent_get_by_x(pDb, pQuery, pParams, 1, pReagent_out);
-}
-
-typedef enum __db_x_type {
-    __DB_X_TYPE_REAGTYPE,
-    __DB_X_TYPE_REAGENT,
-    __DB_X_TYPE_VENDOR,
-    __DB_X_TYPE_FACULTY,
-    __DB_X_TYPE_LAB,
-    __DB_X_TYPE_INVENTORY_ITEM,
-    __DB_X_TYPE_ANTENNA,
-
-    __DB_X_TYPE__FIRST = __DB_X_TYPE_REAGTYPE,
-    __DB_X_TYPE__LAST = __DB_X_TYPE_ANTENNA
-} __db_x_type_t;
-
-int db_x_get_total_count(db_t* pDb, int* pCount_out, __db_x_type_t xType) {
-  assert(pDb != NULL);
-  assert(pCount_out != NULL);
-  assert(xType >= __DB_X_TYPE__FIRST && xType <= __DB_X_TYPE__LAST);
-  const char* pQuery = NULL;
-  switch (xType) {
-    case __DB_X_TYPE_REAGTYPE:
-      pQuery = "SELECT COUNT(*) FROM public.reagent_types";
-      break;
-    case __DB_X_TYPE_REAGENT:
-      pQuery = "SELECT COUNT(*) FROM public.reagents";
-      break;
-    case __DB_X_TYPE_VENDOR:
-      pQuery = "SELECT COUNT(*) FROM public.vendors";
-      break;
-    case __DB_X_TYPE_FACULTY:
-      pQuery = "SELECT COUNT(*) FROM public.faculties";
-      break;
-    case __DB_X_TYPE_LAB:
-      pQuery = "SELECT COUNT(*) FROM public.labs";
-      break;
-    case __DB_X_TYPE_INVENTORY_ITEM:
-      pQuery = "SELECT COUNT(*) FROM public.inventory_items";
-      break;
-    case __DB_X_TYPE_ANTENNA:
-      pQuery = "SELECT COUNT(*) FROM public.antennas";
-      break;
-    default:
-      LOG_E("db_x_get_total_count: Invalid xType: %d", xType);
-      exit(EXIT_FAILURE);
-  }
-  const char* pParams[0] = {};
-  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
-  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 0, NULL, pParams, NULL, NULL, 0);
-  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
-    LOG_E("db_x_get_total_count: Failed to get total count: %s", PQerrorMessage(pDbConnection->pConn));
-    PQclear(pResult);
-    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
-    return -1;
-  }
-  if (PQntuples(pResult) != 1) {
-    LOG_E("db_x_get_total_count: Unexpected number of tuples in result: %d", PQntuples(pResult));
-    PQclear(pResult);
-    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
-    exit(EXIT_FAILURE);
-  }
-  if (PQnfields(pResult) != 1) {
-    LOG_E("db_x_get_total_count: Unexpected number of fields in result: %d", PQnfields(pResult));
-    PQclear(pResult);
-    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
-    exit(EXIT_FAILURE);
-  }
-  *pCount_out = atoi(PQgetvalue(pResult, 0, 0));
-  PQclear(pResult);
-  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
-  return 0;
 }
 
 //TODO switch to using db_x_get_total_count
