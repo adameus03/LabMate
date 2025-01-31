@@ -285,13 +285,11 @@
       }
     }
 
-    // TODO Use `fetchXsCount`
     async function fetchReagentsCount() {
       // GET `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents_count": <n>)}
       return fetchXsCount("reagents");
     }
 
-    // TODO Use `fetchXs`
     async function fetchReagents(filterParam, filterValue, p_offset, p_size) {
       // POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents": [{ "reagent_id": <id>, "name": "<name>", "vendor": "<vendor>", "reagtype_id": <reagtype_id>}, ...])}
       const xParametrizationObject = __fetchXs_ParametrizationObject("reagents", ["none", "name", "vendor", "reagtype_id"]);
