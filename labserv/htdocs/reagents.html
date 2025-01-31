@@ -71,13 +71,13 @@
             <th>Name</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
+        <tbody id="reagent-names-tbody">
+          <!-- <tr>
             <td>BSA</td>
           </tr>
           <tr>
             <td>BSTFA</td>
-          </tr>
+          </tr> -->
         </tbody>
       </table>
     </div>
@@ -163,6 +163,15 @@
   </div>
 
   <script>
+    const LABSERV_API_URL = "http://127.0.0.1:7890/api"
+
+    function assert(condition, message) {
+      if (!condition) {
+          alert(message || "Assertion failed!"); // Show a message to the user
+          throw new Error(message || "Assertion failed!"); // Stop execution
+      }
+    }
+
     function __parentCheck() {
       if (window.self == window.parent) {
         alert('You tinkered with the website, so now it won\'t work. Bye bye');
@@ -170,9 +179,107 @@
         return;
       }
     }
-    window.onload = function () {
-      __parentCheck();
-      document.getElementById("reagentForm")
+    function getElements() {
+      return {
+        reagentForm: document.getElementById("reagentForm"),
+        reagentNamesTbody: document.getElementById("reagent-names-tbody")
+      };
+    }
+
+    async function fetchReagentsCount() {
+      // GET `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents_count": <n>)}
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/reagents`);
+        assert(response.ok, "Failed to fetch reagents count! Falsy response.ok, response.status=" + response.status);
+        const data = await response.json();
+        
+        assert(data, "data is falsy");
+        console.log(`GET ${LABSERV_API_URL}/reagents`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch reagents count! Message from LABSERV: ${data.message}`);
+          return -1;
+        } else {
+          assert(data.reagents_count || data.reagents_count === 0, "reagents_count is falsy and not 0");
+          assert(data.reagents_count >= 0, "reagents_count is negative");
+          if (data.reagents_count === 0) {
+            console.log("No reagents found");
+            alert("No reagents found, you can add some using the \"Add new reagent\" button");
+          }
+          return data.reagents_count;
+        } 
+      } catch (error) {
+        assert(false, "Failed to fetch reagents count! Error: " + error);
+        return -1;
+      };
+    }
+
+    async function fetchReagents(filterParam, filterValue, p_offset, p_size) {
+      // POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents": [{ "reagent_id": <id>, "name": "<name>", "vendor": "<vendor>", "reagtype_id": <reagtype_id>}, ...])}
+      assert(["none", "name", "vendor", "reagtype_id"].includes(filterParam), "Invalid filterParam");
+      assert(typeof filterValue === "string", "filterValue is not a string");
+      assert(typeof p_offset === "number", "p_offset is not a number");
+      assert(typeof p_size === "number", "p_size is not a number");
+      assert(p_offset >= 0, "p_offset is negative");
+      assert(p_size > 0, "p_size is not positive");
+      assert(Number.isInteger(p_offset), "p_offset is not an integer");
+      
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/reagents`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            filter: `${filterParam}`,
+            value: `${filterValue}`,
+            p_offset: p_offset,
+            p_size: p_size
+          })
+        });
+        assert(response.ok, "Failed to fetch reagents! Falsy response.ok, response.status=" + response.status);
+        const data = await response.json();
+        
+        assert(data, "data is falsy");
+        console.log(`POST ${LABSERV_API_URL}/reagents`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch reagents! Message from LABSERV: ${data.message}`);
+          return [];
+        } else {
+          assert(data.reagents, "reagents is falsy");
+          assert(Array.isArray(data.reagents), "reagents is not an array");
+          return data.reagents;
+        }
+      } catch (error) {
+        assert(false, "Failed to fetch reagents! Error: " + error);
+        return [];
+      }
+    }
+
+    async function loadContent(elements) {
+      let reagentsCount = await fetchReagentsCount();
+      console.log("reagentsCount: ", reagentsCount);
+      let reagents = await fetchReagents("none", "", 0, reagentsCount);
+      for (let i = 0; i < reagents.length; i++) {
+        let tr = document.createElement("tr");
+        let td = document.createElement("td");
+        td.textContent = reagents[i].name;
+        tr.appendChild(td);
+        elements.reagentNamesTbody.appendChild(tr);
+      }
+
+      // elements.reagentNamesTbody.innerHTML = `
+      //   <tr>
+      //     <td>BSA 111</td>
+      //   </tr>
+      //   <tr>
+      //     <td>BSTFA 222</td>
+      //   </tr>
+      // `;
+    }
+    function __setActions_reagentFormSubmission(elements) {
+      elements.reagentForm
       .addEventListener("submit", function (event) {
         event.preventDefault(); // Prevent the form from submitting the traditional way
 
@@ -196,6 +303,17 @@
         // Show a success message (optional)
         alert("Reagent added successfully!");
       });
+    }
+
+    function setActions(elements) {
+      __setActions_reagentFormSubmission(elements);
+    }
+
+    window.onload = async function () {
+      __parentCheck();
+      window.elements = getElements();
+      await loadContent(window.elements);
+      setActions(window.elements);
     }
   </script>
 </body>
