@@ -37,7 +37,7 @@
       <span class="input-group-text">Filter by</span>
 
       <!-- Select Dropdown -->
-      <select class="form-select form-select-lg flex-grow-1" aria-label="Filter options">
+      <select class="form-select form-select-lg flex-grow-1" aria-label="Filter type options">
         <option selected>no filter</option>
         <option value="1">name</option>
         <option value="2">vendor</option>
@@ -46,7 +46,7 @@
 
       <!-- Input Field -->
       <!--<input type="text" class="form-control flex-grow-1" placeholder="Filter value" aria-label="Filter value">-->
-      <select class="form-select select2" id="reagentType" required>
+      <select class="form-select select2" aria-label="Filter value" required>
         <option value="1">organosilicon compounds</option>
         <option value="2">organic salts</option>
         <option value="3">acids</option>
@@ -107,9 +107,9 @@
                 <label for="reagentVendor" class="form-label">Vendor</label>
                 <select class="form-select select2" id="reagentVendor" required>
                   <option value="">Select a vendor</option>
-                  <option value="1">Sigma Aldrich</option>
+                  <!-- <option value="1">Sigma Aldrich</option>
                   <option value="2">Merck</option>
-                  <option value="3">ABC Chem</option>
+                  <option value="3">ABC Chem</option> -->
                 </select>
               </div>
 
@@ -118,9 +118,9 @@
                 <label for="reagentType" class="form-label">Type</label>
                 <select class="form-select select2" id="reagentType" required>
                   <option value="">Select a type</option>
-                  <option value="1">organosilicon compounds</option>
+                  <!-- <option value="1">organosilicon compounds</option>
                   <option value="2">organic salts</option>
-                  <option value="3">acids</option>
+                  <option value="3">acids</option> -->
                 </select>
               </div>
             </form>
@@ -163,7 +163,11 @@
   </div>
 
   <script>
-    const LABSERV_API_URL = "http://127.0.0.1:7890/api"
+    const LABSERV_API_URL = "http://127.0.0.1:7890/api";
+
+    let globals = {
+      "elements": null
+    };
 
     function assert(condition, message) {
       if (!condition) {
@@ -188,6 +192,100 @@
       };
     }
 
+    async function fetchXsCount(xsName) {
+      assert(typeof xsName === "string", "xsName is not a string");
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/${xsName}`);
+        assert(response.ok, `Failed to fetch ${xsName} count! Falsy response.ok, response.status=${response.status}`);
+        const data = await response.json();
+        
+        assert(data, `data is falsy`);
+        console.log(`GET ${LABSERV_API_URL}/${xsName}`, data);
+        assert(data.status, `status is falsy`);
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch ${xsName} count! Message from LABSERV: ${data.message}`);
+          return -1;
+        } else {
+          assert(data[`${xsName}_count`] || data[`${xsName}_count`] === 0, `${xsName}_count is falsy and not 0`);
+          assert(data[`${xsName}_count`] >= 0, `${xsName}_count is negative`);
+          if (data[`${xsName}_count`] === 0) {
+            console.log(`No ${xsName} found`);
+            alert(`No ${xsName} found yet... Add some?`);
+          }
+          return data[`${xsName}_count`];
+        }
+      } catch (error) {
+        assert(false, `Failed to fetch ${xsName} count! Error: ${error}`);
+        return -1;
+      };
+    }
+
+    function __fetchXs_ParametrizationObject_SanCheck(xParametrizationObject) {
+      assert(typeof xParametrizationObject === "object", "xParametrizationObject is not an object");
+      assert(typeof xParametrizationObject.xsName === "string", "xParametrizationObject.xsName is not a string");
+      assert(Array.isArray(xParametrizationObject.xFilterOptions), "xParametrizationObject.xFilterOptions is not an array");
+      for (let i = 0; i < xParametrizationObject.xFilterOptions.length; i++) {
+        assert(typeof xParametrizationObject.xFilterOptions[i] === "string", "xParametrizationObject.xFilterOptions[i] is not a string");
+      }
+    }
+
+    function __fetchXs_ParametrizationObject(xsName, xFilterOptions) {
+      assert(typeof xsName === "string", "xsName is not a string");
+      assert(Array.isArray(xFilterOptions), "xFilterOptions is not an array");
+      for (let i = 0; i < xFilterOptions.length; i++) {
+        assert(typeof xFilterOptions[i] === "string", "xFilterOptions[i] is not a string");
+      }
+      return {
+        "xsName": xsName,
+        "xFilterOptions": xFilterOptions
+      };
+    }
+
+    async function fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size) {
+      __fetchXs_ParametrizationObject_SanCheck(xParametrizationObject);
+      assert(xParametrizationObject.xFilterOptions.includes(filterParam), "Invalid filterParam");
+      assert(typeof filterValue === "string", "filterValue is not a string");
+      assert(typeof p_offset === "number", "p_offset is not a number");
+      assert(typeof p_size === "number", "p_size is not a number");
+      assert(p_offset >= 0, "p_offset is negative");
+      assert(p_size > 0, "p_size is not positive");
+      assert(Number.isInteger(p_offset), "p_offset is not an integer");
+      assert(Number.isInteger(p_size), "p_size is not an integer");
+
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/${xParametrizationObject.xsName}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            filter: `${filterParam}`,
+            value: `${filterValue}`,
+            p_offset: p_offset,
+            p_size: p_size
+          })
+        });
+        assert(response.ok, `Failed to fetch ${xParametrizationObject.xsName}! Falsy response.ok, response.status=${response.status}`);
+        const data = await response.json();
+        
+        assert(data, `data is falsy`);
+        console.log(`POST ${LABSERV_API_URL}/${xParametrizationObject.xsName}`, data);
+        assert(data.status, `status is falsy`);
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Message from LABSERV: ${data.message}`);
+          return [];
+        } else {
+          assert(data[xParametrizationObject.xsName], `${xParametrizationObject.xsName} is falsy`);
+          assert(Array.isArray(data[xParametrizationObject.xsName]), `${xParametrizationObject.xsName} is not an array`);
+          return data[xParametrizationObject.xsName];
+        }
+      } catch (error) {
+        assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Error: ${error}`);
+        return [];
+      }
+    }
+
+    // TODO Use `fetchXsCount`
     async function fetchReagentsCount() {
       // GET `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents_count": <n>)}
       try {
@@ -216,6 +314,7 @@
       };
     }
 
+    // TODO Use `fetchXs`
     async function fetchReagents(filterParam, filterValue, p_offset, p_size) {
       // POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents": [{ "reagent_id": <id>, "name": "<name>", "vendor": "<vendor>", "reagtype_id": <reagtype_id>}, ...])}
       assert(["none", "name", "vendor", "reagtype_id"].includes(filterParam), "Invalid filterParam");
@@ -225,6 +324,7 @@
       assert(p_offset >= 0, "p_offset is negative");
       assert(p_size > 0, "p_size is not positive");
       assert(Number.isInteger(p_offset), "p_offset is not an integer");
+      assert(Number.isInteger(p_size), "p_size is not an integer");
       
       try {
         const response = await fetch(`${LABSERV_API_URL}/reagents`, {
@@ -259,6 +359,28 @@
       }
     }
 
+    async function fetchVendorsCount() {
+      // GET `${LABSERV_API_URL}/vendors` -> { status: "success|error", message: "...", ("vendors_count": <n>)}
+      return fetchXsCount("vendors");
+    }
+
+    async function fetchVendors(filterParam, filterValue, p_offset, p_size) {
+      // POST -d '{"filter": "<none|name>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("vendors": [{ "vendor_id": <id>, "name": "<name>"}, ...])}
+      const xParametrizationObject = __fetchXs_ParametrizationObject("vendors", ["none", "name"]);
+      return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
+    }
+
+    async function fetchReagentTypesCount() {
+      // GET `${LABSERV_API_URL}/reagtypes` -> { status: "success|error", message: "...", ("reagtypes_count": <n>)}
+      return fetchXsCount("reagtypes");
+    }
+
+    async function fetchReagentTypes(filterParam, filterValue, p_offset, p_size) {
+      // POST -d '{"filter": "<none|name>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagtypes` -> { status: "success|error", message: "...", ("reagtypes": [{ "reagtype_id": <id>, "name": "<name>"}, ...])}
+      const xParametrizationObject = __fetchXs_ParametrizationObject("reagtypes", ["none", "name"]);
+      return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
+    }
+
     async function loadContent(elements) {
       let reagentsCount = await fetchReagentsCount();
       console.log("reagentsCount: ", reagentsCount);
@@ -271,14 +393,25 @@
         elements.reagentNamesTbody.appendChild(tr);
       }
 
-      // elements.reagentNamesTbody.innerHTML = `
-      //   <tr>
-      //     <td>BSA 111</td>
-      //   </tr>
-      //   <tr>
-      //     <td>BSTFA 222</td>
-      //   </tr>
-      // `;
+      let vendorsCount = await fetchVendorsCount();
+      console.log("vendorsCount: ", vendorsCount);
+      let vendors = await fetchVendors("none", "", 0, vendorsCount);
+      for (let i = 0; i < vendors.length; i++) {
+        let option = document.createElement("option");
+        option.value = vendors[i].vendor_id;
+        option.textContent = vendors[i].name;
+        elements.reagentVendorSelect.appendChild(option);
+      }
+
+      let reagentTypesCount = await fetchReagentTypesCount();
+      console.log("reagentTypesCount: ", reagentTypesCount);
+      let reagentTypes = await fetchReagentTypes("none", "", 0, reagentTypesCount);
+      for (let i = 0; i < reagentTypes.length; i++) {
+        let option = document.createElement("option");
+        option.value = reagentTypes[i].reagtype_id;
+        option.textContent = reagentTypes[i].name;
+        elements.reagentTypeSelect.appendChild(option);
+      }
     }
     function __setActions_reagentFormSubmission(elements) {
       elements.reagentForm
@@ -313,9 +446,10 @@
 
     window.onload = async function () {
       __parentCheck();
-      window.elements = getElements();
-      await loadContent(window.elements);
-      setActions(window.elements);
+      globals.elements = getElements();
+      await loadContent(globals.elements);
+      setActions(globals.elements);
+      console.log(globals);
     }
   </script>
 </body>
