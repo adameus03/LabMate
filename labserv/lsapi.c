@@ -1063,6 +1063,7 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
 typedef enum __lsapi_x_type {
     __LSAPI_X_TYPE_REAGTYPE,
     __LSAPI_X_TYPE_REAGENT,
+    __LSAPI_X_TYPE_VENDOR,
     __LSAPI_X_TYPE_FACULTY,
     __LSAPI_X_TYPE_LAB,
     __LSAPI_X_TYPE_INVENTORY_ITEM,
@@ -1085,6 +1086,9 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             break;
         case __LSAPI_X_TYPE_REAGENT:
             xName = "reagent";
+            break;
+        case __LSAPI_X_TYPE_VENDOR:
+            xName = "vendor";
             break;
         case __LSAPI_X_TYPE_FACULTY:
             xName = "faculty";
@@ -1217,6 +1221,10 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             pX = (void*)malloc(sizeof(db_reagent_t));
             rv = db_reagent_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_reagent_t*)pX);
             break;
+        case __LSAPI_X_TYPE_VENDOR:
+            pX = (void*)malloc(sizeof(db_vendor_t));
+            rv = db_vendor_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_vendor_t*)pX);
+            break;
         case __LSAPI_X_TYPE_FACULTY:
             pX = (void*)malloc(sizeof(db_faculty_t));
             rv = db_faculty_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_faculty_t*)pX);
@@ -1312,6 +1320,11 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             yyjson_mut_obj_add_str(pJsonResp, pXObject, "vendor", reagent.vendor);
             yyjson_mut_obj_add_int(pJsonResp, pXObject, "reagtype_id", reagent.reagent_type_id);
             break;
+        case __LSAPI_X_TYPE_VENDOR:
+            db_vendor_t vendor = *((db_vendor_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "vendor_id", vendor.vendor_id);
+            yyjson_mut_obj_add_str(pJsonResp, pXObject, "name", vendor.name);
+            break;
         case __LSAPI_X_TYPE_FACULTY:
             db_faculty_t faculty = *((db_faculty_t*)pX);
             yyjson_mut_obj_add_int(pJsonResp, pXObject, "faculty_id", faculty.faculty_id);
@@ -1363,6 +1376,9 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             break;
         case __LSAPI_X_TYPE_REAGENT:
             db_reagent_free((db_reagent_t*)pX);
+            break;
+        case __LSAPI_X_TYPE_VENDOR:
+            db_vendor_free((db_vendor_t*)pX);
             break;
         case __LSAPI_X_TYPE_FACULTY:
             db_faculty_free((db_faculty_t*)pX);
@@ -1665,7 +1681,7 @@ int lsapi_endpoint_reagent(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
 
 // Obtain list of reagents
 //TODO Authentication & authorization?
-// CURL -X POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/reagents
+// curl -X POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/reagents
 static int __lsapi_endpoint_reagents_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -1788,12 +1804,238 @@ static int __lsapi_endpoint_reagents_post(h2o_handler_t* pH2oHandler, h2o_req_t*
     return 0;
 }
 
+// gets total number of reagents in the database
+static int __lsapi_endpoint_reagents_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    int reagents_count = 0;
+    int rv = db_reagents_get_total_count(pLsapi->pDb, &reagents_count);
+    if (0 != rv) {
+        LOG_E("__lsapi_endpoint_reagents_get: Failed to get total reagents count from database (db_reagents_get_total_count returned %d)", rv);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get total reagents count from database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Reagents count retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    yyjson_mut_obj_add_int(pJsonResp, pRootResp, "reagents_count", reagents_count);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+    
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
 int lsapi_endpoint_reagents(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
         return __lsapi_endpoint_reagents_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_reagents_get(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+static int __lsapi_endpoint_vendor_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_VENDOR);
+}
+
+int lsapi_endpoint_vendor(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_vendor_get(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+//TODO Abstract these into a common function (__lsapi_endpoint_xs_post maybe?)
+// curl -X POST -d '{"filter": "<none|name>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/vendors
+static int __lsapi_endpoint_vendors_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pFilter = yyjson_obj_get(pRoot, "filter");
+    if (pFilter == NULL || !yyjson_is_str(pFilter)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid filter");
+    }
+    yyjson_val* pValue = yyjson_obj_get(pRoot, "value");
+    if (pValue == NULL || !yyjson_is_str(pValue)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid value");
+    }
+    yyjson_val* pPOffset = yyjson_obj_get(pRoot, "p_offset");
+    if (pPOffset == NULL || !yyjson_is_int(pPOffset)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_offset");
+    }
+    yyjson_val* pPSize = yyjson_obj_get(pRoot, "p_size");
+    if (pPSize == NULL || !yyjson_is_int(pPSize)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_size");
+    }
+
+    const char* filter = yyjson_get_str(pFilter);
+    const char* value = yyjson_get_str(pValue);
+    int page_offset = yyjson_get_int(pPOffset);
+    int page_size = yyjson_get_int(pPSize);
+
+    assert(filter != NULL && value != NULL);
+    if (page_offset < 0 || page_size < 1) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid p_offset or p_size");
+    }
+
+    // get vendors data from database so that we can use it for the http response
+    db_vendor_t* vendors = NULL;
+    int vendors_count = 0;
+
+    char* page_offset_str = __lsapi_itoa(page_offset);
+    char* page_size_str = __lsapi_itoa(page_size);
+    db_vendor_filter_type_t filter_type = DB_VENDOR_FILTER_TYPE_NONE;
+    if (0 == strcmp(filter, "none")) {
+        filter_type = DB_VENDOR_FILTER_TYPE_NONE;
+    } else if (0 == strcmp(filter, "name")) {
+        filter_type = DB_VENDOR_FILTER_TYPE_NAME;
+    } else {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid filter");
+    }
+    int rv = db_vendors_read_page_filtered(pLsapi->pDb, page_offset_str, page_size_str, &vendors, &vendors_count, filter_type, value);
+    free(page_offset_str);
+    free(page_size_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "No vendors found");
+        } else {
+            LOG_E("__lsapi_endpoint_vendors_post: Failed to get vendors data from database (db_vendors_read_page_filtered returned %d)", rv);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get vendors data from database");
+        }
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Vendors data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add vendors data as array
+    yyjson_mut_val* pVendors = yyjson_mut_arr(pJsonResp);
+    for (int i = 0; i < vendors_count; i++) {
+        yyjson_mut_val* pVendor = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_int(pJsonResp, pVendor, "vendor_id", vendors[i].vendor_id);
+        yyjson_mut_obj_add_str(pJsonResp, pVendor, "name", vendors[i].name);
+        yyjson_mut_arr_add_val(pVendors, pVendor);
+    }
+    // add vendors array to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "vendors", pVendors);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    assert(vendors != NULL);
+    for (int i = 0; i < vendors_count; i++) {
+        db_vendor_free(&vendors[i]);
+    }
+    free(vendors);
+    return 0;
+}
+
+// gets total number of vendors in the database
+static int __lsapi_endpoint_vendors_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    int vendors_count = 0;
+    int rv = db_vendors_get_total_count(pLsapi->pDb, &vendors_count);
+    if (0 != rv) {
+        LOG_E("__lsapi_endpoint_vendors_get: Failed to get total vendors count from database (db_vendors_get_total_count returned %d)", rv);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get total vendors count from database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Vendors count retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    yyjson_mut_obj_add_int(pJsonResp, pRootResp, "vendors_count", vendors_count);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+    
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+int lsapi_endpoint_vendors(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_vendors_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_vendors_get(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }

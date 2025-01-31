@@ -56,6 +56,11 @@ typedef struct db_reagent {
   char* vendor;
 } db_reagent_t;
 
+typedef struct db_vendor {
+  int vendor_id;
+  char* name;
+} db_vendor_t;
+
 typedef struct db_inventory_item {
   int inventory_id;
   int reagent_id;
@@ -95,6 +100,7 @@ void db_faculty_free(db_faculty_t* pFaculty);
 void db_reagent_type_free(db_reagent_type_t* pReagentType);
 void db_lab_free(db_lab_t* pLab);
 void db_reagent_free(db_reagent_t* pReagent);
+void db_vendor_free(db_vendor_t* pVendor);
 void db_inventory_item_free(db_inventory_item_t* pInventoryItem);
 void db_antenna_free(db_antenna_t* pAntenna);
 void db_invm_free(db_invm_t* pInvm);
@@ -181,6 +187,24 @@ int db_reagents_read_page_filtered(db_t* pDb,
                                    int* pN_out, 
                                    db_reagent_filter_type_t filter_type, 
                                    const char* filter_value);
+
+int db_vendor_get_by_id(db_t* pDb, const char* vendor_id_in, db_vendor_t* pVendor_out);
+
+int db_vendors_get_total_count(db_t* pDb, int* pCount_out);
+
+typedef enum db_vendor_filter_type {
+  DB_VENDOR_FILTER_TYPE_NONE,
+  DB_VENDOR_FILTER_TYPE_NAME
+} db_vendor_filter_type_t;
+
+int db_vendors_read_page_filtered(db_t* pDb, 
+                                  const char* offset, 
+                                  const char* page_size, 
+                                  db_vendor_t** ppVendors_out, 
+                                  int* pN_out, 
+                                  db_vendor_filter_type_t filter_type,
+                                  const char* filter_value);
+
 
 int db_faculty_insert(db_t* pDb, const char* name, const char* email_domain);
 

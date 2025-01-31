@@ -402,6 +402,10 @@ void db_reagent_free(db_reagent_t* pReagent) {
   free(pReagent->name);
   free(pReagent->vendor);
 }
+void db_vendor_free(db_vendor_t* pVendor) {
+  assert(pVendor != NULL);
+  free(pVendor->name);
+}
 void db_inventory_item_free(db_inventory_item_t* pInventoryItem) {
   assert(pInventoryItem != NULL);
   free(pInventoryItem->date_added);
@@ -945,6 +949,78 @@ int db_reagent_get_by_id(db_t* pDb, const char* reagent_id_in, db_reagent_t* pRe
   return db_reagent_get_by_x(pDb, pQuery, pParams, 1, pReagent_out);
 }
 
+typedef enum __db_x_type {
+    __DB_X_TYPE_REAGTYPE,
+    __DB_X_TYPE_REAGENT,
+    __DB_X_TYPE_VENDOR,
+    __DB_X_TYPE_FACULTY,
+    __DB_X_TYPE_LAB,
+    __DB_X_TYPE_INVENTORY_ITEM,
+    __DB_X_TYPE_ANTENNA,
+
+    __DB_X_TYPE__FIRST = __DB_X_TYPE_REAGTYPE,
+    __DB_X_TYPE__LAST = __DB_X_TYPE_ANTENNA
+} __db_x_type_t;
+
+int db_x_get_total_count(db_t* pDb, int* pCount_out, __db_x_type_t xType) {
+  assert(pDb != NULL);
+  assert(pCount_out != NULL);
+  assert(xType >= __DB_X_TYPE__FIRST && xType <= __DB_X_TYPE__LAST);
+  const char* pQuery = NULL;
+  switch (xType) {
+    case __DB_X_TYPE_REAGTYPE:
+      pQuery = "SELECT COUNT(*) FROM public.reagent_types";
+      break;
+    case __DB_X_TYPE_REAGENT:
+      pQuery = "SELECT COUNT(*) FROM public.reagents";
+      break;
+    case __DB_X_TYPE_VENDOR:
+      pQuery = "SELECT COUNT(*) FROM public.vendors";
+      break;
+    case __DB_X_TYPE_FACULTY:
+      pQuery = "SELECT COUNT(*) FROM public.faculties";
+      break;
+    case __DB_X_TYPE_LAB:
+      pQuery = "SELECT COUNT(*) FROM public.labs";
+      break;
+    case __DB_X_TYPE_INVENTORY_ITEM:
+      pQuery = "SELECT COUNT(*) FROM public.inventory_items";
+      break;
+    case __DB_X_TYPE_ANTENNA:
+      pQuery = "SELECT COUNT(*) FROM public.antennas";
+      break;
+    default:
+      LOG_E("db_x_get_total_count: Invalid xType: %d", xType);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[0] = {};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 0, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_x_get_total_count: Failed to get total count: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_x_get_total_count: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 1) {
+    LOG_E("db_x_get_total_count: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  *pCount_out = atoi(PQgetvalue(pResult, 0, 0));
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+//TODO switch to using db_x_get_total_count
 int db_reagents_get_total_count(db_t* pDb, int* pCount_out) {
   assert(pDb != NULL);
   assert(pCount_out != NULL);
@@ -976,6 +1052,7 @@ int db_reagents_get_total_count(db_t* pDb, int* pCount_out) {
   return 0;
 }
 
+//TODO Get rid of this function as we already have db_reagents_read_page_filtered ?
 int db_reagents_read_page(db_t* pDb, const char* offset, const char* page_size, db_reagent_t** ppReagents_out, int* pN_out) {
   assert(pDb != NULL);
   assert(offset != NULL);
@@ -1093,6 +1170,142 @@ int db_reagents_read_page_filtered(db_t* pDb,
     pReagents[i].reagent_type_id = atoi(PQgetvalue(pResult, i, 3));
   }
   *ppReagents_out = pReagents;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_vendor_t db_vendor_clone(db_vendor_t dbVendor) {
+  return (db_vendor_t) {
+    .vendor_id = dbVendor.vendor_id,
+    .name = p_strdup(dbVendor.name)
+  };
+}
+
+static int db_vendor_get_by_x(db_t* pDb,
+                               const char* pQuery,
+                               const char** pParams,
+                               int nParams,
+                               db_vendor_t* pVendor_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pVendor_out != NULL);
+  
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, nParams, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_vendor_get_by_x: Failed to get vendor: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_E("db_vendor_get_by_x: Vendor not found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No vendor found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_E("db_vendor_get_by_x: Multiple vendors found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple vendors found
+  }
+  if (PQnfields(pResult) != 2) {
+    LOG_E("db_vendor_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_vendor_t vendor;
+  vendor.vendor_id = atoi(PQgetvalue(pResult, 0, 0));
+  vendor.name = PQgetvalue(pResult, 0, 1);
+
+  *pVendor_out = db_vendor_clone(vendor);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_vendor_get_by_id(db_t* pDb, const char* vendor_id_in, db_vendor_t* pVendor_out) {
+  assert(pDb != NULL);
+  assert(vendor_id_in > 0);
+  assert(pVendor_out != NULL);
+  const char* pQuery = "SELECT * FROM public.vendors WHERE vendor_id = $1";
+  const char* pParams[1] = {vendor_id_in};
+  return db_vendor_get_by_x(pDb, pQuery, pParams, 1, pVendor_out);
+}
+
+int db_vendors_get_total_count(db_t* pDb, int* pCount_out) {
+  return db_x_get_total_count(pDb, pCount_out, __DB_X_TYPE_VENDOR);
+}
+
+int db_vendors_read_page_filtered(db_t* pDb, 
+                                  const char* offset, 
+                                  const char* page_size, 
+                                  db_vendor_t** ppVendors_out, 
+                                  int* pN_out, 
+                                  db_vendor_filter_type_t filter_type,
+                                  const char* filter_value) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppVendors_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_type >= DB_VENDOR_FILTER_TYPE_NONE && filter_type <= DB_VENDOR_FILTER_TYPE_NAME);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_VENDOR_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.vendors WHERE $1 = $1 ORDER BY vendor_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_VENDOR_FILTER_TYPE_NAME:
+      pQuery = "SELECT * FROM public.vendors WHERE name ~* $1 ORDER BY vendor_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_vendors_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_vendors_read_page_filtered: Failed to read vendors page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_vendors_read_page_filtered: No vendors found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No vendors found
+  }
+  if (PQnfields(pResult) != 2) {
+    LOG_E("db_vendors_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_vendor_t* pVendors = malloc(nTuples * sizeof(db_vendor_t));
+  if (pVendors == NULL) {
+    LOG_E("db_vendors_read_page_filtered: Failed to allocate memory for vendors");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pVendors[i].vendor_id = atoi(PQgetvalue(pResult, i, 0));
+    pVendors[i].name = p_strdup(PQgetvalue(pResult, i, 1));
+  }
+  *ppVendors_out = pVendors;
   *pN_out = nTuples;
   PQclear(pResult);
   __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);

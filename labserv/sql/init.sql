@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS public.reagents(
 	CONSTRAINT reagent_type_id_fk FOREIGN KEY (reagent_type_id) REFERENCES public.reagent_types(reagent_type_id)
 );
 
+CREATE TABLE IF NOT EXISTS public.vendors(
+	vendor_id serial4 NOT NULL,
+	name varchar NOT NULL,
+	CONSTRAINT vendors_pk PRIMARY KEY (vendor_id),
+	CONSTRAINT vendors_unique UNIQUE (name)
+);
+
 CREATE TABLE IF NOT EXISTS public.faculties(
 	faculty_id serial4 NOT NULL,
 	name varchar NOT NULL,
