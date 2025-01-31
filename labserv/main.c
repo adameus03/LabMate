@@ -58,14 +58,18 @@ static void main_endpoint_handler_spawn_handler(void* pUserData) {
     int (*on_req)(h2o_handler_t *, h2o_req_t *) = NULL;
     on_req = *((void**)(pParams->pH2oHandler + 2));
     on_req(pParams->pH2oHandler, pParams->pReq);
-    main_endpoint_handler_spawn_params_free(pParams);
+    main_endpoint_handler_spawn_params_free(pParams); //TODO For some reason this causes a failed assertion in h2o when compiled with asan. Investigate (the failed assertion is: ./lib/common/socket/uv-binding.c.h:139: do_write: Assertion `sock->super._cb.write == NULL' failed., backtrace points to h2o_socket_write)
 }
 
 static int main_endpoint_handler_spawn(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     uv_thread_t uvThreadId;
     struct main_endpoint_handler_spawn_params* pParams = main_endpoint_handler_spawn_params_new(pH2oHandler, pReq);
-    uv_thread_create(&uvThreadId, main_endpoint_handler_spawn_handler, (void*)pParams);
-    //main_endpoint_handler_spawn_handler((void*)pParams);
+    
+#if LABSERV_ENDPOINTS_THREADING_ENABLED == 1
+    assert(0 == uv_thread_create(&uvThreadId, main_endpoint_handler_spawn_handler, (void*)pParams));
+#else
+    main_endpoint_handler_spawn_handler((void*)pParams);
+#endif
     //p_uthread_create(main_endpoint_handler_spawn_handler, (void*)pParams, FALSE, NULL);
 }
 

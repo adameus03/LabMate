@@ -27,6 +27,16 @@ else()
     message(STATUS "Address sanitizer and leak detection disabled")
 endif()
 
+#optional undefined behavior sanitizer
+option(FSANITIZE_UB "Enable undefined behavior sanitizer" OFF)
+if(FSANITIZE_UB)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=undefined")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=undefined")
+    message(STATUS "Undefined behavior sanitizer enabled")
+else()
+    message(STATUS "Undefined behavior sanitizer disabled")
+endif()
+
 #optional fuzzing
 option(ENABLE_FUZZING "Enable fuzzing" OFF)
 if(ENABLE_FUZZING)

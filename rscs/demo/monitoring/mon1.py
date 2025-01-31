@@ -87,7 +87,7 @@ for i, (antno, epc, var) in enumerate(filters):
     Checkbutton(root, text=f'antno={antno}, epc={epc}', variable=var).grid(row=i, column=0, sticky='w')
 
 # Start animation
-ani = animation.FuncAnimation(plt.gcf(), update_plot, interval=5000)
+ani = animation.FuncAnimation(plt.gcf(), update_plot, interval=500)
 
 # Show the plot
 plt.show()

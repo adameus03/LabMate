@@ -10,6 +10,7 @@
 #define LABSERV_IPV4_ADDR "0.0.0.0"
 #define LABSERV_IP_PORT 7890
 #define LABSERV_H2O_ACCESS_LOG_FILE_PATH "/dev/stdout"
+#define LABSERV_ENDPOINTS_THREADING_ENABLED 0
 
 /* Database configuration */
 #define LABSERV_DB_CONNINFO "postgresql://user:password@example.com/labmate"
