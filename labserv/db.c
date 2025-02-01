@@ -1190,7 +1190,7 @@ int db_reagents_read_page_filtered(db_t* pDb,
   assert(page_size != NULL);
   assert(ppReagents_out != NULL);
   assert(pN_out != NULL);
-  assert(filter_type >= DB_REAGENT_FILTER_TYPE_NONE && filter_type <= DB_REAGENT_FILTER_TYPE_VENDOR);
+  assert(filter_type >= DB_REAGENT_FILTER_TYPE_NONE && filter_type <= DB_REAGENT_FILTER_TYPE_REAGTYPE_ID);
   assert(filter_value != NULL);
   const char* pQuery = NULL;
   switch (filter_type) {

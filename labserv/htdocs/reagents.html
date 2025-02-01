@@ -141,6 +141,14 @@
       </div>
     </div>
 
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="text-center">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2">Loading stuff...</p>
+    </div>
+
     <nav aria-label="Paginacja">
       <ul class="pagination justify-content-center">
 
@@ -222,12 +230,14 @@
         reagFilterTypeSelect: document.getElementById("reagFilterTypeSelect"),
         toggleInputType: document.getElementById("toggleInputType"),
         applyReagFilterButton: document.getElementById("button-apply-reag-filter"),
-        reagentsListingH2: document.getElementById("reagentsListingH2")
+        reagentsListingH2: document.getElementById("reagentsListingH2"),
+        loadingSpinner: document.getElementById("loadingSpinner"),
       };
     }
 
     async function fetchXsCount(xsName) {
       assert(typeof xsName === "string", "xsName is not a string");
+      showSpinner(globals.elements);
       try {
         const response = await fetch(`${LABSERV_API_URL}/${xsName}`);
         assert(response.ok, `Failed to fetch ${xsName} count! Falsy response.ok, response.status=${response.status}`);
@@ -251,7 +261,9 @@
       } catch (error) {
         assert(false, `Failed to fetch ${xsName} count! Error: ${error}`, error.isFromAssertion !== true);
         return -1;
-      };
+      } finally {
+        hideSpinner(globals.elements);
+      }
     }
 
     function __fetchXs_ParametrizationObject_SanCheck(xParametrizationObject) {
@@ -286,6 +298,7 @@
       assert(Number.isInteger(p_offset), "p_offset is not an integer");
       assert(Number.isInteger(p_size), "p_size is not an integer");
 
+      showSpinner(globals.elements);
       try {
         const response = await fetch(`${LABSERV_API_URL}/${xParametrizationObject.xsName}`, {
           method: "POST",
@@ -316,6 +329,8 @@
       } catch (error) {
         assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Error: ${error}`, error.isFromAssertion !== true);
         return [];
+      } finally {
+        hideSpinner(globals.elements);
       }
     }
 
@@ -476,6 +491,14 @@
         tr.appendChild(td);
         elements.reagentNamesTbody.appendChild(tr);
       }
+    }
+
+    function showSpinner(elements) {
+      elements.loadingSpinner.style.display = "block";
+    }
+
+    function hideSpinner(elements) {
+      elements.loadingSpinner.style.display = "none";
     }
 
     async function preloadContent(elements) {
