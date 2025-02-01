@@ -1190,7 +1190,7 @@ int db_reagents_read_page_filtered(db_t* pDb,
   assert(page_size != NULL);
   assert(ppReagents_out != NULL);
   assert(pN_out != NULL);
-  assert(filter_type >= DB_REAGENT_FILTER_TYPE_NONE && filter_type <= DB_REAGENT_FILTER_TYPE_REAGTYPE_ID);
+  assert(filter_type >= DB_REAGENT_FILTER_TYPE_NONE && filter_type <= DB_REAGENT_FILTER_TYPE_REAGTYPE_NAME);
   assert(filter_value != NULL);
   const char* pQuery = NULL;
   switch (filter_type) {
@@ -1205,6 +1205,9 @@ int db_reagents_read_page_filtered(db_t* pDb,
       break;
     case DB_REAGENT_FILTER_TYPE_REAGTYPE_ID:
       pQuery = "SELECT * FROM public.reagents WHERE reagent_type_id = $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_REAGENT_FILTER_TYPE_REAGTYPE_NAME:
+      pQuery = "SELECT * FROM public.reagents r LEFT JOIN public.reagent_types rt ON r.reagent_type_id = rt.reagtype_id WHERE rt.name ~* $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
       break;
     default:
       LOG_E("db_reagents_read_page_filtered: Unexpected filter type: %d", filter_type);
