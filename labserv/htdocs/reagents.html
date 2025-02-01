@@ -25,7 +25,13 @@
   </style>
 
   <div class="container my-4">
-    <h2 class="text-center mb-4">Reagents Listing</h2>
+    <!-- Alert/Notification Message -->
+    <!-- <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <strong>Success!</strong> Your action was completed successfully.
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div> -->
+
+    <h2 class="text-center mb-4" id="reagentsListingH2">Reagents Listing</h2>
 
     <!-- Add New Reagent Button -->
     <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addReagentModal">Add new
@@ -53,7 +59,7 @@
       </select> -->
 
       <!-- Filter Button -->
-      <button class="btn btn-outline-secondary" type="button" id="button-addon2">APPLY</button>
+      <button class="btn btn-outline-secondary" type="button" id="button-apply-reag-filter">APPLY</button>
     </div>
 
     <!-- Toggle Button -->
@@ -166,15 +172,37 @@
     const LABSERV_API_URL = "http://127.0.0.1:7890/api";
 
     let globals = {
-      "elements": null
+      "elements": null,
     };
 
-    function assert(condition, message) {
+    function showUserAlertElement(message, type = "success") {
+      let alertElement = document.createElement("div");
+      alertElement.classList.add("alert");
+      alertElement.classList.add(`alert-${type}`);
+      alertElement.classList.add("alert-dismissible");
+      alertElement.classList.add("fade");
+      alertElement.classList.add("show");
+      alertElement.setAttribute("role", "alert");
+      alertElement.textContent = message;
+      let button = document.createElement("button");
+      button.type = "button";
+      button.classList.add("btn-close");
+      button.setAttribute("data-bs-dismiss", "alert");
+      button.setAttribute("aria-label", "Close");
+      alertElement.appendChild(button);
+      globals.elements.reagentsListingH2.before(alertElement);
+    }
+
+    function assert(condition, message, shouldAlert = true) {
       if (!condition) {
-          alert(message || "Assertion failed!"); // Show a message to the user
-          const error = new Error(message || "Assertion failed!");
-          console.log(error.stack); //print backtrace
-          throw new Error(message || "Assertion failed!"); // Stop execution
+        if (shouldAlert) {
+          //alert(message || "Assertion failed!"); // Show a message to the user  
+          showUserAlertElement(message || "Assertion failed!", "danger");
+        }
+        const error = new Error(message || "Assertion failed!");
+        error.isFromAssertion = true;
+        console.log(error.stack); //print backtrace
+        throw error; // Aim to stop execution
       }
     }
 
@@ -192,7 +220,9 @@
         reagentVendorSelect: document.getElementById("reagentVendor"), //modal
         reagentTypeSelect: document.getElementById("reagentType"), //modal
         reagFilterTypeSelect: document.getElementById("reagFilterTypeSelect"),
-        toggleInputType: document.getElementById("toggleInputType")
+        toggleInputType: document.getElementById("toggleInputType"),
+        applyReagFilterButton: document.getElementById("button-apply-reag-filter"),
+        reagentsListingH2: document.getElementById("reagentsListingH2")
       };
     }
 
@@ -219,7 +249,7 @@
           return data[`${xsName}_count`];
         }
       } catch (error) {
-        assert(false, `Failed to fetch ${xsName} count! Error: ${error}`);
+        assert(false, `Failed to fetch ${xsName} count! Error: ${error}`, error.isFromAssertion !== true);
         return -1;
       };
     }
@@ -284,7 +314,7 @@
           return data[xParametrizationObject.xsName];
         }
       } catch (error) {
-        assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Error: ${error}`);
+        assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Error: ${error}`, error.isFromAssertion !== true);
         return [];
       }
     }
@@ -337,7 +367,7 @@
         let filterValues = [];
         switch (filterType) {
           case "no filter":
-            filterValues.push("none");
+            filterValues.push(" ");
             break;
           case "name":
             let reagentsCount = await fetchReagentsCount();
@@ -357,7 +387,7 @@
             let reagentTypesCount = await fetchReagentTypesCount();
             let reagentTypes = await fetchReagentTypes("none", "", 0, reagentTypesCount);
             for (let i = 0; i < reagentTypes.length; i++) {
-              filterValues.push(reagentTypes[i].name);
+              filterValues.push({"name": reagentTypes[i].name, "id": reagentTypes[i].reagtype_id});
             }
             break;
           default:
@@ -374,9 +404,18 @@
         select.required = true;
         for (let i = 0; i < filterValues.length; i++) {
           let option = document.createElement("option");
-          option.value = filterValues[i];
-          option.textContent = filterValues[i];
+          if (filterType === "type") {
+            option.value = filterValues[i].id;
+            option.textContent = filterValues[i].name;
+          } else {
+            option.value = filterValues[i];
+            option.textContent = filterValues[i];
+          }
           select.appendChild(option);
+        }
+        if (filterType === "no filter") {
+          select.value = " ";
+          select.disabled = true;
         }
         elements.reagFilterTypeSelect.after(select);
       } else {
@@ -388,7 +427,54 @@
         input.placeholder = "Filter value";
         input.setAttribute("aria-label", "Filter value");
         input.id = "reagFilterValueInput";
+        if (elements.reagFilterTypeSelect.value === "no filter") {
+          input.value = " ";
+          input.disabled = true;
+        }
         elements.reagFilterTypeSelect.after(input);
+      }
+    }
+
+    async function __reloadReagList(elements) {
+      let _filterType = elements.reagFilterTypeSelect.value;
+      let filterType = "";
+      switch (_filterType) {
+        case "no filter":
+          filterType = "none";
+          break;
+        case "name":
+          filterType = "name";
+          break;
+        case "vendor":
+          filterType = "vendor";
+          break;
+        case "type":
+          filterType = "reagtype_id";
+          break;
+        default:
+          assert(false, `Invalid reagent filter type "${_filterType}"`);
+          break;
+      }
+
+      let filterValue = "";
+      if (document.getElementById("reagFilterValueSelect")) {
+        filterValue = document.getElementById("reagFilterValueSelect").value;
+      } else if (document.getElementById("reagFilterValueInput")) {
+        filterValue = document.getElementById("reagFilterValueInput").value;
+      } else {
+        assert(false, "No filter value element found");
+      }
+     
+      let reagents = await fetchReagents(filterType, filterValue, 0, 10);
+      // clear the table
+      elements.reagentNamesTbody.innerHTML = "";
+      // refill the table
+      for (let i = 0; i < reagents.length; i++) {
+        let tr = document.createElement("tr");
+        let td = document.createElement("td");
+        td.textContent = reagents[i].name;
+        tr.appendChild(td);
+        elements.reagentNamesTbody.appendChild(tr);
       }
     }
 
@@ -423,6 +509,8 @@
         option.textContent = reagentTypes[i].name;
         elements.reagentTypeSelect.appendChild(option);
       }
+
+      __loadReagFilterValues(elements);
     }
 
     function __setActions_reagentFormSubmission(elements) {
@@ -463,9 +551,17 @@
       });
     }
 
+    function __setActions_reagFilterApply(elements) {
+      elements.applyReagFilterButton
+      .addEventListener("click", async function (event) {
+        await __reloadReagList(elements);
+      });
+    }
+
     function setActions(elements) {
       __setActions_reagentFormSubmission(elements);
       __setActions_reagFilterOptionsChange(elements);
+      __setActions_reagFilterApply(elements);
     }
 
     window.onload = async function () {
