@@ -37,20 +37,20 @@
       <span class="input-group-text">Filter by</span>
 
       <!-- Select Dropdown -->
-      <select class="form-select form-select-lg flex-grow-1" aria-label="Filter type options">
+      <select class="form-select form-select-lg flex-grow-1" aria-label="Filter type options" id="reagFilterTypeSelect">
         <option selected>no filter</option>
-        <option value="1">name</option>
-        <option value="2">vendor</option>
-        <option value="3">type</option>
+        <option>name</option>
+        <option>vendor</option>
+        <option>type</option>
       </select>
 
       <!-- Input Field -->
       <!--<input type="text" class="form-control flex-grow-1" placeholder="Filter value" aria-label="Filter value">-->
-      <select class="form-select select2" aria-label="Filter value" required>
+      <!-- <select class="form-select select2" aria-label="Filter value" required>
         <option value="1">organosilicon compounds</option>
         <option value="2">organic salts</option>
         <option value="3">acids</option>
-      </select>
+      </select> -->
 
       <!-- Filter Button -->
       <button class="btn btn-outline-secondary" type="button" id="button-addon2">APPLY</button>
@@ -172,6 +172,8 @@
     function assert(condition, message) {
       if (!condition) {
           alert(message || "Assertion failed!"); // Show a message to the user
+          const error = new Error(message || "Assertion failed!");
+          console.log(error.stack); //print backtrace
           throw new Error(message || "Assertion failed!"); // Stop execution
       }
     }
@@ -187,8 +189,10 @@
       return {
         reagentForm: document.getElementById("reagentForm"),
         reagentNamesTbody: document.getElementById("reagent-names-tbody"),
-        reagentVendorSelect: document.getElementById("reagentVendor"),
-        reagentTypeSelect: document.getElementById("reagentType")
+        reagentVendorSelect: document.getElementById("reagentVendor"), //modal
+        reagentTypeSelect: document.getElementById("reagentType"), //modal
+        reagFilterTypeSelect: document.getElementById("reagFilterTypeSelect"),
+        toggleInputType: document.getElementById("toggleInputType")
       };
     }
 
@@ -318,7 +322,77 @@
       return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
     }
 
-    async function loadContent(elements) {
+    function __removeFilterValueElementIfExists() {
+      if (document.getElementById("reagFilterValueSelect")) {
+        document.getElementById("reagFilterValueSelect").remove();
+      } else if (document.getElementById("reagFilterValueInput")) {
+        document.getElementById("reagFilterValueInput").remove();
+      }
+    }
+
+    async function __loadReagFilterValues(elements) {
+      let enableDropdown = elements.toggleInputType.checked;
+      if (enableDropdown) {
+        let filterType = elements.reagFilterTypeSelect.value;
+        let filterValues = [];
+        switch (filterType) {
+          case "no filter":
+            filterValues.push("none");
+            break;
+          case "name":
+            let reagentsCount = await fetchReagentsCount();
+            let reagents = await fetchReagents("none", "", 0, reagentsCount);
+            for (let i = 0; i < reagents.length; i++) {
+              filterValues.push(reagents[i].name);
+            }
+            break;
+          case "vendor":
+            let vendorsCount = await fetchVendorsCount();
+            let vendors = await fetchVendors("none", "", 0, vendorsCount);
+            for (let i = 0; i < vendors.length; i++) {
+              filterValues.push(vendors[i].name);
+            }
+            break;
+          case "type":
+            let reagentTypesCount = await fetchReagentTypesCount();
+            let reagentTypes = await fetchReagentTypes("none", "", 0, reagentTypesCount);
+            for (let i = 0; i < reagentTypes.length; i++) {
+              filterValues.push(reagentTypes[i].name);
+            }
+            break;
+          default:
+            assert(false, `Invalid reagent filter type "${filterType}"`);
+            break;
+        }
+
+        __removeFilterValueElementIfExists();
+        let select = document.createElement("select");
+        select.classList.add("form-select");
+        select.classList.add("select2");
+        select.setAttribute("aria-label", "Filter value");
+        select.id = "reagFilterValueSelect";
+        select.required = true;
+        for (let i = 0; i < filterValues.length; i++) {
+          let option = document.createElement("option");
+          option.value = filterValues[i];
+          option.textContent = filterValues[i];
+          select.appendChild(option);
+        }
+        elements.reagFilterTypeSelect.after(select);
+      } else {
+        __removeFilterValueElementIfExists();
+        let input = document.createElement("input");
+        input.type = "text";
+        input.classList.add("form-control");
+        input.classList.add("flex-grow-1");
+        input.placeholder = "Filter value";
+        input.setAttribute("aria-label", "Filter value");
+        input.id = "reagFilterValueInput";
+        elements.reagFilterTypeSelect.after(input);
+      }
+    }
+
+    async function preloadContent(elements) {
       let reagentsCount = await fetchReagentsCount();
       console.log("reagentsCount: ", reagentsCount);
       let reagents = await fetchReagents("none", "", 0, reagentsCount);
@@ -350,6 +424,7 @@
         elements.reagentTypeSelect.appendChild(option);
       }
     }
+
     function __setActions_reagentFormSubmission(elements) {
       elements.reagentForm
       .addEventListener("submit", function (event) {
@@ -377,14 +452,26 @@
       });
     }
 
+    function __setActions_reagFilterOptionsChange(elements) {
+      elements.reagFilterTypeSelect
+      .addEventListener("change", async function (event) {
+        await __loadReagFilterValues(elements);
+      });
+      elements.toggleInputType
+      .addEventListener("change", async function (event) {
+        await __loadReagFilterValues(elements);
+      });
+    }
+
     function setActions(elements) {
       __setActions_reagentFormSubmission(elements);
+      __setActions_reagFilterOptionsChange(elements);
     }
 
     window.onload = async function () {
       __parentCheck();
       globals.elements = getElements();
-      await loadContent(globals.elements);
+      await preloadContent(globals.elements);
       setActions(globals.elements);
       console.log(globals);
     }
