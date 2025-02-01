@@ -341,7 +341,7 @@
 
     async function fetchReagents(filterParam, filterValue, p_offset, p_size) {
       // POST -d '{"filter": "<none|name|vendor|reagtype_id>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", ("reagents": [{ "reagent_id": <id>, "name": "<name>", "vendor": "<vendor>", "reagtype_id": <reagtype_id>}, ...])}
-      const xParametrizationObject = __fetchXs_ParametrizationObject("reagents", ["none", "name", "vendor", "reagtype_id"]);
+      const xParametrizationObject = __fetchXs_ParametrizationObject("reagents", ["none", "name", "vendor", "reagtype_id", "reagtype_name"]);
       return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
     }
 
@@ -451,6 +451,8 @@
     }
 
     async function __reloadReagList(elements) {
+      assert(typeof elements.toggleInputType.checked === "boolean", "toggleInputType.checked is not a boolean");
+      
       let _filterType = elements.reagFilterTypeSelect.value;
       let filterType = "";
       switch (_filterType) {
@@ -464,7 +466,11 @@
           filterType = "vendor";
           break;
         case "type":
-          filterType = "reagtype_id";
+          if (elements.toggleInputType.checked) {
+            filterType = "reagtype_id";
+          } else {
+            filterType = "reagtype_name";
+          }
           break;
         default:
           assert(false, `Invalid reagent filter type "${_filterType}"`);
@@ -475,7 +481,7 @@
       if (document.getElementById("reagFilterValueSelect")) {
         filterValue = document.getElementById("reagFilterValueSelect").value;
       } else if (document.getElementById("reagFilterValueInput")) {
-        filterValue = document.getElementById("reagFilterValueInput").value;
+        filterValue = document.getElementById("reagFilterValueInput").value; 
       } else {
         assert(false, "No filter value element found");
       }

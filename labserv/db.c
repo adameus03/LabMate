@@ -1207,7 +1207,7 @@ int db_reagents_read_page_filtered(db_t* pDb,
       pQuery = "SELECT * FROM public.reagents WHERE reagent_type_id = $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
       break;
     case DB_REAGENT_FILTER_TYPE_REAGTYPE_NAME:
-      pQuery = "SELECT * FROM public.reagents r LEFT JOIN public.reagent_types rt ON r.reagent_type_id = rt.reagtype_id WHERE rt.name ~* $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
+      pQuery = "SELECT r.reagent_id, r.name, r.vendor, r.reagent_type_id FROM public.reagents r LEFT JOIN public.reagent_types rt ON r.reagent_type_id = rt.reagent_type_id WHERE rt.name ~* $1 ORDER BY reagent_id OFFSET $2 LIMIT $3";
       break;
     default:
       LOG_E("db_reagents_read_page_filtered: Unexpected filter type: %d", filter_type);
