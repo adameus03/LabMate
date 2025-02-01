@@ -1913,6 +1913,8 @@ static int __lsapi_endpoint_reagents_post(h2o_handler_t* pH2oHandler, h2o_req_t*
         filter_type = DB_REAGENT_FILTER_TYPE_VENDOR;
     } else if (0 == strcmp(filter, "reagtype_id")) {
         filter_type = DB_REAGENT_FILTER_TYPE_REAGTYPE_ID;
+    } else if (0 == strcmp(filter, "reagtype_name")) {
+        filter_type = DB_REAGENT_FILTER_TYPE_REAGTYPE_NAME;
     } else {
         yyjson_doc_free(pJson);
         free(page_offset_str);
