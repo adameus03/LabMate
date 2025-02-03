@@ -101,17 +101,17 @@
 
           <!-- Modal Body -->
           <div class="modal-body">
-            <form id="reagentForm">
+            <form id="modalReagentForm">
               <!-- Name Input -->
               <div class="mb-3">
-                <label for="reagentName" class="form-label">Name</label>
-                <input type="text" class="form-control" id="reagentName" placeholder="Enter reagent name" required>
+                <label for="modalReagentName" class="form-label">Name</label>
+                <input type="text" class="form-control" id="modalReagentName" placeholder="Enter reagent name" required>
               </div>
 
               <!-- Vendor Dropdown (Searchable) -->
               <div class="mb-3">
-                <label for="reagentVendor" class="form-label">Vendor</label>
-                <select class="form-select select2" id="reagentVendor" required>
+                <label for="modalReagentVendor" class="form-label">Vendor</label>
+                <select class="form-select select2" id="modalReagentVendor" required>
                   <option value="">Select a vendor</option>
                   <!-- <option value="1">Sigma Aldrich</option>
                   <option value="2">Merck</option>
@@ -121,8 +121,8 @@
 
               <!-- Type Dropdown (Searchable) -->
               <div class="mb-3">
-                <label for="reagentType" class="form-label">Type</label>
-                <select class="form-select select2" id="reagentType" required>
+                <label for="modalReagentType" class="form-label">Type</label>
+                <select class="form-select select2" id="modalReagentType" required>
                   <option value="">Select a type</option>
                   <!-- <option value="1">organosilicon compounds</option>
                   <option value="2">organic salts</option>
@@ -135,7 +135,7 @@
           <!-- Modal Footer -->
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="submit" class="btn btn-primary" form="reagentForm">Save</button>
+            <button type="submit" class="btn btn-primary" form="modalReagentForm" id="modalSubmitButton">Save</button>
           </div>
         </div>
       </div>
@@ -146,7 +146,7 @@
       <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
-      <p class="mt-2">Loading stuff...</p>
+      <p class="mt-2" id="spinnerCaption">Loading stuff...</p>
     </div>
 
     <nav aria-label="Paginacja">
@@ -223,15 +223,19 @@
     }
     function getElements() {
       return {
-        reagentForm: document.getElementById("reagentForm"),
+        modalReagentForm: document.getElementById("modalReagentForm"), //modal
+        modalReagentName: document.getElementById("modalReagentName"), //modal
+        modalReagentVendorSelect: document.getElementById("modalReagentVendor"), //modal
+        modalReagentTypeSelect: document.getElementById("modalReagentType"), //modal
+        modalSubmitButton: document.getElementById("modalSubmitButton"), //modal
+        addReagentModal: document.getElementById("addReagentModal"),
         reagentNamesTbody: document.getElementById("reagent-names-tbody"),
-        reagentVendorSelect: document.getElementById("reagentVendor"), //modal
-        reagentTypeSelect: document.getElementById("reagentType"), //modal
         reagFilterTypeSelect: document.getElementById("reagFilterTypeSelect"),
         toggleInputType: document.getElementById("toggleInputType"),
         applyReagFilterButton: document.getElementById("button-apply-reag-filter"),
         reagentsListingH2: document.getElementById("reagentsListingH2"),
         loadingSpinner: document.getElementById("loadingSpinner"),
+        spinnerCaption: document.getElementById("spinnerCaption")
       };
     }
 
@@ -365,6 +369,52 @@
       // POST -d '{"filter": "<none|name>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' `${LABSERV_API_URL}/reagtypes` -> { status: "success|error", message: "...", ("reagtypes": [{ "reagtype_id": <id>, "name": "<name>"}, ...])}
       const xParametrizationObject = __fetchXs_ParametrizationObject("reagtypes", ["none", "name"]);
       return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
+    }
+
+    async function uploadReagent(rname, vendor, reagentTypeId, username, sessionKey) { 
+      // PUT -d '{"rname":"<reagent name>", "vendor": "<vendor>", "rtid": <reagent type id>, "username":"<username>", "session_key":"<sesskey>"}' `${LABSERV_API_URL}/reagents` -> { status: "success|error", message: "...", reagent: { "reagent_id": <id>, "name": "<name>", "vendor": "<vendor>", "reagtype_id": <reagtype_id>}}
+      assert(typeof rname === "string", "rname is not a string");
+      assert(typeof vendor === "string", "vendor is not a string");
+      assert(typeof reagentTypeId === "number", "reagentTypeId is not a number");
+      assert(typeof username === "string", "username is not a string");
+      assert(typeof sessionKey === "string", "sessionKey is not a string");
+      setSpinnerCaption(globals.elements, "Uploading reagent...");
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/reagent`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "rname": `${rname}`,
+            "vendor": `${vendor}`,
+            "rtid": reagentTypeId,
+            "username": `${username}`,
+            "session_key": `${sessionKey}`
+          })
+        });
+        assert(response.ok, `Failed to upload reagent! Falsy response.ok, response.status=${response.status}`);
+        const data = await response.json();
+        assert(data, `data is falsy`);
+        console.log(`PUT ${LABSERV_API_URL}/reagents`, data);
+        assert(data.status, `status is falsy`);
+        if (data.status !== "success") {
+          assert(false, `Failed to upload reagent! Message from LABSERV: ${data.message}`);
+          return null;
+        } else {
+          assert(data.reagent, `reagent is falsy`);
+          return data.reagent;
+        }
+      } catch (error) {
+        assert(false, `Failed to upload reagent! Error: ${error}`, error.isFromAssertion !== true);
+        return null;
+      } finally {
+        hideSpinner(globals.elements);
+        spinnerCaptionRestoreDefault();
+        // reload the reagents list
+        await __reloadReagList(globals.elements);
+      }
     }
 
     function __removeFilterValueElementIfExists() {
@@ -507,6 +557,14 @@
       elements.loadingSpinner.style.display = "none";
     }
 
+    function setSpinnerCaption(elements, caption) {
+      elements.spinnerCaption.textContent = caption;
+    }
+
+    function spinnerCaptionRestoreDefault() {
+      setSpinnerCaption(globals.elements, "Loading stuff...");
+    }
+
     async function preloadContent(elements) {
       let reagentsCount = await fetchReagentsCount();
       console.log("reagentsCount: ", reagentsCount);
@@ -526,7 +584,7 @@
         let option = document.createElement("option");
         option.value = vendors[i].vendor_id;
         option.textContent = vendors[i].name;
-        elements.reagentVendorSelect.appendChild(option);
+        elements.modalReagentVendorSelect.appendChild(option);
       }
 
       let reagentTypesCount = await fetchReagentTypesCount();
@@ -536,36 +594,39 @@
         let option = document.createElement("option");
         option.value = reagentTypes[i].reagtype_id;
         option.textContent = reagentTypes[i].name;
-        elements.reagentTypeSelect.appendChild(option);
+        elements.modalReagentTypeSelect.appendChild(option);
       }
 
       __loadReagFilterValues(elements);
     }
 
     function __setActions_reagentFormSubmission(elements) {
-      elements.reagentForm
+      elements.modalReagentForm
       .addEventListener("submit", function (event) {
         event.preventDefault(); // Prevent the form from submitting the traditional way
 
         // Get input values
-        const name = document.getElementById("reagentName").value;
-        const vendor = document.getElementById("reagentVendor").value;
-        const type = document.getElementById("reagentType").value;
+        const name = elements.modalReagentName.value;
+        const vendor = elements.modalReagentVendorSelect.value;
+        const type = Number(elements.modalReagentTypeSelect.value);
 
-        // Log the data (you can replace this with an API call or other logic)
         console.log("New Reagent Data:", { name, vendor, type });
 
         // Close the modal
         const modal = bootstrap.Modal.getInstance(
-          document.getElementById("addReagentModal")
+          elements.addReagentModal
         );
         modal.hide();
 
-        // Clear the form (optional)
-        document.getElementById("reagentForm").reset();
+        // Clear the form
+        elements.modalReagentForm.reset()
 
-        // Show a success message (optional)
-        alert("Reagent added successfully!");
+        // Upload the reagent
+        const username = localStorage.getItem("username");
+        const sessionKey = localStorage.getItem("session_key");
+        assert(username, "username is falsy");
+        assert(sessionKey, "sessionKey is falsy");
+        uploadReagent(name, vendor, type, username, sessionKey);
       });
     }
 
