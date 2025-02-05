@@ -887,7 +887,7 @@ int db_reagent_type_get_by_id(db_t* pDb, const char* reagtype_id_in, db_reagent_
   assert(pDb != NULL);
   assert(reagtype_id_in > 0);
   assert(pReagentType_out != NULL);
-  const char* pQuery = "SELECT * FROM public.reagent_types WHERE reagtype_id = $1";
+  const char* pQuery = "SELECT * FROM public.reagent_types WHERE reagent_type_id = $1";
   const char* pParams[1] = {reagtype_id_in};
   return db_reagent_type_get_by_x(pDb, pQuery, pParams, 1, pReagentType_out);
 }

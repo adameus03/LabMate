@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+
+<!-- ACKNOWLEDGEMENT: Table styling based on https://github.com/QualityDU/QualityDU/blob/master/backend/templates/act/acts-table.html -->
+
+<head>
+  <title>LabMate Reagents</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body>
+
+  <style>
+
+  </style>
+
+  <div class="container my-4">
+    <h2 class="text-center mb-4" id="reagentSummaryH2">BSTFA - reagent summary</h2>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead class="table-primary">
+          <tr>
+            <th>Param</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Reagent name</td>
+            <td id="reagentNameTd">BSTFA</td>
+          </tr>
+          <tr>
+            <td>Vendor</td>
+            <td id="reagentVendorTd">Sigma Aldrich</td>
+          </tr>
+          <tr>
+            <td>Reagent type</td>
+            <td id="reagentTypeTd">organosilicon compounds</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Centered Icons -->
+    <div class="row justify-content-center mt-4">
+      <div class="col-auto">
+        <i class="fas fa-skull-crossbones fa-3x text-danger" title="Danger"></i>
+      </div>
+      <div class="col-auto">
+        <i class="fas fa-radiation fa-3x text-warning" title="Radioactive"></i>
+      </div>
+      <div class="col-auto">
+        <i class="fas fa-fire fa-3x text-danger" title="Flammable"></i>
+      </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="text-center">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2" id="spinnerCaption">Loading stuff...</p>
+    </div>
+
+    <!-- Comments -->
+    <div class="container mt-5">
+      <h2 class="mb-4">Comments</h2>
+
+      <!-- Comment List -->
+      <ul class="list-group mb-4" id="commentList">
+        <!-- Comment 1 -->
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-1">John Doe</h5>
+            <small class="text-muted">2 hours ago</small>
+          </div>
+          <p class="mb-1">You'd better not touch it</p>
+        </li>
+
+        <!-- Comment 2 -->
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-1">Jane Smith</h5>
+            <small class="text-muted">5 hours ago</small>
+          </div>
+          <p class="mb-1">Use only under fume hood!</p>
+        </li>
+
+        <!-- Comment 3 -->
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-1">John Doe</h5>
+            <small class="text-muted">2 hours ago</small>
+          </div>
+          <p class="mb-1">Don't accidentally blow up our city. Please please please please please</p>
+        </li>
+
+        <!-- Comment 4 -->
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-1">Jane Smith</h5>
+            <small class="text-muted">5 hours ago</small>
+          </div>
+          <p class="mb-1">@everyone Won't be reasonable to eat it</p>
+        </li>
+      </ul>
+
+      <!-- Post Comment Form -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Post a Comment</h5>
+          <form id="commentForm">
+            <!-- Name Input -->
+            <div class="mb-3">
+              <label for="commentName" class="form-label">Name</label>
+              <input id="commentBoxUsername" type="text" class="form-control" id="commentName" placeholder="Your name" value="user123" required
+                disabled>
+            </div>
+
+            <!-- Comment Input -->
+            <div class="mb-3">
+              <label for="commentText" class="form-label">Comment</label>
+              <textarea class="form-control" id="commentText" rows="3" placeholder="Your comment" required></textarea>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn btn-primary">Submit</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Instances in inventory -->
+      <div class="container mt-5">
+        <h2 class="mb-4">Instances in inventory</h2>
+
+        <!-- Add New Reagent Button -->
+        <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal"
+          data-bs-target="#addInventoryItemModal">Register new instance</button>
+        <div class="input-group mb-3">
+
+          <!-- "Filter by" Text -->
+          <span class="input-group-text">Select from</span>
+
+          <!-- Select Dropdown -->
+          <select class="form-select form-select-lg flex-grow-1" aria-label="Filter options">
+            <option value="1">lab</option>
+            <option value="2">faculty</option>
+          </select>
+
+          <!-- Input Field -->
+          <!--<input type="text" class="form-control flex-grow-1" placeholder="Filter value" aria-label="Filter value">-->
+          <select class="form-select select2" id="selectFromOption" required>
+            <option value="1">Lab 1</option>
+            <option value="2">Lab 2</option>
+            <option value="3">Lab 3</option>
+          </select>
+
+          <!-- Filter Button -->
+          <button class="btn btn-outline-secondary" type="button" id="button-addon2">APPLY</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped table-hover">
+            <thead class="table-primary">
+              <tr>
+                <th>EPC</th>
+                <th>Date added</th>
+                <th>Expiration date</th>
+                <th>Operations</th> <!-- New column for actions -->
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>AAAAAAAAAAAAAAAAAAAAAAAA</td>
+                <td>2025-01-03 11:15:28</td>
+                <td>2025-01-03 11:15:28</td>
+                <td>
+                  <!-- Write tag Button -->
+                  <button type="button" class="btn btn-sm btn-primary me-2">
+                    write tag
+                  </button>
+                  <!-- Print label Button -->
+                  <button type="button" class="btn btn-sm btn-secondary me-2">
+                    print label
+                  </button>
+                  <!-- Track Button -->
+                  <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal"
+                    data-bs-target="#canvasModal">
+                    Track
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td>BBBBBBBBBBBBBBBBBBBBBBBB</td>
+                <td>2025-01-03 11:15:28</td>
+                <td>2025-01-03 11:15:28</td>
+                <td>
+                  <!-- Write tag Button -->
+                  <button type="button" class="btn btn-sm btn-primary me-2">
+                    write tag
+                  </button>
+                  <!-- Print label Button -->
+                  <button type="button" class="btn btn-sm btn-secondary me-2">
+                    print label
+                  </button>
+                  <!-- Track Button -->
+                  <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal"
+                    data-bs-target="#canvasModal">
+                    Track
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- Modal for Adding inventory item -->
+      <div class="modal fade" id="addInventoryItemModal" tabindex="-1" aria-labelledby="addInventoryItemModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <!-- Modal Header -->
+            <div class="modal-header">
+              <h5 class="modal-title" id="addInventoryItemModalLabel">Add New Reagent</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+              <form id="reagentForm">
+                <!-- EPC Input -->
+                <div class="mb-3">
+                  <label for="inventoryItemEPC" class="form-label">EPC</label>
+                  <input type="text" class="form-control" id="reagentName" placeholder="Enter inventory item EPC"
+                    required>
+                </div>
+
+                <!-- Lab Dropdown (Searchable) -->
+                <div class="mb-3">
+                  <label for="inventoryItemLab" class="form-label">Lab</label>
+                  <select class="form-select select2" id="inventoryItemLab" required>
+                    <option value="">Select a lab</option>
+                    <option value="1">Lab 1</option>
+                    <option value="2">Lab 2</option>
+                    <option value="3">Lab 3</option>
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label for="inventoryItemAddDate" class="form-label">Add date</label>
+                  <input type="date" class="form-control" id="inventoryItemAddDate" required>
+                </div>
+
+                <div class="mb-3">
+                  <label for="inventoryItemExpirationDate" class="form-label">Expiration date</label>
+                  <input type="date" class="form-control" id="inventoryItemExpirationDate" required>
+                </div>
+              </form>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary" form="reagentForm">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal for tracking inventory item (canvasModal) -->
+      <div class="modal fade" id="canvasModal" tabindex="-1" aria-labelledby="canvasModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="canvasModalLabel">Item tracker</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <!-- Canvas Element -->
+              <canvas id="myCanvas" width="600" height="400" style="border: 1px solid #000;"></canvas>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <nav aria-label="Paginacja">
+      <ul class="pagination justify-content-center">
+
+        <li class="page-item disabled"><span class="page-link">«</span></li>
+
+        <li class="page-item active"><span class="page-link">1</span></li>
+
+        <li class="page-item"><a class="page-link" href="/act/all?page=2">2</a></li>
+
+        <li class="page-item"><a class="page-link" href="/act/all?page=3">3</a></li>
+
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+
+        <li class="page-item"><a class="page-link" href="/act/all?page=4337">4337</a></li>
+
+        <li class="page-item"><a class="page-link" href="/act/all?page=4338">4338</a></li>
+
+        <li class="page-item">
+          <a class="page-link" href="/act/all?page=2" aria-label="Następna">
+            »
+          </a>
+        </li>
+
+      </ul>
+    </nav>
+
+  </div>
+
+  <script>
+    const LABSERV_API_URL = "http://127.0.0.1:7890/api";
+
+    let globals = {
+      "elements": null,
+    };
+
+    function showUserAlertElement(message, type = "success") {
+      let alertElement = document.createElement("div");
+      alertElement.classList.add("alert");
+      alertElement.classList.add(`alert-${type}`);
+      alertElement.classList.add("alert-dismissible");
+      alertElement.classList.add("fade");
+      alertElement.classList.add("show");
+      alertElement.setAttribute("role", "alert");
+      alertElement.textContent = message;
+      let button = document.createElement("button");
+      button.type = "button";
+      button.classList.add("btn-close");
+      button.setAttribute("data-bs-dismiss", "alert");
+      button.setAttribute("aria-label", "Close");
+      alertElement.appendChild(button);
+      globals.elements.reagentSummaryH2.before(alertElement);
+    }
+
+    function assert(condition, message, shouldAlert = true) {
+      if (!condition) {
+        if (shouldAlert) {
+          //alert(message || "Assertion failed!"); // Show a message to the user  
+          showUserAlertElement(message || "Assertion failed!", "danger");
+        }
+        const error = new Error(message || "Assertion failed!");
+        error.isFromAssertion = true;
+        console.log(error.stack); //print backtrace
+        throw error; // Aim to stop execution
+      }
+    }
+
+    function __parentCheck() {
+      if (window.self == window.parent) {
+        alert('You tinkered with the website, so now it won\'t work. Bye bye');
+        window.location.href = 'logged-common.html?c=chat';
+        return;
+      }
+    }
+    
+    function getElements() {
+      return {
+        reagentSummaryH2: document.getElementById("reagentSummaryH2"),
+        reagentNameTd: document.getElementById("reagentNameTd"),
+        reagentVendorTd: document.getElementById("reagentVendorTd"),
+        reagentTypeTd: document.getElementById("reagentTypeTd"),
+        loadingSpinner: document.getElementById("loadingSpinner"),
+        spinnerCaption: document.getElementById("spinnerCaption"),
+        commentBoxUsername: document.getElementById("commentBoxUsername"),
+      }
+    }
+
+    function showSpinner(elements) {
+      elements.loadingSpinner.style.display = "block";
+    }
+
+    function hideSpinner(elements) {
+      elements.loadingSpinner.style.display = "none";
+    }
+
+    function setSpinnerCaption(elements, caption) {
+      elements.spinnerCaption.textContent = caption;
+    }
+
+    function spinnerCaptionRestoreDefault() {
+      setSpinnerCaption(globals.elements, "Loading stuff...");
+    }
+
+    async function fetchReagent(reagentId) {
+      assert(typeof reagentId === "number", "Reagent ID must be a number");
+      assert(Number.isInteger(reagentId), "Reagent ID must be an integer");
+      
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/reagent?reagent_id=${reagentId}`);
+        assert(response.ok, "Failed to fetch reagent data");
+        const data = await response.json();
+
+        assert(data, "data is falsy");
+        console.log(`GET ${LABSERV_API_URL}/reagent?reagent_id=${reagentId}`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch reagent data! Message from LABSERV: ${data.message}`);
+          return null;
+        } else {
+          assert(data.reagent, "reagent is falsy");
+          assert(data.reagent.reagent_id, "reagent.reagent_id is falsy");
+          assert(data.reagent.reagent_id === reagentId, "reagent.reagent_id does not match the requested reagent ID");
+          assert(data.reagent.name, "reagent.name is falsy");
+          assert(data.reagent.vendor, "reagent.vendor is falsy");
+          assert(data.reagent.reagtype_id, "reagent.reagtype_id is falsy");
+          return data.reagent;
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        alert("Failed to fetch reagent data for unexpected reason");
+        return null;
+      } finally {
+        hideSpinner(globals.elements);
+        spinnerCaptionRestoreDefault();
+      }
+    }
+
+    async function fetchReagtype(reagtypeId) {
+      assert(typeof reagtypeId === "number", "Reagtype ID must be a number");
+      assert(Number.isInteger(reagtypeId), "Reagtype ID must be an integer");
+      
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/reagtype?reagtype_id=${reagtypeId}`);
+        assert(response.ok, "Failed to fetch reagtype data");
+        const data = await response.json();
+
+        assert(data, "data is falsy");
+        console.log(`GET ${LABSERV_API_URL}/reagtype?reagtype_id=${reagtypeId}`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch reagtype data! Message from LABSERV: ${data.message}`);
+          return null;
+        } else {
+          assert(data.reagtype, "reagtype is falsy");
+          assert(data.reagtype.reagtype_id, "reagtype.reagtype_id is falsy");
+          assert(data.reagtype.reagtype_id === reagtypeId, "reagtype.reagtype_id does not match the requested reagtype ID");
+          assert(data.reagtype.name, "reagtype.name is falsy");
+          return data.reagtype;
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        alert("Failed to fetch reagtype data for unexpected reason");
+        return null;
+      } finally {
+        hideSpinner(globals.elements);
+        spinnerCaptionRestoreDefault();
+      }
+    }
+
+    async function preloadContent(elements, reagentId) {
+      let reagent = await fetchReagent(reagentId);
+      assert(reagent, "reagent is falsy");  
+      let reagtype = await fetchReagtype(reagent.reagtype_id);
+      assert(reagtype, "reagtype is falsy");
+      elements.reagentSummaryH2.textContent = `${reagent.name} - reagent summary`;
+      elements.reagentNameTd.textContent = reagent.name;
+      elements.reagentVendorTd.textContent = reagent.vendor;
+      elements.reagentTypeTd.textContent = reagtype.name;
+      let username = localStorage.getItem("username");
+      assert(username, "Username is falsy");
+      elements.commentBoxUsername.value = username;
+    }
+
+    window.onload = function() {
+      __parentCheck();
+      let urlParams = new URLSearchParams(window.location.search);
+      let reagentId = urlParams.get('id');
+      if (!reagentId) {
+        alert('No reagent ID provided. Bye bye');
+        console.log(window.location.search);
+        window.location.href = '/reagents.html';
+        return;
+      }
+      reagentId = Number(reagentId);
+      assert(reagentId, "Reagent ID conversion to number failure");
+      console.log(`Reagent ID: ${reagentId}`);
+      globals.window = window;
+      globals.elements = getElements();
+      preloadContent(globals.elements, reagentId);
+    }
+  </script>
+</body>
+
+</html>

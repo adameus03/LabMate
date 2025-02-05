@@ -544,6 +544,10 @@
         let tr = document.createElement("tr");
         let td = document.createElement("td");
         td.textContent = reagents[i].name;
+        td.addEventListener("click", function (event) {
+          //redirect to /reagent.html?id=<reagent_id>
+          window.location.href = `reagent.html?id=${reagents[i].reagent_id}`;
+        });
         tr.appendChild(td);
         elements.reagentNamesTbody.appendChild(tr);
       }
@@ -575,6 +579,10 @@
         td.textContent = reagents[i].name;
         tr.appendChild(td);
         elements.reagentNamesTbody.appendChild(tr);
+        td.addEventListener("click", function (event) {
+          //redirect to /logged-common.html?c=reagent&id=<reagent_id>
+          window.location.href = `reagent.html?c=reagent&id=${reagents[i].reagent_id}`;
+        });
       }
 
       let vendorsCount = await fetchVendorsCount();

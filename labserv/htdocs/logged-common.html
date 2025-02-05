@@ -149,6 +149,10 @@
         case 'reagents':
           component.data = 'reagents.html';
           break;
+        case 'reagent':
+          let reagentId = urlParams.get('id') || '';
+          component.data = `reagent.html?id=${reagentId}`;
+          break;
         case 'labs':
           component.data = 'labs.html';
           break;
