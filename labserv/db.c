@@ -1727,7 +1727,7 @@ int db_labs_read_page_filtered(db_t* pDb,
       pQuery = "SELECT * FROM public.labs WHERE faculty_id = $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
       break;
     case DB_LAB_FILTER_TYPE_USER_ID:
-      pQuery = "SELECT l.lab_id, l.name, l.bearer_token_hash, l.bearer_token_salt, l.lab_key, l.host, l.faculty_id FROM public.labs l LEFT JOIN public.faculties f ON l.faculty_id = f.faculty_id LEFT JOIN public.users u ON u.email LIKE f.email_domain || '%' WHERE u.user_id = $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
+      pQuery = "SELECT l.lab_id, l.name, l.bearer_token_hash, l.bearer_token_salt, l.lab_key, l.host, l.faculty_id FROM public.labs l LEFT JOIN public.faculties f ON l.faculty_id = f.faculty_id LEFT JOIN public.users u ON u.email LIKE '%' || f.email_domain WHERE u.user_id = $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
       break;
     default:
       LOG_E("db_labs_read_page_filtered: Unexpected filter type: %d", filter_type);
