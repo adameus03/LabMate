@@ -251,7 +251,22 @@ int db_lab_get_by_epc(db_t* pDb, const char* epc_in, db_lab_t* pLab_out);
 
 int db_lab_get_by_host(db_t* pDb, const char* host_in, db_lab_t* pLab_out);
 
-//int db_lab_
+int db_labs_get_total_count(db_t* pDb, int* pCount_out);
+
+typedef enum db_lab_filter_type {
+  DB_LAB_FILTER_TYPE_NONE,
+  DB_LAB_FILTER_TYPE_NAME,
+  DB_LAB_FILTER_TYPE_FACULTY_ID,
+  DB_LAB_FILTER_TYPE_USER_ID
+} db_lab_filter_type_t;
+
+int db_labs_read_page_filtered(db_t* pDb, 
+                               const char* offset, 
+                               const char* page_size, 
+                               db_lab_t** ppLabs_out, 
+                               int* pN_out, 
+                               db_lab_filter_type_t filter_type, 
+                               const char* filter_value);
 
 int db_inventory_insert(db_t* pDb, 
                         const char* reagent_id, 

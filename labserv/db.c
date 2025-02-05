@@ -1697,6 +1697,87 @@ int db_lab_get_by_host(db_t* pDb, const char* host_in, db_lab_t* pLab_out) {
   return db_lab_get_by_x(pDb, pQuery, pParams, 1, pLab_out);
 }
 
+int db_labs_get_total_count(db_t* pDb, int* pCount_out) {
+  return db_x_get_total_count(pDb, pCount_out, __DB_X_TYPE_LAB);
+}
+
+int db_labs_read_page_filtered(db_t* pDb, 
+                               const char* offset, 
+                               const char* page_size, 
+                               db_lab_t** ppLabs_out, 
+                               int* pN_out, 
+                               db_lab_filter_type_t filter_type, 
+                               const char* filter_value) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppLabs_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_type >= DB_LAB_FILTER_TYPE_NONE && filter_type <= DB_LAB_FILTER_TYPE_USER_ID);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_LAB_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.labs WHERE $1 = $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_LAB_FILTER_TYPE_NAME:
+      pQuery = "SELECT * FROM public.labs WHERE name ~* $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_LAB_FILTER_TYPE_FACULTY_ID:
+      pQuery = "SELECT * FROM public.labs WHERE faculty_id = $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_LAB_FILTER_TYPE_USER_ID:
+      pQuery = "SELECT l.lab_id, l.name, l.bearer_token_hash, l.bearer_token_salt, l.lab_key, l.host, l.faculty_id FROM public.labs l LEFT JOIN public.faculties f ON l.faculty_id = f.faculty_id LEFT JOIN public.users u ON u.email LIKE f.email_domain || '%' WHERE u.user_id = $1 ORDER BY lab_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_labs_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_labs_read_page_filtered: Failed to read labs page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_labs_read_page_filtered: No labs found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No labs found
+  }
+  if (PQnfields(pResult) != 7) {
+    LOG_E("db_labs_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_lab_t* pLabs = malloc(nTuples * sizeof(db_lab_t));
+  if (pLabs == NULL) {
+    LOG_E("db_labs_read_page_filtered: Failed to allocate memory for labs");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pLabs[i].lab_id = atoi(PQgetvalue(pResult, i, 0));
+    pLabs[i].name = p_strdup(PQgetvalue(pResult, i, 1));
+    pLabs[i].bearer_token_hash = p_strdup(PQgetvalue(pResult, i, 2));
+    pLabs[i].bearer_token_salt = p_strdup(PQgetvalue(pResult, i, 3));
+    pLabs[i].lab_key = p_strdup(PQgetvalue(pResult, i, 4));
+    pLabs[i].host = p_strdup(PQgetvalue(pResult, i, 5));
+    pLabs[i].faculty_id = atoi(PQgetvalue(pResult, i, 6));
+  }
+  *ppLabs_out = pLabs;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
 int db_inventory_insert(db_t* pDb, 
                         const char* reagent_id, 
                         const char* date_added, 

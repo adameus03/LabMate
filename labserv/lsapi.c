@@ -2532,6 +2532,183 @@ int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     } 
 }
 
+// curl -X POST -d {"filter": "<none|name|fid|uid>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/labs
+static int __lsapi_endpoint_labs_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pFilter = yyjson_obj_get(pRoot, "filter");
+    if (pFilter == NULL || !yyjson_is_str(pFilter)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid filter");
+    }
+    yyjson_val* pValue = yyjson_obj_get(pRoot, "value");
+    if (pValue == NULL || !yyjson_is_str(pValue)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid value");
+    }
+    yyjson_val* pPOffset = yyjson_obj_get(pRoot, "p_offset");
+    if (pPOffset == NULL || !yyjson_is_int(pPOffset)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_offset");
+    }
+    yyjson_val* pPSize = yyjson_obj_get(pRoot, "p_size");
+    if (pPSize == NULL || !yyjson_is_int(pPSize)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_size");
+    }
+
+    const char* filter = yyjson_get_str(pFilter);
+    const char* value = yyjson_get_str(pValue);
+    int page_offset = yyjson_get_int(pPOffset);
+    int page_size = yyjson_get_int(pPSize);
+
+    assert(filter != NULL && value != NULL);
+    if (page_offset < 0 || page_size < 0) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid p_offset or p_size");
+    }
+
+    // get labs data from database so that we can use it for the http response
+    db_lab_t* labs = NULL;
+    int labs_count = 0;
+
+    char* page_offset_str = __lsapi_itoa(page_offset);
+    char* page_size_str = __lsapi_itoa(page_size);
+    db_lab_filter_type_t filter_type = DB_LAB_FILTER_TYPE_NONE;
+    if (0 == strcmp(filter, "none")) {
+        filter_type = DB_LAB_FILTER_TYPE_NONE;
+    } else if (0 == strcmp(filter, "name")) {
+        filter_type = DB_LAB_FILTER_TYPE_NAME;
+    } else if (0 == strcmp(filter, "fid")) {
+        filter_type = DB_LAB_FILTER_TYPE_FACULTY_ID;
+    } else if (0 == strcmp(filter, "uid")) {
+        filter_type = DB_LAB_FILTER_TYPE_USER_ID;
+    } else {
+        yyjson_doc_free(pJson);
+        free(page_offset_str);
+        free(page_size_str);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid filter");
+    }
+    int rv = db_labs_read_page_filtered(pLsapi->pDb, page_offset_str, page_size_str, &labs, &labs_count, filter_type, value);
+    free(page_offset_str);
+    free(page_size_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "No labs found");
+        } else {
+            LOG_E("__lsapi_endpoint_labs_post: Failed to get labs data from database (db_labs_read_page_filtered returned %d)", rv);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get labs data from database");
+        }
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Labs data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add labs data as array
+    yyjson_mut_val* pLabs = yyjson_mut_arr(pJsonResp);
+    for (int i = 0; i < labs_count; i++) {
+        yyjson_mut_val* pLab = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_int(pJsonResp, pLab, "lab_id", labs[i].lab_id);
+        yyjson_mut_obj_add_str(pJsonResp, pLab, "name", labs[i].name);
+        yyjson_mut_obj_add_int(pJsonResp, pLab, "faculty_id", labs[i].faculty_id);
+        yyjson_mut_arr_add_val(pLabs, pLab);
+    }
+    // add labs array to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "labs", pLabs);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    assert(labs != NULL);
+    for (int i = 0; i < labs_count; i++) {
+        db_lab_free(&labs[i]);
+    }
+    free(labs);
+    return 0;
+}
+
+// gets total number of labs in the database
+static int __lsapi_endpoint_labs_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    int labsCount = 0;
+    int rv = db_labs_get_total_count(pLsapi->pDb, &labsCount);
+    if (0 != rv) {
+        LOG_E("__lsapi_endpoint_labs_get: Failed to get total labs count from database (db_labs_get_total_count returned %d)", rv);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get total labs count from database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Labs count retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    yyjson_mut_obj_add_int(pJsonResp, pRootResp, "labs_count", labsCount);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+int lsapi_endpoint_labs(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_labs_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_labs_get(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
 /**
  * TODO should we really pass epc, apwd, kpwd instead of generate it? For now yes, as it seems to make debugging easier
 */
