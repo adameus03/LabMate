@@ -615,7 +615,7 @@
 
         // Get input values
         const name = elements.modalReagentName.value;
-        const vendor = elements.modalReagentVendorSelect.value;
+        const vendor = /*elements.modalReagentVendorSelect.value*/elements.modalReagentVendorSelect.options[elements.modalReagentVendorSelect.selectedIndex].textContent;
         const type = Number(elements.modalReagentTypeSelect.value);
 
         console.log("New Reagent Data:", { name, vendor, type });

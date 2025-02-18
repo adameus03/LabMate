@@ -233,33 +233,33 @@
 
             <!-- Modal Body -->
             <div class="modal-body">
-              <form id="reagentForm">
+              <form id="modalInventoryItemForm">
                 <!-- EPC Input -->
                 <div class="mb-3">
-                  <label for="inventoryItemEPC" class="form-label">EPC</label>
-                  <input type="text" class="form-control" id="reagentName" placeholder="Enter inventory item EPC"
+                  <label for="modalInventoryItemEPC" class="form-label">EPC</label>
+                  <input type="text" class="form-control" id="modalInventoryItemEPC" placeholder="Enter inventory item EPC"
                     required>
                 </div>
 
                 <!-- Lab Dropdown (Searchable) -->
                 <div class="mb-3">
-                  <label for="inventoryItemLab" class="form-label">Lab</label>
-                  <select class="form-select select2" id="inventoryItemLab" required>
+                  <label for="modalInventoryItemLabSelect" class="form-label">Lab</label>
+                  <select class="form-select select2" id="modalInventoryItemLabSelect" required>
                     <option value="">Select a lab</option>
-                    <option value="1">Lab 1</option>
+                    <!--<option value="1">Lab 1</option>
                     <option value="2">Lab 2</option>
-                    <option value="3">Lab 3</option>
+                    <option value="3">Lab 3</option>-->
                   </select>
                 </div>
 
                 <div class="mb-3">
-                  <label for="inventoryItemAddDate" class="form-label">Add date</label>
-                  <input type="date" class="form-control" id="inventoryItemAddDate" required>
+                  <label for="modalInventoryItemAddDate" class="form-label">Add date</label>
+                  <input type="date" class="form-control" id="modalInventoryItemAddDate" required>
                 </div>
 
                 <div class="mb-3">
-                  <label for="inventoryItemExpirationDate" class="form-label">Expiration date</label>
-                  <input type="date" class="form-control" id="inventoryItemExpirationDate" required>
+                  <label for="modalInventoryItemExpirationDate" class="form-label">Expiration date</label>
+                  <input type="date" class="form-control" id="modalInventoryItemExpirationDate" required>
                 </div>
               </form>
             </div>
@@ -267,7 +267,7 @@
             <!-- Modal Footer -->
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-              <button type="submit" class="btn btn-primary" form="reagentForm">Save</button>
+              <button type="submit" class="btn btn-primary" form="modalInventoryItemForm" id="modalSubmitButton">Save</button>
             </div>
           </div>
         </div>
@@ -369,6 +369,13 @@
     
     function getElements() {
       return {
+        modalInventoryItemForm: document.getElementById("modalInventoryItemForm"), //modal
+        modalInventoryItemEPC: document.getElementById("modalInventoryItemEPC"), //modal
+        modalInventoryItemLabSelect: document.getElementById("modalInventoryItemLabSelect"), //modal
+        modalInventoryItemAddDate: document.getElementById("modalInventoryItemAddDate"), //modal
+        modalInventoryItemExpirationDate: document.getElementById("modalInventoryItemExpirationDate"), //modal
+        modalSubmitButton: document.getElementById("modalSubmitButton"), //modal
+        addInventoryItemModal: document.getElementById("addInventoryItemModal"),
         reagentSummaryH2: document.getElementById("reagentSummaryH2"),
         reagentNameTd: document.getElementById("reagentNameTd"),
         reagentVendorTd: document.getElementById("reagentVendorTd"),
@@ -393,6 +400,105 @@
 
     function spinnerCaptionRestoreDefault() {
       setSpinnerCaption(globals.elements, "Loading stuff...");
+    }
+
+    async function fetchXsCount(xsName) {
+      assert(typeof xsName === "string", "xsName is not a string");
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/${xsName}`);
+        assert(response.ok, `Failed to fetch ${xsName} count! Falsy response.ok, response.status=${response.status}`);
+        const data = await response.json();
+        
+        assert(data, `data is falsy`);
+        console.log(`GET ${LABSERV_API_URL}/${xsName}`, data);
+        assert(data.status, `status is falsy`);
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch ${xsName} count! Message from LABSERV: ${data.message}`);
+          return -1;
+        } else {
+          assert(data[`${xsName}_count`] || data[`${xsName}_count`] === 0, `${xsName}_count is falsy and not 0`);
+          assert(data[`${xsName}_count`] >= 0, `${xsName}_count is negative`);
+          if (data[`${xsName}_count`] === 0) {
+            console.log(`No ${xsName} found`);
+            alert(`No ${xsName} found yet... Add some?`);
+          }
+          return data[`${xsName}_count`];
+        }
+      } catch (error) {
+        assert(false, `Failed to fetch ${xsName} count! Error: ${error}`, error.isFromAssertion !== true);
+        return -1;
+      } finally {
+        hideSpinner(globals.elements);
+      }
+    }
+
+    function __fetchXs_ParametrizationObject_SanCheck(xParametrizationObject) {
+      assert(typeof xParametrizationObject === "object", "xParametrizationObject is not an object");
+      assert(typeof xParametrizationObject.xsName === "string", "xParametrizationObject.xsName is not a string");
+      assert(Array.isArray(xParametrizationObject.xFilterOptions), "xParametrizationObject.xFilterOptions is not an array");
+      for (let i = 0; i < xParametrizationObject.xFilterOptions.length; i++) {
+        assert(typeof xParametrizationObject.xFilterOptions[i] === "string", "xParametrizationObject.xFilterOptions[i] is not a string");
+      }
+    }
+
+    function __fetchXs_ParametrizationObject(xsName, xFilterOptions) {
+      assert(typeof xsName === "string", "xsName is not a string");
+      assert(Array.isArray(xFilterOptions), "xFilterOptions is not an array");
+      for (let i = 0; i < xFilterOptions.length; i++) {
+        assert(typeof xFilterOptions[i] === "string", "xFilterOptions[i] is not a string");
+      }
+      return {
+        "xsName": xsName,
+        "xFilterOptions": xFilterOptions
+      };
+    }
+
+    async function fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size) {
+      __fetchXs_ParametrizationObject_SanCheck(xParametrizationObject);
+      assert(xParametrizationObject.xFilterOptions.includes(filterParam), "Invalid filterParam");
+      assert(typeof filterValue === "string", "filterValue is not a string");
+      assert(typeof p_offset === "number", "p_offset is not a number");
+      assert(typeof p_size === "number", "p_size is not a number");
+      assert(p_offset >= 0, "p_offset is negative");
+      assert(p_size > 0, "p_size is not positive");
+      assert(Number.isInteger(p_offset), "p_offset is not an integer");
+      assert(Number.isInteger(p_size), "p_size is not an integer");
+
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/${xParametrizationObject.xsName}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            filter: `${filterParam}`,
+            value: `${filterValue}`,
+            p_offset: p_offset,
+            p_size: p_size
+          })
+        });
+        assert(response.ok, `Failed to fetch ${xParametrizationObject.xsName}! Falsy response.ok, response.status=${response.status}`);
+        const data = await response.json();
+        
+        assert(data, `data is falsy`);
+        console.log(`POST ${LABSERV_API_URL}/${xParametrizationObject.xsName}`, data);
+        assert(data.status, `status is falsy`);
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Message from LABSERV: ${data.message}`);
+          return [];
+        } else {
+          assert(data[xParametrizationObject.xsName], `${xParametrizationObject.xsName} is falsy`);
+          assert(Array.isArray(data[xParametrizationObject.xsName]), `${xParametrizationObject.xsName} is not an array`);
+          return data[xParametrizationObject.xsName];
+        }
+      } catch (error) {
+        assert(false, `Failed to fetch ${xParametrizationObject.xsName}! Error: ${error}`, error.isFromAssertion !== true);
+        return [];
+      } finally {
+        hideSpinner(globals.elements);
+      }
     }
 
     async function fetchReagent(reagentId) {
@@ -463,6 +569,82 @@
       }
     }
 
+    async function fetchLabs(filterParam, filterValue, p_offset, p_size) {
+      const xParametrizationObject = __fetchXs_ParametrizationObject("labs", ["none", "name", "fid", "uid"]);
+      return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
+    }
+
+    async function fetchLabsByUserId(userId, p_offset, p_size) {
+      console.log("userId", userId);
+      assert(typeof userId === "number", "User ID must be a number");
+      assert(Number.isInteger(userId), "User ID must be an integer");
+      return fetchLabs("uid", `${userId}`, p_offset, p_size);
+    }
+
+    async function uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey) {
+      //PUT -d '{"rgid":<reagent id>, "dadd":"<date added>", "dexp": "<date expire>", "lid":<lab id>, "epc": "<epc>", "apwd": "<apwd>", "kpwd":"<kpwd>", "username":"<username>", "session_key":"<sesskey>"}' `${LABSERV_API_URL}/inventory` -> { status: "success|error", message: "...", inventory_item: { inventory_item_id: <inventory item id>, reagent_id: <reagent id>, date_added: "<date added>", date_expire: "<date expire>", lab_id: <lab id>, epc: "<epc>" }}
+      assert(typeof reagentId === "number", "Reagent ID must be a number");
+      assert(Number.isInteger(reagentId), "Reagent ID must be an integer");
+      assert(typeof dateAdded === "string", "Date added must be a string");
+      assert(typeof dateExpire === "string", "Date expire must be a string");
+      assert(typeof labId === "number", "Lab ID must be a number");
+      assert(Number.isInteger(labId), "Lab ID must be an integer");
+      assert(typeof epc === "string", "EPC must be a string");
+      assert(typeof apwd === "string", "APWD must be a string");
+      assert(typeof kpwd === "string", "KPWD must be a string");
+      assert(typeof username === "string", "Username must be a string");
+      assert(typeof sesskey === "string", "Session key must be a string");
+
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/inventory`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            rgid: reagentId,
+            dadd: dateAdded,
+            dexp: dateExpire,
+            lid: labId,
+            epc: epc,
+            apwd: apwd,
+            kpwd: kpwd,
+            username: username,
+            session_key: sesskey
+          })
+        });
+        assert(response.ok, "Failed to upload inventory item");
+        const data = await response.json();
+
+        assert(data, "data is falsy");
+        console.log(`PUT ${LABSERV_API_URL}/inventory`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to upload inventory item! Message from LABSERV: ${data.message}`);
+          return null;
+        } else {
+          assert(data.inventory_item, "inventory_item is falsy");
+          assert(data.inventory_item.inventory_item_id, "inventory_item.inventory_item_id is falsy");
+          assert(data.inventory_item.reagent_id, "inventory_item.reagent_id is falsy");
+          assert(data.inventory_item.reagent_id === reagentId, "inventory_item.reagent_id does not match the requested reagent ID");
+          assert(data.inventory_item.date_added, "inventory_item.date_added is falsy");
+          assert(data.inventory_item.date_expire, "inventory_item.date_expire is falsy");
+          assert(data.inventory_item.lab_id, "inventory_item.lab_id is falsy");
+          assert(data.inventory_item.lab_id === labId, "inventory_item.lab_id does not match the requested lab ID");
+          assert(data.inventory_item.epc, "inventory_item.epc is falsy");
+          return data.inventory_item;
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        assert(false, `Failed to upload inventory item: ${error}`);
+        return null;
+      } finally {
+        hideSpinner(globals.elements);
+        spinnerCaptionRestoreDefault();
+      }
+    }
+
     async function preloadContent(elements, reagentId) {
       let reagent = await fetchReagent(reagentId);
       assert(reagent, "reagent is falsy");  
@@ -475,9 +657,61 @@
       let username = localStorage.getItem("username");
       assert(username, "Username is falsy");
       elements.commentBoxUsername.value = username;
+
+      assert(localStorage.getItem("user_id"), "User ID is falsy");
+      let user_labs = await fetchLabsByUserId(Number(localStorage.getItem("user_id")), 0, 10);
+      console.log("User labs:", user_labs);
+      //add labs to select
+      for (let i = 0; i < user_labs.length; i++) {
+        let option = document.createElement("option");
+        assert(user_labs[i].lab_id, "lab_id is falsy");
+        assert(user_labs[i].name, "name is falsy");
+        option.value = user_labs[i].lab_id;
+        option.textContent = user_labs[i].name;
+        elements.modalInventoryItemLabSelect.appendChild(option);
+      }
     }
 
-    window.onload = function() {
+    function __setActions_inventoryFormSubmission(elements, reagentId) {
+      elements.modalInventoryItemForm
+      .addEventListener("submit", function (event) {
+        event.preventDefault();
+        let epc = elements.modalInventoryItemEPC.value;
+        let labId = Number(elements.modalInventoryItemLabSelect.value);
+        let dateAdded = elements.modalInventoryItemAddDate.value;
+        let dateExpire = elements.modalInventoryItemExpirationDate.value;
+        let username = localStorage.getItem("username");
+        let sesskey = localStorage.getItem("session_key");
+        
+        assert(epc, "EPC is falsy");
+        assert(labId, "Lab ID is falsy");
+        assert(dateAdded, "Date added is falsy");
+        assert(dateExpire, "Expiration date is falsy");
+        assert(username, "Username is falsy");
+        assert(sesskey, "Session key is falsy");
+
+        //Generate random APWD and KPWD (4 bytes written as hex)
+        let apwd = Math.floor(Math.random() * 0x100000000).toString(16).padStart(8, '0');
+        let kpwd = Math.floor(Math.random() * 0x100000000).toString(16).padStart(8, '0');
+        console.log(`APWD: ${apwd}, KPWD: ${kpwd}`);
+        
+        //Close the modal and clear form
+        const modal = bootstrap.Modal.getInstance(
+          elements.addInventoryItemModal
+        );
+        modal.hide();
+        elements.modalInventoryItemForm.reset();
+
+        //Upload the inventory item
+        uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey);
+      });
+    }
+
+    function setActions(elements, reagentId) {
+      __setActions_inventoryFormSubmission(elements, reagentId);
+    }
+
+    window.onload = async function() {
       __parentCheck();
       let urlParams = new URLSearchParams(window.location.search);
       let reagentId = urlParams.get('id');
@@ -492,7 +726,9 @@
       console.log(`Reagent ID: ${reagentId}`);
       globals.window = window;
       globals.elements = getElements();
-      preloadContent(globals.elements, reagentId);
+      await preloadContent(globals.elements, reagentId);
+      setActions(globals.elements, reagentId);
+      console.log(globals);
     }
   </script>
 </body>

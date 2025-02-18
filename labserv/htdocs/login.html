@@ -77,11 +77,12 @@
         console.log('Response:', data);
         let respObj = data;
         if (respObj.status === 'success') {
-          if (respObj.session_key) {
+          if (respObj.session_key && respObj.user) {
             // Save session_key & username in local storage
             try {
               localStorage.setItem('session_key', respObj.session_key);
               localStorage.setItem('username', document.getElementsByName('username')[0].value);
+              localStorage.setItem('user_id', respObj.user.user_id);
             } catch (e) {
               alert('Failed to save data to local storage: ' + e);
               return;
@@ -90,7 +91,7 @@
             //window.location.href = 'logged-common.html?c=chat';
             window.location.href = 'logged-common.html?c=reagents';
           } else {
-            alert('Unexpected error: missing session_key in server response');
+            alert('Unexpected error: missing session_key and/or user in server response');
           }
         } else {
           //alert('Failed to login. Please check your credentials or try again');
