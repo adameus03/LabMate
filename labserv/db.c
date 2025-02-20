@@ -1519,6 +1519,80 @@ int db_faculty_get_by_id(db_t* pDb, const char* faculty_id_in, db_faculty_t* pFa
   return db_faculty_get_by_x(pDb, pQuery, pParams, 1, pFaculty_out);
 }
 
+int db_faculties_get_total_count(db_t* pDb, int* pCount_out) {
+  return db_x_get_total_count(pDb, pCount_out, __DB_X_TYPE_FACULTY);
+}
+
+int db_faculties_read_page_filtered(db_t* pDb, 
+                                    const char* offset, 
+                                    const char* page_size, 
+                                    db_faculty_t** ppFaculties_out, 
+                                    int* pN_out, 
+                                    db_faculty_filter_type_t filter_type, 
+                                    const char* filter_value) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppFaculties_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_type >= DB_FACULTY_FILTER_TYPE_NONE && filter_type <= DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_FACULTY_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.faculties WHERE $1 = $1 ORDER BY faculty_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_FACULTY_FILTER_TYPE_NAME:
+      pQuery = "SELECT * FROM public.faculties WHERE name ~* $1 ORDER BY faculty_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN:
+      pQuery = "SELECT * FROM public.faculties WHERE email_domain ~* $1 ORDER BY faculty_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_faculties_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_faculties_read_page_filtered: Failed to read faculties page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_faculties_read_page_filtered: No faculties found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No faculties found
+  }
+  if (PQnfields(pResult) != 3) {
+    LOG_E("db_faculties_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_faculty_t* pFaculties = malloc(nTuples * sizeof(db_faculty_t));
+  if (pFaculties == NULL) {
+    LOG_E("db_faculties_read_page_filtered: Failed to allocate memory for faculties");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pFaculties[i].faculty_id = atoi(PQgetvalue(pResult, i, 0));
+    pFaculties[i].name = p_strdup(PQgetvalue(pResult, i, 1));
+    pFaculties[i].email_domain = p_strdup(PQgetvalue(pResult, i, 2));
+  }
+  *ppFaculties_out = pFaculties;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
 int db_lab_insert(db_t* pDb, 
                   const char* name, 
                   const char* bearer_token_hash, 

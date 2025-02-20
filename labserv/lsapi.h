@@ -90,6 +90,11 @@ int lsapi_endpoint_vendors(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
 /**
+ * @brief Handle LSAPI faculties endpoint
+ */
+int lsapi_endpoint_faculties(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
  * @brief Handle LSAPI lab endpoint
  */
 int lsapi_endpoint_lab(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);

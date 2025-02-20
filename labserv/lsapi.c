@@ -2359,6 +2359,180 @@ int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
+// curl -X POST -d '{"filter": "<none|name|email_domain>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/faculties
+static int __lsapi_endpoint_faculties_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pFilter = yyjson_obj_get(pRoot, "filter");
+    if (pFilter == NULL || !yyjson_is_str(pFilter)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid filter");
+    }
+    yyjson_val* pValue = yyjson_obj_get(pRoot, "value");
+    if (pValue == NULL || !yyjson_is_str(pValue)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid value");
+    }
+    yyjson_val* pPOffset = yyjson_obj_get(pRoot, "p_offset");
+    if (pPOffset == NULL || !yyjson_is_int(pPOffset)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_offset");
+    }
+    yyjson_val* pPSize = yyjson_obj_get(pRoot, "p_size");
+    if (pPSize == NULL || !yyjson_is_int(pPSize)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_size");
+    }
+
+    const char* filter = yyjson_get_str(pFilter);
+    const char* value = yyjson_get_str(pValue);
+    int page_offset = yyjson_get_int(pPOffset);
+    int page_size = yyjson_get_int(pPSize);
+
+    assert(filter != NULL && value != NULL);
+    if (page_offset < 0 || page_size < 1) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid p_offset or p_size");
+    }
+
+    // get faculties data from database so that we can use it for the http response
+    db_faculty_t* faculties = NULL;
+    int faculties_count = 0;
+
+    char* page_offset_str = __lsapi_itoa(page_offset);
+    char* page_size_str = __lsapi_itoa(page_size);
+    db_faculty_filter_type_t filter_type = DB_FACULTY_FILTER_TYPE_NONE;
+    if (0 == strcmp(filter, "none")) {
+        filter_type = DB_FACULTY_FILTER_TYPE_NONE;
+    } else if (0 == strcmp(filter, "name")) {
+        filter_type = DB_FACULTY_FILTER_TYPE_NAME;
+    } else if (0 == strcmp(filter, "email_domain")) {
+        filter_type = DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN;
+    } else {
+        yyjson_doc_free(pJson);
+        free(page_offset_str);
+        free(page_size_str);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid filter");
+    }
+    int rv = db_faculties_read_page_filtered(pLsapi->pDb, page_offset_str, page_size_str, &faculties, &faculties_count, filter_type, value);
+    free(page_offset_str);
+    free(page_size_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "No faculties found");
+        } else {
+            LOG_E("__lsapi_endpoint_faculties_post: Failed to get faculties data from database (db_faculties_read_page_filtered returned %d)", rv);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get faculties data from database");
+        }
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Faculties data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add faculties data as array
+    yyjson_mut_val* pFaculties = yyjson_mut_arr(pJsonResp);
+    for (int i = 0; i < faculties_count; i++) {
+        yyjson_mut_val* pFaculty = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_int(pJsonResp, pFaculty, "faculty_id", faculties[i].faculty_id);
+        yyjson_mut_obj_add_str(pJsonResp, pFaculty, "name", faculties[i].name);
+        yyjson_mut_obj_add_str(pJsonResp, pFaculty, "email_domain", faculties[i].email_domain);
+        yyjson_mut_arr_add_val(pFaculties, pFaculty);
+    }
+    // add faculties array to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "faculties", pFaculties);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    assert(faculties != NULL);
+    for (int i = 0; i < faculties_count; i++) {
+        db_faculty_free(&faculties[i]);
+    }
+    free(faculties);
+    return 0;
+}
+
+//gets total number of faculties in the database
+static int __lsapi_endpoint_faculties_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    int faculties_count = 0;
+    int rv = db_faculties_get_total_count(pLsapi->pDb, &faculties_count);
+    if (0 != rv) {
+        LOG_E("__lsapi_endpoint_faculties_get: Failed to get total faculties count from database (db_faculties_get_total_count returned %d)", rv);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get total faculties count from database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Faculties count retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    yyjson_mut_obj_add_int(pJsonResp, pRootResp, "faculties_count", faculties_count);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+    
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+int lsapi_endpoint_faculties(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_faculties_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_faculties_get(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
 // curl -X PUT -d '{"lname":"<lab name>", "ltoken":"<lab token>", "lkey": "<lkey>", "host": "<host>", "fid":<faculty id>, "username":"<username>", "session_key":"<sesskey>"}'
 static int __lsapi_endpoint_lab_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);

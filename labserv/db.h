@@ -228,6 +228,22 @@ int db_faculty_insert_ret(db_t* pDb, const char* name, const char* email_domain,
 
 int db_faculty_get_by_id(db_t* pDb, const char* faculty_id_in, db_faculty_t* pFaculty_out);
 
+int db_faculties_get_total_count(db_t* pDb, int* pCount_out);
+
+typedef enum db_faculty_filter_type {
+  DB_FACULTY_FILTER_TYPE_NONE,
+  DB_FACULTY_FILTER_TYPE_NAME,
+  DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN
+} db_faculty_filter_type_t;
+
+int db_faculties_read_page_filtered(db_t* pDb, 
+                                    const char* offset, 
+                                    const char* page_size, 
+                                    db_faculty_t** ppFaculties_out, 
+                                    int* pN_out, 
+                                    db_faculty_filter_type_t filter_type, 
+                                    const char* filter_value);
+
 int db_lab_insert(db_t* pDb, 
                   const char* name, 
                   const char* bearer_token_hash, 
