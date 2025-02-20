@@ -581,6 +581,21 @@
       return fetchLabs("uid", `${userId}`, p_offset, p_size);
     }
 
+    async function fetchFaculties(filterParam, filterValue, p_offset, p_size) {
+      const xParametrizationObject = __fetchXs_ParametrizationObject("faculties", ["none", "name", "email_domain"]);
+      return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
+    }
+
+    async function fetchFacultiesAll(p_offset, p_size) {
+      return fetchFaculties("none", "", p_offset, p_size);
+    }
+
+    async function fetchFacultiesByUserId(userId, p_offset, p_size) {
+      assert(typeof userId === "number", "User ID must be a number");
+      assert(Number.isInteger(userId), "User ID must be an integer");
+      return fetchFaculties("uid", `${userId}`, p_offset, p_size);
+    }
+
     async function uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey) {
       //PUT -d '{"rgid":<reagent id>, "dadd":"<date added>", "dexp": "<date expire>", "lid":<lab id>, "epc": "<epc>", "apwd": "<apwd>", "kpwd":"<kpwd>", "username":"<username>", "session_key":"<sesskey>"}' `${LABSERV_API_URL}/inventory` -> { status: "success|error", message: "...", inventory_item: { inventory_item_id: <inventory item id>, reagent_id: <reagent id>, date_added: "<date added>", date_expire: "<date expire>", lab_id: <lab id>, epc: "<epc>" }}
       assert(typeof reagentId === "number", "Reagent ID must be a number");

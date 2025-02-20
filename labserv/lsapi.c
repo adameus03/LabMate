@@ -2359,7 +2359,7 @@ int lsapi_endpoint_faculty(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
-// curl -X POST -d '{"filter": "<none|name|email_domain>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/faculties
+// curl -X POST -d '{"filter": "<none|name|uid|email_domain>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:7890/api/faculties
 static int __lsapi_endpoint_faculties_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -2416,6 +2416,8 @@ static int __lsapi_endpoint_faculties_post(h2o_handler_t* pH2oHandler, h2o_req_t
         filter_type = DB_FACULTY_FILTER_TYPE_NONE;
     } else if (0 == strcmp(filter, "name")) {
         filter_type = DB_FACULTY_FILTER_TYPE_NAME;
+    } else if (0 == strcmp(filter, "uid")) {
+        filter_type = DB_FACULTY_FILTER_TYPE_USER_ID;
     } else if (0 == strcmp(filter, "email_domain")) {
         filter_type = DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN;
     } else {

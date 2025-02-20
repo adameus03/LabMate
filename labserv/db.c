@@ -1548,6 +1548,9 @@ int db_faculties_read_page_filtered(db_t* pDb,
     case DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN:
       pQuery = "SELECT * FROM public.faculties WHERE email_domain ~* $1 ORDER BY faculty_id OFFSET $2 LIMIT $3";
       break;
+    case DB_FACULTY_FILTER_TYPE_USER_ID:
+      pQuery = "SELECT f.faculty_id, f.name, f.email_domain FROM public.faculties f LEFT JOIN public.users u ON u.email LIKE '%' || f.email_domain WHERE u.user_id = $1 ORDER BY faculty_id OFFSET $2 LIMIT $3";
+      break;
     default:
       LOG_E("db_faculties_read_page_filtered: Unexpected filter type: %d", filter_type);
       exit(EXIT_FAILURE);

@@ -233,6 +233,7 @@ int db_faculties_get_total_count(db_t* pDb, int* pCount_out);
 typedef enum db_faculty_filter_type {
   DB_FACULTY_FILTER_TYPE_NONE,
   DB_FACULTY_FILTER_TYPE_NAME,
+  DB_FACULTY_FILTER_TYPE_USER_ID,
   DB_FACULTY_FILTER_TYPE_EMAIL_DOMAIN
 } db_faculty_filter_type_t;
 
