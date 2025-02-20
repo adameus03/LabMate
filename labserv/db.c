@@ -2067,6 +2067,96 @@ int db_inventory_set_embodied(db_t* pDb, const char* inventory_id) {
   return 0;
 }
 
+int db_inventory_items_get_total_count(db_t* pDb, int* pCount_out) {
+  return db_x_get_total_count(pDb, pCount_out, __DB_X_TYPE_INVENTORY_ITEM);
+}
+
+int db_inventory_items_read_page_filtered(db_t* pDb, 
+                                          const char* offset, 
+                                          const char* page_size, 
+                                          db_inventory_item_t** ppInventoryItems_out, 
+                                          int* pN_out, 
+                                          db_inventory_item_filter_type_t filter_type, 
+                                          const char* filter_value) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppInventoryItems_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_type >= DB_INVENTORY_ITEM_FILTER_TYPE_NONE && filter_type <= DB_INVENTORY_ITEM_FILTER_TYPE_IS_EMBODIED);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_INVENTORY_ITEM_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.inventory WHERE $1 = $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_REAGENT_ID:
+      pQuery = "SELECT * FROM public.inventory WHERE reagent_id = $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_LAB_ID:
+      pQuery = "SELECT * FROM public.inventory WHERE lab_id = $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_EPC:
+      pQuery = "SELECT * FROM public.inventory WHERE epc ~* $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_FACULTY_ID:
+      pQuery = "SELECT i.inventory_id, i.reagent_id, i.date_added, i.date_expire, i.lab_id, i.epc, i.apwd, i.kpwd, i.is_embodied, i.basepoint_id FROM public.inventory i LEFT JOIN public.labs l ON i.lab_id = l.lab_id LEFT JOIN public.faculties f ON l.faculty_id = f.faculty_id WHERE f.faculty_id = $1 ORDER BY i.inventory_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_IS_EMBODIED:
+      pQuery = "SELECT * FROM public.inventory WHERE is_embodied = $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_inventory_items_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_inventory_items_read_page_filtered: Failed to read inventory items page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_inventory_items_read_page_filtered: No inventory items found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No items found
+  }
+  if (PQnfields(pResult) != 10) {
+    LOG_E("db_inventory_items_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_inventory_item_t* pInventoryItems = malloc(nTuples * sizeof(db_inventory_item_t));
+  if (pInventoryItems == NULL) {
+    LOG_E("db_inventory_items_read_page_filtered: Failed to allocate memory for inventory items");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pInventoryItems[i].inventory_id = atoi(PQgetvalue(pResult, i, 0));
+    pInventoryItems[i].reagent_id = atoi(PQgetvalue(pResult, i, 1));
+    pInventoryItems[i].date_added = p_strdup(PQgetvalue(pResult, i, 2));
+    pInventoryItems[i].date_expire = p_strdup(PQgetvalue(pResult, i, 3));
+    pInventoryItems[i].lab_id = atoi(PQgetvalue(pResult, i, 4));
+    pInventoryItems[i].epc = p_strdup(PQgetvalue(pResult, i, 5));
+    pInventoryItems[i].apwd = p_strdup(PQgetvalue(pResult, i, 6));
+    pInventoryItems[i].kpwd = p_strdup(PQgetvalue(pResult, i, 7));
+    pInventoryItems[i].is_embodied = PQgetvalue(pResult, i, 8)[0] == 't' ? 1 : 0;
+    pInventoryItems[i].basepoint_id = atoi(PQgetvalue(pResult, i, 9));
+  }
+  *ppInventoryItems_out = pInventoryItems;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
 int db_antenna_insert(db_t* pDb, 
                       const char* name, 
                       const char* info, 

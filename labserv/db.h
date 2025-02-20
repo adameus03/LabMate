@@ -305,6 +305,26 @@ int db_inventory_get_by_lab_id_filter_embodied(db_t* pDb, const char* lab_id_in,
 
 int db_inventory_set_embodied(db_t* pDb, const char* inventory_id);
 
+int db_inventory_items_get_total_count(db_t* pDb, int* pCount_out);
+
+typedef enum db_inventory_item_filter_type {
+  DB_INVENTORY_ITEM_FILTER_TYPE_NONE,
+  DB_INVENTORY_ITEM_FILTER_TYPE_REAGENT_ID,
+  DB_INVENTORY_ITEM_FILTER_TYPE_LAB_ID,
+  DB_INVENTORY_ITEM_FILTER_TYPE_EPC,
+  DB_INVENTORY_ITEM_FILTER_TYPE_FACULTY_ID,
+  DB_INVENTORY_ITEM_FILTER_TYPE_IS_EMBODIED,
+} db_inventory_item_filter_type_t;
+
+
+int db_inventory_items_read_page_filtered(db_t* pDb, 
+                                          const char* offset, 
+                                          const char* page_size, 
+                                          db_inventory_item_t** ppInventoryItems_out, 
+                                          int* pN_out, 
+                                          db_inventory_item_filter_type_t filter_type, 
+                                          const char* filter_value);
+
 int db_antenna_insert(db_t* pDb, 
                       const char* name, 
                       const char* info, 

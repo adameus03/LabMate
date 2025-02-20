@@ -3111,6 +3111,192 @@ int lsapi_endpoint_inventory(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     }
 }
 
+// curl -X POST -d {"filter": "<none|rid|lid|epc|fid|emb>", "value": "<value>", "p_offset": <p_offset>, "p_size": <p_size>}' http://localhost:8080/api/inventory-items
+static int __lsapi_endpoint_inventory_items_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pFilter = yyjson_obj_get(pRoot, "filter");
+    if (pFilter == NULL || !yyjson_is_str(pFilter)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid filter");
+    }
+    yyjson_val* pValue = yyjson_obj_get(pRoot, "value");
+    if (pValue == NULL || !yyjson_is_str(pValue)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid value");
+    }
+    yyjson_val* pPOffset = yyjson_obj_get(pRoot, "p_offset");
+    if (pPOffset == NULL || !yyjson_is_int(pPOffset)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_offset");
+    }
+    yyjson_val* pPSize = yyjson_obj_get(pRoot, "p_size");
+    if (pPSize == NULL || !yyjson_is_int(pPSize)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid p_size");
+    }
+
+    const char* filter = yyjson_get_str(pFilter);
+    const char* value = yyjson_get_str(pValue);
+    const int page_offset = yyjson_get_int(pPOffset);
+    const int page_size = yyjson_get_int(pPSize);
+
+    assert(filter != NULL && value != NULL);
+    if (page_offset < 0 || page_size < 0) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid p_offset or p_size");
+    }
+
+    // get inventory items data from database so that we can use it for the http response
+    db_inventory_item_t* inventoryItems = NULL;
+    int inventoryItemsCount = 0;
+
+    char* page_offset_str = __lsapi_itoa(page_offset);
+    char* page_size_str = __lsapi_itoa(page_size);
+    db_inventory_item_filter_type_t filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_NONE;
+    if (0 == strcmp(filter, "none")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_NONE;
+    } else if (0 == strcmp(filter, "rid")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_REAGENT_ID;
+    } else if (0 == strcmp(filter, "lid")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_LAB_ID;
+    } else if (0 == strcmp(filter, "epc")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_EPC;
+    } else if (0 == strcmp(filter, "fid")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_FACULTY_ID;
+    } else if (0 == strcmp(filter, "emb")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_IS_EMBODIED;
+    } else {
+        yyjson_doc_free(pJson);
+        free(page_offset_str);
+        free(page_size_str);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid filter");
+    }
+    int rv = db_inventory_items_read_page_filtered(pLsapi->pDb, page_offset_str, page_size_str, &inventoryItems, &inventoryItemsCount, filter_type, value);
+    free(page_offset_str);
+    free(page_size_str);
+    if (0 != rv) {
+        if (rv == -2) {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "No inventory items found");
+        } else {
+            LOG_E("__lsapi_endpoint_inventory_items_post: Failed to get inventory items data from database (db_inventory_items_read_page_filtered returned %d)", rv);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get inventory items data from database");
+        }
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Inventory items data retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add inventory items data as array
+    yyjson_mut_val* pInventoryItems = yyjson_mut_arr(pJsonResp);
+    for (int i = 0; i < inventoryItemsCount; i++) {
+        yyjson_mut_val* pInventoryItem = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_int(pJsonResp, pInventoryItem, "inventory_item_id", inventoryItems[i].inventory_id);
+        yyjson_mut_obj_add_int(pJsonResp, pInventoryItem, "reagent_id", inventoryItems[i].reagent_id);
+        yyjson_mut_obj_add_str(pJsonResp, pInventoryItem, "date_added", inventoryItems[i].date_added);
+        yyjson_mut_obj_add_str(pJsonResp, pInventoryItem, "date_expire", inventoryItems[i].date_expire);
+        yyjson_mut_obj_add_int(pJsonResp, pInventoryItem, "lab_id", inventoryItems[i].lab_id);
+        yyjson_mut_obj_add_str(pJsonResp, pInventoryItem, "epc", inventoryItems[i].epc);
+        yyjson_mut_obj_add_int(pJsonResp, pInventoryItem, "is_embodied", inventoryItems[i].is_embodied);
+        yyjson_mut_obj_add_int(pJsonResp, pInventoryItem, "basepoint_id", inventoryItems[i].basepoint_id);
+        yyjson_mut_arr_add_val(pInventoryItems, pInventoryItem);
+    }
+    // add inventory items array to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "inventory_items", pInventoryItems);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    assert(inventoryItems != NULL);
+    for (int i = 0; i < inventoryItemsCount; i++) {
+        db_inventory_item_free(&inventoryItems[i]);
+    }
+    free(inventoryItems);
+    return 0;
+}
+
+// gets total number of inventory items in the database
+static int __lsapi_endpoint_inventory_items_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    int inventoryItemsCount = 0;
+    int rv = db_inventory_items_get_total_count(pLsapi->pDb, &inventoryItemsCount);
+    if (0 != rv) {
+        LOG_E("__Lsapi_endpoint_inventory_items_get: Failed to get total count of inventory items from database (db_inventory_items_get_total_count returned %d)", rv);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get total count of inventory items from database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Total number of inventory items retrieved successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    yyjson_mut_obj_add_int(pJsonResp, pRootResp, "inventory_items_count", inventoryItemsCount);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+    
+    free((void*)respText);
+    yyjson_mut_doc_free(pJsonResp);
+    return 0;
+}
+
+int lsapi_endpoint_inventory_items(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_inventory_items_post(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_inventory_items_get(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
 /**
  * @brief Obtain IP address from provided URL.
  * @note Uses libcurl under the hood.
