@@ -37,10 +37,13 @@ def query_database(antno, epc):
       db_conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
     query = f"""
     SELECT time, rx_signal_strength
-    FROM invm
-    WHERE antno = {antno} AND inventory_epc = '{epc}'
-    ORDER BY time DESC
-    LIMIT 100;
+    FROM (
+        SELECT time, rx_signal_strength
+        FROM invm
+        WHERE antno = {antno} AND inventory_epc = '{epc}'
+        ORDER BY time DESC
+        LIMIT 100
+    ) subinvm WHERE subinvm.rx_signal_strength > 0;
     """
     df = pd.read_sql(query, db_conn)
     if should_disconnect_db:
@@ -58,7 +61,7 @@ def update_plot(frame):
     plt.legend(loc='upper left')
     plt.xlabel('Time')
     plt.ylabel('RX Signal Strength')
-    plt.ylim(175, None)  # Set the y-axis limit to 175 and the maximum value
+    #plt.ylim(175, None)  # Set the y-axis limit to 175 and the maximum value
     plt.title('Real-Time RX Signal Strength')
     plt.gcf().autofmt_xdate()
 
