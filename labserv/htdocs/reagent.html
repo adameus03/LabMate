@@ -338,6 +338,8 @@
       alertElement.classList.add("show");
       alertElement.setAttribute("role", "alert");
       alertElement.textContent = message;
+      alertElement.style.position = "fixed"; //
+      alertElement.style.zIndex = "1000"; //
       let button = document.createElement("button");
       button.type = "button";
       button.classList.add("btn-close");
@@ -809,7 +811,7 @@
       elements.inventoryFilterSelectFrom.after(elements.inventoryFilterSelectWhat);
     }
 
-    async function __reloadInventoryList(elements, reagentId) {
+    async function __reloadInventoryList(elements, reagentId, username, sesskey) {
       let filterSelectFromOpt = elements.inventoryFilterSelectFrom.value;
       let filterSelectWhatOpt = elements.inventoryFilterSelectWhat.value;
       let filterParam = "";
@@ -898,7 +900,7 @@
             const res = await embodyInventoryItem(inventoryItems[i].inventory_item_id, username, sesskey);
             if (res) {
               alert("Tag write successful");
-              await __reloadInventoryList(elements, reagentId);
+              await __reloadInventoryList(elements, reagentId, username, sesskey);
             } else {
               alert("Tag write failed");
             }
@@ -909,7 +911,7 @@
       }
     }
 
-    async function preloadContent(elements, reagentId) {
+    async function preloadContent(elements, reagentId, username, sesskey) {
       let reagent = await fetchReagent(reagentId);
       assert(reagent, "reagent is falsy");  
       let reagtype = await fetchReagtype(reagent.reagtype_id);
@@ -918,7 +920,7 @@
       elements.reagentNameTd.textContent = reagent.name;
       elements.reagentVendorTd.textContent = reagent.vendor;
       elements.reagentTypeTd.textContent = reagtype.name;
-      let username = localStorage.getItem("username");
+      //let username = localStorage.getItem("username");
       assert(username, "Username is falsy");
       elements.commentBoxUsername.value = username;
 
@@ -936,10 +938,10 @@
       }
 
       await __loadInventoryFilterValues(elements);
-      await __reloadInventoryList(elements, reagentId);
+      await __reloadInventoryList(elements, reagentId, username, sesskey);
     }
 
-    function __setActions_inventoryFormSubmission(elements, reagentId) {
+    function __setActions_inventoryFormSubmission(elements, reagentId, username, sesskey) {
       elements.modalInventoryItemForm
       .addEventListener("submit", async function (event) {
         event.preventDefault();
@@ -947,8 +949,8 @@
         let labId = Number(elements.modalInventoryItemLabSelect.value);
         let dateAdded = elements.modalInventoryItemAddDate.value;
         let dateExpire = elements.modalInventoryItemExpirationDate.value;
-        let username = localStorage.getItem("username");
-        let sesskey = localStorage.getItem("session_key");
+        // let username = localStorage.getItem("username");
+        // let sesskey = localStorage.getItem("session_key");
         
         assert(epc, "EPC is falsy");
         assert(labId, "Lab ID is falsy");
@@ -973,7 +975,7 @@
         await uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey);
 
         //Reload the inventory list
-        await __reloadInventoryList(elements, reagentId);
+        await __reloadInventoryList(elements, reagentId, username, sesskey);
       });
     }
 
@@ -984,17 +986,17 @@
       });
     }
 
-    function __setActions_inventoryFilterApply(elements, reagentId) {
+    function __setActions_inventoryFilterApply(elements, reagentId, username, sesskey) {
       elements.applyInventoryFilterButton
       .addEventListener("click", async function (event) {
-        await __reloadInventoryList(elements, reagentId);
+        await __reloadInventoryList(elements, reagentId, username, sesskey);
       });
     }
 
-    function setActions(elements, reagentId) {
+    function setActions(elements, reagentId, username, sesskey) {
       __setActions_inventoryFormSubmission(elements, reagentId);
       __setActions_inventoryFilterOptionsChange(elements);
-      __setActions_inventoryFilterApply(elements, reagentId);
+      __setActions_inventoryFilterApply(elements, reagentId, username, sesskey);
     }
 
     window.onload = async function() {
@@ -1010,10 +1012,16 @@
       reagentId = Number(reagentId);
       assert(reagentId, "Reagent ID conversion to number failure");
       console.log(`Reagent ID: ${reagentId}`);
+
+      let username = localStorage.getItem("username");
+      let sesskey = localStorage.getItem("session_key");
+      assert(username, "username is falsy");
+      assert(sesskey, "sesskey is falsy");
+
       globals.window = window;
       globals.elements = getElements();
-      await preloadContent(globals.elements, reagentId);
-      setActions(globals.elements, reagentId);
+      await preloadContent(globals.elements, reagentId, username, sesskey);
+      setActions(globals.elements, reagentId, username, sesskey);
       console.log(globals);
     }
   </script>
