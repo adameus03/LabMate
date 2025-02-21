@@ -3350,6 +3350,10 @@ static int __lsapi_endpoint_inventory_items_post(h2o_handler_t* pH2oHandler, h2o
         filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_EPC;
     } else if (0 == strcmp(filter, "fid")) {
         filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_FACULTY_ID;
+    } else if (0 == strcmp(filter, "rid_lid")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_RID_LID;
+    } else if (0 == strcmp(filter, "rid_fid")) {
+        filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_RID_FID;
     } else if (0 == strcmp(filter, "emb")) {
         filter_type = DB_INVENTORY_ITEM_FILTER_TYPE_IS_EMBODIED;
     } else {

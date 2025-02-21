@@ -2179,6 +2179,12 @@ int db_inventory_items_read_page_filtered(db_t* pDb,
     case DB_INVENTORY_ITEM_FILTER_TYPE_FACULTY_ID:
       pQuery = "SELECT i.inventory_id, i.reagent_id, i.date_added, i.date_expire, i.lab_id, i.epc, i.apwd, i.kpwd, i.is_embodied, i.basepoint_id FROM public.inventory i LEFT JOIN public.labs l ON i.lab_id = l.lab_id LEFT JOIN public.faculties f ON l.faculty_id = f.faculty_id WHERE f.faculty_id = $1 ORDER BY i.inventory_id OFFSET $2 LIMIT $3";
       break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_RID_LID:
+      pQuery = "SELECT * FROM public.inventory WHERE reagent_id || '&' || lab_id = $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_INVENTORY_ITEM_FILTER_TYPE_RID_FID:
+      pQuery = "SELECT i.inventory_id, i.reagent_id, i.date_added, i.date_expire, i.lab_id, i.epc, i.apwd, i.kpwd, i.is_embodied, i.basepoint_id FROM public.inventory i LEFT JOIN public.labs l ON i.lab_id = l.lab_id LEFT JOIN public.faculties f ON l.faculty_id = f.faculty_id WHERE i.reagent_id || '&' || f.faculty_id = $1 ORDER BY i.inventory_id OFFSET $2 LIMIT $3";
+      break;
     case DB_INVENTORY_ITEM_FILTER_TYPE_IS_EMBODIED:
       pQuery = "SELECT * FROM public.inventory WHERE is_embodied = $1 ORDER BY inventory_id OFFSET $2 LIMIT $3";
       break;
@@ -2198,9 +2204,9 @@ int db_inventory_items_read_page_filtered(db_t* pDb,
   int nTuples = PQntuples(pResult);
   if (nTuples == 0) {
     LOG_I("db_inventory_items_read_page_filtered: No inventory items found");
-    PQclear(pResult);
-    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
-    return -2; // No items found
+    //PQclear(pResult);
+    //__db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    //return -2; // No items found
   }
   if (PQnfields(pResult) != 10) {
     LOG_E("db_inventory_items_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));

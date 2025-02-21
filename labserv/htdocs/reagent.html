@@ -496,6 +496,9 @@
         } else {
           assert(data[xParametrizationObject.xsName], `${xParametrizationObject.xsName} is falsy`);
           assert(Array.isArray(data[xParametrizationObject.xsName]), `${xParametrizationObject.xsName} is not an array`);
+          if (!(data[xParametrizationObject.xsName].length > 0)) {
+            alert(`Empty ${xParametrizationObject.xsName} list obtained!`);
+          }
           return data[xParametrizationObject.xsName];
         }
       } catch (error) {
@@ -602,7 +605,7 @@
     }
 
     async function fetchInventoryItems(filterParam, filterValue, p_offset, p_size) {
-      const xParametrizationObject = __fetchXs_ParametrizationObject("inventory-items", ["none", "lid", "fid", "epc", "rid", "emb"]);
+      const xParametrizationObject = __fetchXs_ParametrizationObject("inventory-items", ["none", "lid", "fid", "epc", "rid", "rid_lid", "rid_fid", "emb"]);
       return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
     }
 
@@ -616,6 +619,22 @@
       assert(typeof facultyId === "number", "Faculty ID must be a number");
       assert(Number.isInteger(facultyId), "Faculty ID must be an integer");
       return fetchInventoryItems("fid", `${facultyId}`, p_offset, p_size);
+    }
+
+    async function fetchInventoryItemsByRidLid(reagentId, labId, p_offset, p_size) {
+      assert(typeof reagentId === "number", "Reagent ID must be a number");
+      assert(Number.isInteger(reagentId), "Reagent ID must be an integer");
+      assert(typeof labId === "number", "Lab ID must be a number");
+      assert(Number.isInteger(labId), "Lab ID must be an integer");
+      return fetchInventoryItems("rid_lid", `${reagentId}&${labId}`, p_offset, p_size);
+    }
+
+    async function fetchInventoryItemsByRidFid(reagentId, facultyId, p_offset, p_size) {
+      assert(typeof reagentId === "number", "Reagent ID must be a number");
+      assert(Number.isInteger(reagentId), "Reagent ID must be an integer");
+      assert(typeof facultyId === "number", "Faculty ID must be a number");
+      assert(Number.isInteger(facultyId), "Faculty ID must be an integer");
+      return fetchInventoryItems("rid_fid", `${reagentId}&${facultyId}`, p_offset, p_size);
     }
 
     async function uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey) {
@@ -742,7 +761,7 @@
       elements.inventoryFilterSelectFrom.after(elements.inventoryFilterSelectWhat);
     }
 
-    async function __reloadInventoryList(elements) {
+    async function __reloadInventoryList(elements, reagentId) {
       let filterSelectFromOpt = elements.inventoryFilterSelectFrom.value;
       let filterSelectWhatOpt = elements.inventoryFilterSelectWhat.value;
       let filterParam = "";
@@ -753,13 +772,15 @@
           filterParam = "lid";
           filterValue = Number(filterSelectWhatOpt);
           assert(Number.isInteger(filterValue), "filterValue is not an integer");
-          inventoryItems = await fetchInventoryItemsByLabId(filterValue, 0, 10);
+          //inventoryItems = await fetchInventoryItemsByLabId(filterValue, 0, 10);
+          inventoryItems = await fetchInventoryItemsByRidLid(reagentId, filterValue, 0, 10);
           break;
         case "2": //faculty
           filterParam = "fid";
           filterValue = Number(filterSelectWhatOpt);
           assert(Number.isInteger(filterValue), "filterValue is not an integer");
-          inventoryItems = await fetchInventoryItemsByFacultyId(filterValue, 0, 10);
+          //inventoryItems = await fetchInventoryItemsByFacultyId(filterValue, 0, 10);
+          inventoryItems = await fetchInventoryItemsByRidFid(reagentId, filterValue, 0, 10);
           break;
         default:
           assert(false, `Invalid filterSelectFromOpt "${filterSelectFromOpt}"`);
@@ -844,7 +865,7 @@
       }
 
       await __loadInventoryFilterValues(elements);
-      await __reloadInventoryList(elements);
+      await __reloadInventoryList(elements, reagentId);
     }
 
     function __setActions_inventoryFormSubmission(elements, reagentId) {
@@ -881,7 +902,7 @@
         await uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey);
 
         //Reload the inventory list
-        await __reloadInventoryList(elements);
+        await __reloadInventoryList(elements, reagentId);
       });
     }
 
@@ -892,17 +913,17 @@
       });
     }
 
-    function __setActions_inventoryFilterApply(elements) {
+    function __setActions_inventoryFilterApply(elements, reagentId) {
       elements.applyInventoryFilterButton
       .addEventListener("click", async function (event) {
-        await __reloadInventoryList(elements);
+        await __reloadInventoryList(elements, reagentId);
       });
     }
 
     function setActions(elements, reagentId) {
       __setActions_inventoryFormSubmission(elements, reagentId);
       __setActions_inventoryFilterOptionsChange(elements);
-      __setActions_inventoryFilterApply(elements);
+      __setActions_inventoryFilterApply(elements, reagentId);
     }
 
     window.onload = async function() {
