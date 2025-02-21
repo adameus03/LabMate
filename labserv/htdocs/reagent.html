@@ -170,6 +170,7 @@
                 <th>EPC</th>
                 <th>Date added</th>
                 <th>Expiration date</th>
+                <th>Is embodied?</th>
                 <th>Operations</th> <!-- New column for actions -->
               </tr>
             </thead>
@@ -701,6 +702,53 @@
       }
     }
 
+    //POST -d '{"action": "embody", "iid": 11, "username":"<username>", "session_key":"<sesskey>"}' /api/inventory
+    async function embodyInventoryItem(iid, username, sesskey) {
+      assert(typeof iid === "number", "Inventory item ID must be a number");
+      assert(Number.isInteger(iid), "Inventory item ID must be an integer");
+      assert(typeof username === "string", "Username must be a string");
+      assert(typeof sesskey === "string", "Session key must be a string");
+
+      showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/inventory`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            action: "embody",
+            iid: iid,
+            username: username,
+            session_key: sesskey
+          })
+        });
+        assert(response.ok, "Failed to embody inventory item");
+        const data = await response.json();
+
+        assert(data, "data is falsy");
+        console.log(`POST ${LABSERV_API_URL}/inventory`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to embody inventory item! Message from LABSERV: ${data.message}`);
+          return null;
+        } else {
+          //assert(data.inventory_item, "inventory_item is falsy");
+          //assert(data.inventory_item.inventory_item_id, "inventory_item.inventory_item_id is falsy");
+          //assert(data.inventory_item.inventory_item_id === iid, "inventory_item.inventory_item_id does not match the requested inventory item ID");
+          //return data.inventory_item;
+          return true;
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        assert(false, `Failed to embody inventory item: ${error}`);
+        return null;
+      } finally {
+        hideSpinner(globals.elements);
+        spinnerCaptionRestoreDefault();
+      }
+    }
+
     function __removeFilterValueElementIfExists() {
       let filterSelectWhat = globals.elements.inventoryFilterSelectWhat;
       if (filterSelectWhat) {
@@ -797,6 +845,7 @@
         let ttEpc = document.createElement("tt");
         let tdDateAdded = document.createElement("td");
         let tdDateExpire = document.createElement("td");
+        let tdEmbodied = document.createElement("td");
         let tdOperations = document.createElement("td");
         let writeTagButton = document.createElement("button");
         let printLabelButton = document.createElement("button");
@@ -805,6 +854,7 @@
         ttEpc.textContent = inventoryItems[i].epc;
         tdDateAdded.textContent = inventoryItems[i].date_added;
         tdDateExpire.textContent = inventoryItems[i].date_expire;
+        tdEmbodied.textContent = inventoryItems[i].is_embodied ? "✔️":"❌";
         writeTagButton.type = "button";
         writeTagButton.classList.add("btn");
         writeTagButton.classList.add("btn-sm");
@@ -834,10 +884,28 @@
         tr.appendChild(tdEpc);
         tr.appendChild(tdDateAdded);
         tr.appendChild(tdDateExpire);
+        tr.appendChild(tdEmbodied);
         tr.appendChild(tdOperations);
 
         elements.inventoryTbody.appendChild(tr);
-        //TODO Set actions for buttons
+        
+        //Set actions for buttons
+        writeTagButton.addEventListener("click", async function (event) {
+          assert(inventoryItems[i].inventory_item_id, "inventory_item_id is falsy");
+          //prompt to ensure the user wants to write the tag with given epc, iid
+          let confirmWrite = confirm(`Write tag with EPC: ${inventoryItems[i].epc}, iid: ${inventoryItems[i].inventory_item_id}?`);
+          if (confirmWrite) {
+            const res = await embodyInventoryItem(inventoryItems[i].inventory_item_id, username, sesskey);
+            if (res) {
+              alert("Tag write successful");
+              await __reloadInventoryList(elements, reagentId);
+            } else {
+              alert("Tag write failed");
+            }
+          } else {
+            alert("Tag write cancelled");
+          }
+        });
       }
     }
 
