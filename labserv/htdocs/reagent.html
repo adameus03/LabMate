@@ -794,6 +794,7 @@
       for (let i = 0; i < inventoryItems.length; i++) {
         let tr = document.createElement("tr");
         let tdEpc = document.createElement("td");
+        let ttEpc = document.createElement("tt");
         let tdDateAdded = document.createElement("td");
         let tdDateExpire = document.createElement("td");
         let tdOperations = document.createElement("td");
@@ -801,7 +802,7 @@
         let printLabelButton = document.createElement("button");
         let trackButton = document.createElement("button");
 
-        tdEpc.textContent = inventoryItems[i].epc;
+        ttEpc.textContent = inventoryItems[i].epc;
         tdDateAdded.textContent = inventoryItems[i].date_added;
         tdDateExpire.textContent = inventoryItems[i].date_expire;
         writeTagButton.type = "button";
@@ -823,6 +824,8 @@
         trackButton.setAttribute("data-bs-toggle", "modal");
         trackButton.setAttribute("data-bs-target", "#canvasModal");
         trackButton.textContent = "Track";
+
+        tdEpc.appendChild(ttEpc);
 
         tdOperations.appendChild(writeTagButton);
         tdOperations.appendChild(printLabelButton);
