@@ -143,24 +143,24 @@
         <div class="input-group mb-3">
 
           <!-- "Filter by" Text -->
-          <span class="input-group-text">Select from</span>
+          <span class="input-group-text" id="inventoryFilterSelectFromSpan">Select from</span>
 
           <!-- Select Dropdown -->
-          <select class="form-select form-select-lg flex-grow-1" aria-label="Filter options">
-            <option value="1">lab</option>
+          <select id="inventoryFilterSelectFrom" class="form-select form-select-lg flex-grow-1" aria-label="Filter options">
+            <option selected value="1">lab</option>
             <option value="2">faculty</option>
           </select>
 
           <!-- Input Field -->
           <!--<input type="text" class="form-control flex-grow-1" placeholder="Filter value" aria-label="Filter value">-->
-          <select class="form-select select2" id="selectFromOption" required>
-            <option value="1">Lab 1</option>
+          <select class="form-select select2" id="inventoryFilterSelectWhat" required>
+            <!--<option value="1">Lab 1</option>
             <option value="2">Lab 2</option>
-            <option value="3">Lab 3</option>
+            <option value="3">Lab 3</option>-->
           </select>
 
           <!-- Filter Button -->
-          <button class="btn btn-outline-secondary" type="button" id="button-addon2">APPLY</button>
+          <button class="btn btn-outline-secondary" type="button" id="button-apply-inventory-filter">APPLY</button>
         </div>
 
         <div class="table-responsive">
@@ -173,21 +173,21 @@
                 <th>Operations</th> <!-- New column for actions -->
               </tr>
             </thead>
-            <tbody>
-              <tr>
+            <tbody id="inventory-tbody">
+              <!--<tr>
                 <td>AAAAAAAAAAAAAAAAAAAAAAAA</td>
                 <td>2025-01-03 11:15:28</td>
                 <td>2025-01-03 11:15:28</td>
                 <td>
-                  <!-- Write tag Button -->
+                  <=== Write tag Button ==>
                   <button type="button" class="btn btn-sm btn-primary me-2">
                     write tag
                   </button>
-                  <!-- Print label Button -->
+                  <=== Print label Button ==>
                   <button type="button" class="btn btn-sm btn-secondary me-2">
                     print label
                   </button>
-                  <!-- Track Button -->
+                  <=== Track Button ==>
                   <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal"
                     data-bs-target="#canvasModal">
                     Track
@@ -199,21 +199,21 @@
                 <td>2025-01-03 11:15:28</td>
                 <td>2025-01-03 11:15:28</td>
                 <td>
-                  <!-- Write tag Button -->
+                  <=== Write tag Button ==>
                   <button type="button" class="btn btn-sm btn-primary me-2">
                     write tag
                   </button>
-                  <!-- Print label Button -->
+                  <=== Print label Button ==>
                   <button type="button" class="btn btn-sm btn-secondary me-2">
                     print label
                   </button>
-                  <!-- Track Button -->
+                  <=== Track Button ==>
                   <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal"
                     data-bs-target="#canvasModal">
                     Track
                   </button>
                 </td>
-              </tr>
+              </tr>-->
             </tbody>
           </table>
         </div>
@@ -375,6 +375,11 @@
         modalInventoryItemAddDate: document.getElementById("modalInventoryItemAddDate"), //modal
         modalInventoryItemExpirationDate: document.getElementById("modalInventoryItemExpirationDate"), //modal
         modalSubmitButton: document.getElementById("modalSubmitButton"), //modal
+        inventoryTbody: document.getElementById("inventory-tbody"),
+        inventoryFilterSelectFromSpan: document.getElementById("inventoryFilterSelectFromSpan"),
+        inventoryFilterSelectFrom: document.getElementById("inventoryFilterSelectFrom"),
+        inventoryFilterSelectWhat: document.getElementById("inventoryFilterSelectWhat"),
+        applyInventoryFilterButton: document.getElementById("button-apply-inventory-filter"),
         addInventoryItemModal: document.getElementById("addInventoryItemModal"),
         reagentSummaryH2: document.getElementById("reagentSummaryH2"),
         reagentNameTd: document.getElementById("reagentNameTd"),
@@ -582,7 +587,7 @@
     }
 
     async function fetchFaculties(filterParam, filterValue, p_offset, p_size) {
-      const xParametrizationObject = __fetchXs_ParametrizationObject("faculties", ["none", "name", "email_domain"]);
+      const xParametrizationObject = __fetchXs_ParametrizationObject("faculties", ["none", "name", "uid", "email_domain"]);
       return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
     }
 
@@ -594,6 +599,23 @@
       assert(typeof userId === "number", "User ID must be a number");
       assert(Number.isInteger(userId), "User ID must be an integer");
       return fetchFaculties("uid", `${userId}`, p_offset, p_size);
+    }
+
+    async function fetchInventoryItems(filterParam, filterValue, p_offset, p_size) {
+      const xParametrizationObject = __fetchXs_ParametrizationObject("inventory-items", ["none", "lid", "fid", "epc", "rid", "emb"]);
+      return fetchXs(xParametrizationObject, filterParam, filterValue, p_offset, p_size);
+    }
+
+    async function fetchInventoryItemsByLabId(labId, p_offset, p_size) {
+      assert(typeof labId === "number", "Lab ID must be a number");
+      assert(Number.isInteger(labId), "Lab ID must be an integer");
+      return fetchInventoryItems("lid", `${labId}`, p_offset, p_size);
+    }
+
+    async function fetchInventoryItemsByFacultyId(facultyId, p_offset, p_size) {
+      assert(typeof facultyId === "number", "Faculty ID must be a number");
+      assert(Number.isInteger(facultyId), "Faculty ID must be an integer");
+      return fetchInventoryItems("fid", `${facultyId}`, p_offset, p_size);
     }
 
     async function uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey) {
@@ -660,6 +682,141 @@
       }
     }
 
+    function __removeFilterValueElementIfExists() {
+      let filterSelectWhat = globals.elements.inventoryFilterSelectWhat;
+      if (filterSelectWhat) {
+        filterSelectWhat.remove();
+      }
+    }
+
+    async function __loadInventoryFilterValues(elements) {
+      let filterSelectFromOpt = elements.inventoryFilterSelectFrom.value;
+      let filterSelectWhatOpts = [];
+      switch (filterSelectFromOpt) {
+        case "1": //lab
+          console.log("LOADING INVENTORY FILTER VALUES (LABS)");
+          assert(localStorage.getItem("user_id"), "User ID is falsy");
+          let user_labs = await fetchLabsByUserId(Number(localStorage.getItem("user_id")), 0, 10);
+          for (let i = 0; i < user_labs.length; i++) {
+            assert(user_labs[i].lab_id, "lab_id is falsy");
+            assert(user_labs[i].name, "name is falsy");
+            filterSelectWhatOpts.push({
+              "name": user_labs[i].name,
+              "id": user_labs[i].lab_id
+            });
+          }
+          break;
+        case "2": //faculty
+          console.log("LOADING INVENTORY FILTER VALUES (FACULTIES)");
+          assert(localStorage.getItem("user_id"), "User ID is falsy");
+          let user_faculties = await fetchFacultiesByUserId(Number(localStorage.getItem("user_id")), 0, 10);
+          for (let i = 0; i < user_faculties.length; i++) {
+            assert(user_faculties[i].faculty_id, "faculty_id is falsy");
+            assert(user_faculties[i].name, "name is falsy");
+            filterSelectWhatOpts.push({
+              "name": user_faculties[i].name,
+              "id": user_faculties[i].faculty_id
+            });
+          }
+          break;
+        default:
+          assert(false, `Invalid filterSelectFromOpt "${filterSelectFromOpt}"`);
+          break;
+      }
+
+      console.log("filterSelectWhatOpts:", filterSelectWhatOpts);
+
+      __removeFilterValueElementIfExists();
+      elements.inventoryFilterSelectWhat = document.createElement("select");
+      elements.inventoryFilterSelectWhat.classList.add("form-select");
+      elements.inventoryFilterSelectWhat.classList.add("select2");
+      elements.inventoryFilterSelectWhat.setAttribute("aria-label", "Filter type");
+      elements.inventoryFilterSelectWhat.id = "inventoryFilterSelectWhat";
+      elements.inventoryFilterSelectWhat.required = true;
+      for (let i = 0; i < filterSelectWhatOpts.length; i++) {
+        let option = document.createElement("option");
+        option.value = filterSelectWhatOpts[i].id;
+        option.textContent = filterSelectWhatOpts[i].name;
+        elements.inventoryFilterSelectWhat.appendChild(option);
+      }
+      elements.inventoryFilterSelectFrom.after(elements.inventoryFilterSelectWhat);
+    }
+
+    async function __reloadInventoryList(elements) {
+      let filterSelectFromOpt = elements.inventoryFilterSelectFrom.value;
+      let filterSelectWhatOpt = elements.inventoryFilterSelectWhat.value;
+      let filterParam = "";
+      let filterValue = "";
+      let inventoryItems = [];
+      switch (filterSelectFromOpt) {
+        case "1": //lab
+          filterParam = "lid";
+          filterValue = Number(filterSelectWhatOpt);
+          assert(Number.isInteger(filterValue), "filterValue is not an integer");
+          inventoryItems = await fetchInventoryItemsByLabId(filterValue, 0, 10);
+          break;
+        case "2": //faculty
+          filterParam = "fid";
+          filterValue = Number(filterSelectWhatOpt);
+          assert(Number.isInteger(filterValue), "filterValue is not an integer");
+          inventoryItems = await fetchInventoryItemsByFacultyId(filterValue, 0, 10);
+          break;
+        default:
+          assert(false, `Invalid filterSelectFromOpt "${filterSelectFromOpt}"`);
+          break;
+      }
+      
+      console.log("Inventory items:", inventoryItems);
+      //clear the table
+      elements.inventoryTbody.innerHTML = "";
+      //refill the table
+      for (let i = 0; i < inventoryItems.length; i++) {
+        let tr = document.createElement("tr");
+        let tdEpc = document.createElement("td");
+        let tdDateAdded = document.createElement("td");
+        let tdDateExpire = document.createElement("td");
+        let tdOperations = document.createElement("td");
+        let writeTagButton = document.createElement("button");
+        let printLabelButton = document.createElement("button");
+        let trackButton = document.createElement("button");
+
+        tdEpc.textContent = inventoryItems[i].epc;
+        tdDateAdded.textContent = inventoryItems[i].date_added;
+        tdDateExpire.textContent = inventoryItems[i].date_expire;
+        writeTagButton.type = "button";
+        writeTagButton.classList.add("btn");
+        writeTagButton.classList.add("btn-sm");
+        writeTagButton.classList.add("btn-primary");
+        writeTagButton.classList.add("me-2");
+        writeTagButton.textContent = "write tag";
+        printLabelButton.type = "button";
+        printLabelButton.classList.add("btn");
+        printLabelButton.classList.add("btn-sm");
+        printLabelButton.classList.add("btn-secondary");
+        printLabelButton.classList.add("me-2");
+        printLabelButton.textContent = "print label";
+        trackButton.type = "button";
+        trackButton.classList.add("btn");
+        trackButton.classList.add("btn-sm");
+        trackButton.classList.add("btn-info");
+        trackButton.setAttribute("data-bs-toggle", "modal");
+        trackButton.setAttribute("data-bs-target", "#canvasModal");
+        trackButton.textContent = "Track";
+
+        tdOperations.appendChild(writeTagButton);
+        tdOperations.appendChild(printLabelButton);
+        tdOperations.appendChild(trackButton);
+
+        tr.appendChild(tdEpc);
+        tr.appendChild(tdDateAdded);
+        tr.appendChild(tdDateExpire);
+        tr.appendChild(tdOperations);
+
+        elements.inventoryTbody.appendChild(tr);
+        //TODO Set actions for buttons
+      }
+    }
+
     async function preloadContent(elements, reagentId) {
       let reagent = await fetchReagent(reagentId);
       assert(reagent, "reagent is falsy");  
@@ -685,11 +842,14 @@
         option.textContent = user_labs[i].name;
         elements.modalInventoryItemLabSelect.appendChild(option);
       }
+
+      await __loadInventoryFilterValues(elements);
+      await __reloadInventoryList(elements);
     }
 
     function __setActions_inventoryFormSubmission(elements, reagentId) {
       elements.modalInventoryItemForm
-      .addEventListener("submit", function (event) {
+      .addEventListener("submit", async function (event) {
         event.preventDefault();
         let epc = elements.modalInventoryItemEPC.value;
         let labId = Number(elements.modalInventoryItemLabSelect.value);
@@ -718,12 +878,31 @@
         elements.modalInventoryItemForm.reset();
 
         //Upload the inventory item
-        uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey);
+        await uploadInventoryItem(reagentId, dateAdded, dateExpire, labId, epc, apwd, kpwd, username, sesskey);
+
+        //Reload the inventory list
+        await __reloadInventoryList(elements);
+      });
+    }
+
+    function __setActions_inventoryFilterOptionsChange(elements) {
+      elements.inventoryFilterSelectFrom
+      .addEventListener("change", async function (event) {
+        await __loadInventoryFilterValues(elements);
+      });
+    }
+
+    function __setActions_inventoryFilterApply(elements) {
+      elements.applyInventoryFilterButton
+      .addEventListener("click", async function (event) {
+        await __reloadInventoryList(elements);
       });
     }
 
     function setActions(elements, reagentId) {
       __setActions_inventoryFormSubmission(elements, reagentId);
+      __setActions_inventoryFilterOptionsChange(elements);
+      __setActions_inventoryFilterApply(elements);
     }
 
     window.onload = async function() {

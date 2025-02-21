@@ -3402,7 +3402,7 @@ static int __lsapi_endpoint_inventory_items_post(h2o_handler_t* pH2oHandler, h2o
         yyjson_mut_arr_add_val(pInventoryItems, pInventoryItem);
     }
     // add inventory items array to root
-    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "inventory_items", pInventoryItems);
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "inventory-items", pInventoryItems);
 
     char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
     assert(respText != NULL);
