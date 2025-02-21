@@ -284,7 +284,7 @@
             </div>
             <div class="modal-body">
               <!-- Canvas Element -->
-              <canvas id="myCanvas" width="600" height="400" style="border: 1px solid #000;"></canvas>
+              <canvas id="labMapCanvas" width="600" height="400" style="border: 1px solid #000;"></canvas>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -391,6 +391,8 @@
         loadingSpinner: document.getElementById("loadingSpinner"),
         spinnerCaption: document.getElementById("spinnerCaption"),
         commentBoxUsername: document.getElementById("commentBoxUsername"),
+        canvasModal: document.getElementById("canvasModal"),
+        labMapCanvas: document.getElementById("labMapCanvas")
       }
     }
 
@@ -873,9 +875,16 @@
         trackButton.classList.add("btn");
         trackButton.classList.add("btn-sm");
         trackButton.classList.add("btn-info");
-        trackButton.setAttribute("data-bs-toggle", "modal");
-        trackButton.setAttribute("data-bs-target", "#canvasModal");
+        //trackButton.setAttribute("data-bs-toggle", "modal");
+        //trackButton.setAttribute("data-bs-target", "#canvasModal");
         trackButton.textContent = "Track";
+        trackButton.onclick = function() {
+          globals.tracking_lab_id = inventoryItems[i].lab_id;
+          globals.tracking_inventory_item_id = inventoryItems[i].inventory_item_id;
+
+          const cModal = new bootstrap.Modal('#canvasModal');
+          cModal.show();
+        }
 
         tdEpc.appendChild(ttEpc);
 
@@ -909,6 +918,10 @@
           }
         });
       }
+    }
+
+    function labMapCanvasHandler(elements, lab_id, inventory_item_id) {
+
     }
 
     async function preloadContent(elements, reagentId, username, sesskey) {
@@ -993,10 +1006,42 @@
       });
     }
 
+    function __drawCircle(context, x, y, radius, color) {
+      context.beginPath();
+      context.arc(x, y, radius, 0, 2 * Math.PI);
+      context.fillStyle = color;
+      context.fill();
+      context.stroke();
+    }
+
+    function __setActions_canvasModalOpen() {
+      globals.elements.canvasModal.addEventListener("show.bs.modal", function () {
+        let context = globals.elements.labMapCanvas.getContext("2d");
+        console.log(`Tracking - Lab ID: ${globals.tracking_lab_id}, Inventory item ID: ${globals.tracking_inventory_item_id}`);
+        // fill canvas with lab map (/labmaps/<lab_id>.jpeg)
+        let labMapImage = new Image();
+        labMapImage.onload = function() {
+          context.drawImage(labMapImage, 0, 0, globals.elements.labMapCanvas.width, globals.elements.labMapCanvas.height);
+          console.log(`canvas width: ${globals.elements.labMapCanvas.width}, height: ${globals.elements.labMapCanvas.height}`);
+          globals.__dot = function(x, y) {
+            __drawCircle(context, x, y, 5, "red");
+          }
+          console.log(globals);
+          globals.__dot(52, 190)
+          globals.__dot(192, 195) 
+          globals.__dot(357, 278) 
+          globals.__dot(422, 262)
+          globals.__dot(442, 227)
+        }
+        labMapImage.src = `/labmaps/${globals.tracking_lab_id}.jpeg`;
+      });
+    }
+
     function setActions(elements, reagentId, username, sesskey) {
       __setActions_inventoryFormSubmission(elements, reagentId);
       __setActions_inventoryFilterOptionsChange(elements);
       __setActions_inventoryFilterApply(elements, reagentId, username, sesskey);
+      __setActions_canvasModalOpen();
     }
 
     window.onload = async function() {
