@@ -57,7 +57,7 @@ def update_plot(frame):
         if var.get() == 1:  # Check if the checkbox is selected
             df = query_database(antno, epc)
             #df = df[df['rx_signal_strength'] >= 175] # Improve readability (skip zero values while still showing that the signal was lost)
-            plt.plot(df['time'], df['rx_signal_strength'], label=f'antno={antno}, epc={epc}')
+            plt.plot(df['time'], df['rx_signal_strength'], label=f'antno={antno}, epc={epc}', marker='o', linestyle='dashed')
     plt.legend(loc='upper left')
     plt.xlabel('Time')
     plt.ylabel('RX Signal Strength')
