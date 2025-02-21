@@ -236,7 +236,8 @@ static int ypdr200_frame_recv(ypdr200_frame_t* pFrameRcv, uhfman_ctx_t* pCtx, yp
         if (poll_rv == -1 || poll_rv == 0) {
             LOG_W("Error polling for response prolog: poll_rv=%d", poll_rv);
 #if UHFMAN_GREEDY_MODE == 0            
-            assert(0);
+            //assert(0);
+            LOG_E("Error polling for response prolog in greedy mode");
 #endif
             return YPDR200_FRAME_RECV_ERR_READ;
         } else if (!(pCtx->pollin_fd.revents & POLLIN)) {
