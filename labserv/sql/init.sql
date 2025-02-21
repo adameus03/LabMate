@@ -77,11 +77,10 @@ CREATE TABLE IF NOT EXISTS public.labs(
 
 CREATE TABLE IF NOT EXISTS public.basepoints(
 	basepoint_id serial4 NOT NULL,
-	x int4 NOT NULL,
-	y int4 NOT NULL,
-	z int4 NOT NULL,
+	x float4 NOT NULL,
+	y float4 NOT NULL,
+	z float4 NOT NULL,
 	is_virtual bool NOT NULL DEFAULT false,
-	lab_id int4 NOT NULL,
 	CONSTRAINT basepoints_pk PRIMARY KEY (basepoint_id)
 );
 
@@ -132,6 +131,15 @@ CREATE TABLE IF NOT EXISTS public.invm(
 	--ztb_flag bool DEFAULT false NOT NULL,
 	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc)
 	--FOREIGN KEY (antenna_id) REFERENCES public.antennas(antenna_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.localization_results(
+	"time" TIMESTAMPTZ NOT NULL,
+	inventory_epc TEXT NOT NULL,
+	x float4 NULL,
+	y float4 NULL,
+	z float4 NULL,
+	FOREIGN KEY (inventory_epc) REFERENCES public.inventory(epc)
 );
 
 -- Make the TimescaleDB extension available
@@ -194,5 +202,24 @@ begin
 	ELSE
 	 	RAISE NOTICE 'Hypertable invm already exists, not creating it again';
   END IF;
+END;
+$$;
+
+-- Create a hypertable for localization_results (time-series data with TimescaleDB)
+DO $$
+begin
+	-- Check if the localization_results table is already a hypertable
+	IF NOT EXISTS (
+		SELECT 1 
+		FROM timescaledb_information.hypertables 
+		WHERE hypertable_name = 'localization_results'
+	) THEN
+		-- Create the hypertable when we are sure it wasn't already created
+		RAISE NOTICE 'Creating hypertable localization_results';
+		PERFORM create_hypertable('localization_results', 'time');
+		RAISE NOTICE 'Hypertable localization_results created';
+	ELSE
+	 	RAISE NOTICE 'Hypertable localization_results already exists, not creating it again';
+	END IF;
 END;
 $$;
