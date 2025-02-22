@@ -134,4 +134,9 @@ int lsapi_endpoint_invm(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
  */
 int lsapi_endpoint_invm_bulk(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
+/**
+ * @brief Handle LSAPI Localize endpoint
+ */
+int lsapi_endpoint_localize(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
 #endif //LSAPI_H
