@@ -95,6 +95,26 @@ typedef struct db_invm {
   int rotator_kphi; // For future when antennas can rotate
 } db_invm_t;
 
+typedef struct db_basepoint {
+  int basepoint_id;
+  float x;
+  float y;
+  float z;
+  int is_virtual;
+  // Reading ext makes sense only if a request was made to get extended basepoints (e.g. with DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT_EXT filter). Otherwise you'll find garbage here.
+  struct _db_basepoint_ext {
+    char epc[25]; //TODO: Make this dynamic? But then memory initialization and freeing shall be implemented
+  } ext;
+} db_basepoint_t;
+
+typedef struct db_localization_result {
+  char* time;
+  char* inventory_epc;
+  float x;
+  float y;
+  float z;
+} db_localization_result_t;
+
 void db_user_free(db_user_t* pUser);
 void db_faculty_free(db_faculty_t* pFaculty);
 void db_reagent_type_free(db_reagent_type_t* pReagentType);
@@ -104,6 +124,8 @@ void db_vendor_free(db_vendor_t* pVendor);
 void db_inventory_item_free(db_inventory_item_t* pInventoryItem);
 void db_antenna_free(db_antenna_t* pAntenna);
 void db_invm_free(db_invm_t* pInvm);
+void db_basepoint_free(db_basepoint_t* pBasepoint);
+void db_localization_result_free(db_localization_result_t* pLocalizationResult);
 
 /**
  * @brief Create a new database driver instance
@@ -409,6 +431,78 @@ int db_invm_insert_ret(db_t* pDb,
 //                         const char* measurement_types[],
 //                         const char* rotator_kthetas[],
 //                         const char* rotator_kphis[],
-//                         db_invm_t** ppInvms_out);           
+//                         db_invm_t** ppInvms_out);
+
+int db_basepoint_insert(db_t* pDb, 
+                        const char* x, 
+                        const char* y, 
+                        const char* z, 
+                        const char* is_virtual);
+
+int db_basepoint_insert_ret(db_t* pDb, 
+                            const char* x, 
+                            const char* y, 
+                            const char* z, 
+                            const char* is_virtual, 
+                            db_basepoint_t* pBasepoint_out);
+
+int db_basepoint_get_by_id(db_t* pDb, const char* basepoint_id_in, db_basepoint_t* pBasepoint_out);
+
+int db_basepoints_get_total_count(db_t* pDb, int* pCount_out);
+
+typedef enum db_basepoint_filter_type {
+  DB_BASEPOINT_FILTER_TYPE_NONE,
+  DB_BASEPOINT_FILTER_TYPE_IS_VIRTUAL,
+  DB_BASEPOINT_FILTER_TYPE_LAB_ID,
+  DB_BASEPOINT_FILTER_TYPE_LID_VIRT,
+  DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT,
+  DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT_EXT // Extended with epc when returning items
+} db_basepoint_filter_type_t;
+
+int db_basepoints_read_page_filtered(db_t* pDb, 
+                                     const char* offset, 
+                                     const char* page_size, 
+                                     db_basepoint_t** ppBasepoints_out, 
+                                     int* pN_out, 
+                                     db_basepoint_filter_type_t filter_type, 
+                                     const char* filter_value);
+
+int db_localization_result_insert(db_t* pDb,
+                                  const char* time,
+                                  const char* inventory_epc,
+                                  const char* x,
+                                  const char* y,
+                                  const char* z);
+
+int db_localization_result_insert_bulk(db_t* pDb,
+                                       const size_t nLocalizationResults,
+                                       const char* times[],
+                                       const char* inventory_epcs[],
+                                       const char* xs[],
+                                       const char* ys[],
+                                       const char* zs[]);                                
+                                  
+int db_localization_result_insert_ret(db_t* pDb,
+                                      const char* time,
+                                      const char* inventory_epc,
+                                      const char* x,
+                                      const char* y,
+                                      const char* z,
+                                      db_localization_result_t* pLocalizationResult_out);                                                                        
+
+int db_localization_results_get_total_count(db_t* pDb, int* pCount_out);
+
+int db_localization_results_read_time_window(db_t* pDb, 
+                                             const char* start_time, 
+                                             const char* end_time, 
+                                             db_localization_result_t** ppLocalizationResults_out, 
+                                             int* pN_out);
+
+int db_localization_results_read_time_window_filtered_by_epc(db_t* pDb, 
+                                                             const char* start_time, 
+                                                             const char* end_time, 
+                                                             const char* epc, 
+                                                             db_localization_result_t** ppLocalizationResults_out, 
+                                                             int* pN_out);
 
 #endif // DB_H

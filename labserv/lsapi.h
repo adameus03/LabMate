@@ -139,4 +139,19 @@ int lsapi_endpoint_invm_bulk(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
  */
 int lsapi_endpoint_localize(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
 
+/**
+ * @brief Handle LSAPI basepoint endpoint
+ */
+int lsapi_endpoint_basepoint(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+//
+// @brief Handle LSAPI basepoints endpoint
+//
+// int lsapi_endpoint_basepoints(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
+/**
+ * @brief Handle LSAPI localization results endpoint
+ */
+int lsapi_endpoint_localization_results(h2o_handler_t* pH2oHandler, h2o_req_t* pReq);
+
 #endif //LSAPI_H

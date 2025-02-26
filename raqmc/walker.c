@@ -33,7 +33,8 @@ struct walker {
   //size_t antTabLen;
   puint8 flags;
   struct walker_transmit_readings_buffer_entry __wt_readings_buffer[__WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN];
-  size_t __wt_readings_buffer_len;
+  int64_t __wt_readings_buffer_len;
+  //int64_t __wt_sentry_ix; //start entry index
 };
 
 static int walker_flags_get_should_die(walker_t* pWalker) {
@@ -154,7 +155,10 @@ static size_t walker_libcurl_write_data_null(void *buffer, size_t size, size_t n
 }
 
 //TODO use async curl (multi interface) - then we need to memcpy the buffer first
-static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt) {
+/**
+ * @param flags - lsb: 1 when passing first entry in the cycle, 0 otherwise
+ */
+static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieIndex, const int antNo, const int txp, const int rssi, const int readRate, const int mt, const uint32_t flags) {
   assert(pWalker->__wt_readings_buffer_len < __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN);
   
   ///<debug>
@@ -163,6 +167,10 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     //assert(0 == ieIndex);
   }
   ///</debug>
+
+  // if (flags & 0x1U) {
+  //   pWalker->__wt_sentry_ix = pWalker->__wt_readings_buffer_len;
+  // }
   
   struct walker_transmit_readings_buffer_entry* pNewEntry = &pWalker->__wt_readings_buffer[pWalker->__wt_readings_buffer_len];
   pNewEntry->antNo = antNo;
@@ -198,7 +206,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
     yyjson_mut_obj_add_int(pJson, pRoot, "n_invms", (int64_t)pWalker->__wt_readings_buffer_len);
     yyjson_mut_val* pInvms = yyjson_mut_arr(pJson);
 
-    for (size_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
+    for (int64_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
       struct walker_transmit_readings_buffer_entry* pEntry = &pWalker->__wt_readings_buffer[i];
       yyjson_mut_val* pInvm = yyjson_mut_obj(pJson);
       yyjson_mut_obj_add_str(pJson, pInvm, "t", pEntry->timestamp);
@@ -211,10 +219,15 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
       yyjson_mut_obj_add_int(pJson, pInvm, "mtype", pEntry->mt);
       yyjson_mut_obj_add_int(pJson, pInvm, "rkt", -1); //TODO Future (ref @fgbefaw)
       yyjson_mut_obj_add_int(pJson, pInvm, "rkp", -1); //TODO Future (ref @awdfefe)
+
+      yyjson_mut_obj_add_bool(pJson, pInvm, "is_sentry", i == 0);
       // Add inventory management object to the array
       yyjson_mut_arr_add_val(pInvms, pInvm);
     }
     yyjson_mut_obj_add_val(pJson, pRoot, "invms", pInvms);
+    //yyjson_mut_obj_add_uint(pJson, pRoot, "sentry_ix", pWalker->__wt_sentry_ix);
+
+    //pWalker->__wt_sentry_ix = -1;
 
     LOG_V("walker_transmit_readings_buffered: Calling yyjson_mut_write");
     char* jsonText = yyjson_mut_write(pJson, 0, NULL);
@@ -257,7 +270,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
       }
     }
     
-    for (size_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
+    for (int64_t i = 0; i < pWalker->__wt_readings_buffer_len; i++) {
       struct walker_transmit_readings_buffer_entry* pEntry = &pWalker->__wt_readings_buffer[i];
       free(pEntry->timestamp);
       free(pEntry->epc);
@@ -566,7 +579,7 @@ static void* walker_task(void* pArg) {
         if (0 == rv) {
           LOG_V("walker_task: measurements_quick_perform() succeeded: ieIndex %d, antNo %d, txPower %d, rssi %d", ieIndex, antNo, txPower, rssi);
           //walker_transmit_readings(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
-          walker_transmit_readings_buffered(pWalker, ieIndex, antNo, txPower, rssi, -1, 0);
+          walker_transmit_readings_buffered(pWalker, ieIndex, antNo, txPower, rssi, -1, 0, (ieIndex == 0 && antNo == 0) ? 1U : 0U);
         } else if (-1 == rv) {
           should_break_inventory_looper = 1;
         } else if (-3 == rv) {

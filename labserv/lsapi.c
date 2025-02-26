@@ -10,9 +10,11 @@
 #include "log.h"
 #include "db.h"
 #include "oph.h"
+#include "tracker.h"
 
 struct lsapi {
     db_t* pDb;
+    tracker_t* pTracker;
 };
 
 lsapi_t* lsapi_new() {
@@ -34,10 +36,12 @@ void lsapi_init(lsapi_t* pLsapi) {
     assert(pLsapi != NULL);
     pLsapi->pDb = db_new();
     db_init(pLsapi->pDb);
+    pLsapi->pTracker = tracker_new(pLsapi->pDb);
 }
 
 void lsapi_deinit(lsapi_t* pLsapi) {
     assert(pLsapi != NULL);
+    tracker_free(pLsapi->pTracker);
     db_close(pLsapi->pDb);
     db_free(pLsapi->pDb);
 }
@@ -1059,6 +1063,31 @@ static int __lsapi_endpoint_reagtype_put(h2o_handler_t* pH2oHandler, h2o_req_t* 
     return 0;
 }
 
+/**
+ * @warning You need to free the returned buffer after use
+ */
+static char* __lsapi_itoa(int n) {
+    assert(sizeof(int) <= 4);
+    char* buf = (char*)malloc(12); // 12 bytes is enough for 32-bit int
+    if (buf == NULL) {
+        return NULL;
+    }
+    snprintf(buf, 12, "%d", n);
+    return buf;
+}
+
+/**
+ * @warning You need to free the returned buffer after use
+ */
+static char* __lsapi_dtoa(double d) {
+    char* buf = (char*)malloc(32); // 32 bytes should be enough for double
+    if (buf == NULL) {
+        return NULL;
+    }
+    snprintf(buf, 32, "%f", d);
+    return buf;
+}
+
 // TODO use it for user and reagent too for consistency (reagent is in enum, but not used in __lsapi_endpoint_reagent_get for now)
 typedef enum __lsapi_x_type {
     __LSAPI_X_TYPE_REAGTYPE,
@@ -1067,6 +1096,7 @@ typedef enum __lsapi_x_type {
     __LSAPI_X_TYPE_FACULTY,
     __LSAPI_X_TYPE_LAB,
     __LSAPI_X_TYPE_INVENTORY_ITEM,
+    __LSAPI_X_TYPE_BASEPOINT,
     __LSAPI_X_TYPE_ANTENNA,
 
     __LSAPI_X_TYPE__FIRST = __LSAPI_X_TYPE_REAGTYPE,
@@ -1098,6 +1128,9 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             break;
         case __LSAPI_X_TYPE_INVENTORY_ITEM:
             xName = "inventory_item";
+            break;
+        case __LSAPI_X_TYPE_BASEPOINT:
+            xName = "basepoint";
             break;
         case __LSAPI_X_TYPE_ANTENNA:
             xName = "antenna";
@@ -1237,6 +1270,10 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             pX = (void*)malloc(sizeof(db_inventory_item_t));
             rv = db_inventory_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_inventory_item_t*)pX);
             break;
+        case __LSAPI_X_TYPE_BASEPOINT:
+            pX = (void*)malloc(sizeof(db_basepoint_t));
+            rv = db_basepoint_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_basepoint_t*)pX);
+            break;
         case __LSAPI_X_TYPE_ANTENNA:
             pX = (void*)malloc(sizeof(db_antenna_t));
             rv = db_antenna_get_by_id(pLsapi->pDb, xIdParamValueNt, (db_antenna_t*)pX);
@@ -1346,6 +1383,20 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             yyjson_mut_obj_add_int(pJsonResp, pXObject, "lab_id", inventory_item.lab_id);
             yyjson_mut_obj_add_str(pJsonResp, pXObject, "epc", inventory_item.epc); // TODO remove to hide EPC from frontend?
             break;
+        case __LSAPI_X_TYPE_BASEPOINT:
+            db_basepoint_t basepoint = *((db_basepoint_t*)pX);
+            yyjson_mut_obj_add_int(pJsonResp, pXObject, "basepoint_id", basepoint.basepoint_id);
+            const char* xStr = __lsapi_dtoa(basepoint.x);
+            const char* yStr = __lsapi_dtoa(basepoint.y);
+            const char* zStr = __lsapi_dtoa(basepoint.z);
+            yyjson_mut_obj_add_strcpy(pJsonResp, pXObject, "x", xStr);
+            yyjson_mut_obj_add_strcpy(pJsonResp, pXObject, "y", yStr);
+            yyjson_mut_obj_add_strcpy(pJsonResp, pXObject, "z", zStr);
+            yyjson_mut_obj_add_bool(pJsonResp, pXObject, "is_virtual", (bool)basepoint.is_virtual);
+            free((void*)xStr);
+            free((void*)yStr);
+            free((void*)zStr);
+            break;
         case __LSAPI_X_TYPE_ANTENNA:
             db_antenna_t antenna = *((db_antenna_t*)pX);
             yyjson_mut_obj_add_int(pJsonResp, pXObject, "antenna_id", antenna.antenna_id);
@@ -1389,6 +1440,9 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
         case __LSAPI_X_TYPE_INVENTORY_ITEM:
             db_inventory_item_free((db_inventory_item_t*)pX);
             break;
+        case __LSAPI_X_TYPE_BASEPOINT:
+            db_basepoint_free((db_basepoint_t*)pX);
+            break;
         case __LSAPI_X_TYPE_ANTENNA:
             db_antenna_free((db_antenna_t*)pX);
             break;
@@ -1396,19 +1450,6 @@ static int __lsapi_endpoint_x_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, l
             assert(0);
     }
     return 0;
-}
-
-/**
- * @warning You need to free the returned buffer after use
- */
-static char* __lsapi_itoa(int n) {
-    assert(sizeof(int) <= 4);
-    char* buf = (char*)malloc(12); // 12 bytes is enough for 32-bit int
-    if (buf == NULL) {
-        return NULL;
-    }
-    snprintf(buf, 12, "%d", n);
-    return buf;
 }
 
 static int __lsapi_endpoint_reagtype_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
@@ -4064,6 +4105,11 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
         yyjson_doc_free(pJson);
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid n_invms (number of inventory measurements)");
     }
+    // yyjson_val* pSentryIx = yyjson_obj_get(pRoot, "sentry_ix");
+    // if (pSentryIx == NULL || !yyjson_is_int(pSentryIx)) {
+    //     yyjson_doc_free(pJson);
+    //     return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid sentry_ix (start entry index)");
+    // }
     yyjson_val* pLbToken = yyjson_obj_get(pRoot, "lbtoken");
     if (pLbToken == NULL || !yyjson_is_str(pLbToken)) {
         yyjson_doc_free(pJson);
@@ -4071,6 +4117,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
     }
 
     const int nInvms = yyjson_get_int(pNInvms);
+    //const int64_t sentryIx = (int64_t)yyjson_get_int(pSentryIx);
     const char* lbToken = yyjson_get_str(pLbToken);
 
     yyjson_val* pInvms = yyjson_obj_get(pRoot, "invms");
@@ -4099,6 +4146,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
     char** pMtypes = (char**)malloc(nInvms * sizeof(char*));
     char** pRkts = (char**)malloc(nInvms * sizeof(char*));
     char** pRkps = (char**)malloc(nInvms * sizeof(char*));
+    int* pIsSentryFlags = (int*)malloc(nInvms * sizeof(int));
 
     while ((pInvm = yyjson_arr_iter_next(&iter))) {
         assert(iter.idx-1 >= 0);
@@ -4209,6 +4257,15 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
             // free(pInvms_structs);
             return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid rkp (rotator kphi)");
         }
+        yyjson_val* pIsSentry = yyjson_obj_get(pInvm, "is_sentry");
+        if (pIsSentry == NULL || !yyjson_is_bool(pIsSentry)) {
+            yyjson_doc_free(pJson);
+            // for (int i = 0; i < iter.idx-1; i++) {
+            //     db_invm_free(&pInvms_structs[i]);
+            // }
+            // free(pInvms_structs);
+            return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid is_sentry (is sentry flag)");
+        }
 
         const char* t = yyjson_get_str(pT);
         const char* epc = yyjson_get_str(pEpc);
@@ -4220,6 +4277,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
         int mtype = yyjson_get_int(pMType);
         int rkt = yyjson_get_int(pRkt);
         int rkp = yyjson_get_int(pRkp);
+        bool isSentry = yyjson_get_bool(pIsSentry);
 
         assert(t != NULL);
         assert(epc != NULL);
@@ -4254,7 +4312,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
         pMtypes[iter.idx-1] = mtype_str;
         pRkts[iter.idx-1] = rkt_str;
         pRkps[iter.idx-1] = rkp_str;
-        
+        pIsSentryFlags[iter.idx-1] = isSentry ? 1 : 0;
     }
 
     LOG_V("__lsapi_endpoint_invm_bulk_put_optimized: iter.idx=%d, nInvms=%d", iter.idx, nInvms);
@@ -4286,11 +4344,43 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
         free(pMtypes);
         free(pRkts);
         free(pRkps);
+        free(pIsSentryFlags);
         return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Provided fewer inventory measurements than specified by n_invms");
     }
 
+    // Pass data to tracking module for synchronous processing
+    int rv = tracker_process_data_buffered(pLsapi->pTracker, nInvms, (const char**)pTimes, (const char**)pEpcs, (const char**)pAntnos, (const char**)pRxsss, (const char**)pRxrates, (const char**)pTxps, (const char**)pRxlats, (const char**)pMtypes, (const char**)pRkts, (const char**)pRkps, pIsSentryFlags); // TODO should we even  still store the original measurements in the database? - we should probably get rid of the invm table? For debugging reasons it can be useful however.
+    if (0 != rv) {
+        LOG_E("__lsapi_endpoint_invm_bulk_put_optimized: Failed to process inventory measurements, tracker_process_data_buffered failed with rv=%d", rv);
+        yyjson_doc_free(pJson);
+        for (int i = 0; i < nInvms; i++) {
+            free(pTimes[i]);
+            free(pEpcs[i]);
+            free(pAntnos[i]);
+            free(pRxsss[i]);
+            free(pRxrates[i]);
+            free(pTxps[i]);
+            free(pRxlats[i]);
+            free(pMtypes[i]);
+            free(pRkts[i]);
+            free(pRkps[i]);
+        }
+        free(pTimes);
+        free(pEpcs);
+        free(pAntnos);
+        free(pRxsss);
+        free(pRxrates);
+        free(pTxps);
+        free(pRxlats);
+        free(pMtypes);
+        free(pRkts);
+        free(pRkps);
+        free(pIsSentryFlags);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to process inventory measurements");
+    }
+
     // insert inventory measurements
-    int rv = db_invm_insert_bulk(pLsapi->pDb, nInvms, (const char**)pTimes, (const char**)pEpcs, (const char**)pAntnos, (const char**)pRxsss, (const char**)pRxrates, (const char**)pTxps, (const char**)pRxlats, (const char**)pMtypes, (const char**)pRkts, (const char**)pRkps);
+    rv = db_invm_insert_bulk(pLsapi->pDb, nInvms, (const char**)pTimes, (const char**)pEpcs, (const char**)pAntnos, (const char**)pRxsss, (const char**)pRxrates, (const char**)pTxps, (const char**)pRxlats, (const char**)pMtypes, (const char**)pRkts, (const char**)pRkps);
     if (0 != rv) {
         yyjson_doc_free(pJson);
         // for (int i = 0; i < nInvms; i++) {
@@ -4319,6 +4409,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
         free(pMtypes);
         free(pRkts);
         free(pRkps);
+        free(pIsSentryFlags);
         return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to insert inventory measurements");
     }
 
@@ -4372,6 +4463,7 @@ static int __lsapi_endpoint_invm_bulk_put_optimized(h2o_handler_t* pH2oHandler, 
     free(pMtypes);
     free(pRkts);
     free(pRkps);
+    free(pIsSentryFlags);
     return 0;
 }
 
@@ -4718,6 +4810,7 @@ int lsapi_endpoint_invm_bulk(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
 }
 
 // curl -X POST -d '{...}'
+//Trigger localization on request (TODO abandon this endpoint in favor of continuous localization with tracker and the localization_results endpoint / websockets?)
 static int __lsapi_endpoint_localize_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
     assert(pH2oHandler != NULL);
     assert(pReq != NULL);
@@ -4731,6 +4824,362 @@ int lsapi_endpoint_localize(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
     lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
     if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
         return __lsapi_endpoint_localize_post(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+// TODO add missing RBAC authorizations...
+// curl -X PUT -d '{"x": <x>, "y": <y>, "z": <z>, "is_virtual": <is_virtual>, "username": "<username>", "session_key": "<sesskey>"}' http://localhost:7890/api/basepoint
+static int __lsapi_endpoint_basepoint_put(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pX = yyjson_obj_get(pRoot, "x");
+    if (pX == NULL || !yyjson_is_num(pX)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid x");
+    }
+    yyjson_val* pY = yyjson_obj_get(pRoot, "y");
+    if (pY == NULL || !yyjson_is_num(pY)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid y");
+    }
+    yyjson_val* pZ = yyjson_obj_get(pRoot, "z");
+    if (pZ == NULL || !yyjson_is_num(pZ)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid z");
+    }
+    yyjson_val* pIsVirtual = yyjson_obj_get(pRoot, "is_virtual");
+    if (pIsVirtual == NULL || !yyjson_is_bool(pIsVirtual)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid is_virtual");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pSessionKey = yyjson_obj_get(pRoot, "session_key");
+    if (pSessionKey == NULL || !yyjson_is_str(pSessionKey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid session_key");
+    }
+
+    const double x = yyjson_get_num(pX);
+    const double y = yyjson_get_num(pY);
+    const double z = yyjson_get_num(pZ);
+    const bool isVirtual = yyjson_get_bool(pIsVirtual);
+    const char* username = yyjson_get_str(pUsername);
+    const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
+
+    assert(username != NULL && userProvidedSessionKey != NULL);
+
+    // get user data from database so that we can verify the session key
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            LOG_W("__lsapi_endpoint_basepoint_put: Username %s does not match any user", username);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "The given username does not match any user");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        LOG_W("__lsapi_endpoint_basepoint_put: User %s has no session key set", username);
+        db_user_free(&user);
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "User has no session key set");
+    }
+
+    char* xStr = __lsapi_dtoa(x);
+    char* yStr = __lsapi_dtoa(y);
+    char* zStr = __lsapi_dtoa(z);
+    char* isVirtualStr = isVirtual ? "true" : "false";
+
+    // verify session key
+    char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
+    assert(user.sesskey_hash != NULL);
+    assert(strlen(user.sesskey_hash) == BCRYPT_HASHSIZE - 4);
+    assert(user.sesskey_salt != NULL);
+    assert(strlen(user.sesskey_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+
+    assert(0 == bcrypt_hashpw(userProvidedSessionKey, user.sesskey_salt, userProvidedSessionKeyHash));
+    assert(userProvidedSessionKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedSessionKeyHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_basepoint_put: user-provided session key: %s", userProvidedSessionKey);
+    LOG_V("__lsapi_endpoint_basepoint_put: userProvidedSessionKeyHash: %s, user.sesskey_hash: %s, user.sesskey_salt: %s", userProvidedSessionKeyHash, user.sesskey_hash, user.sesskey_salt);
+
+    if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        db_user_free(&user);
+        free((void*)xStr);
+        free((void*)yStr);
+        free((void*)zStr);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
+    }
+
+    // create basepoint + get basepoint data from database so that we can include it in the http response
+    db_basepoint_t basepoint;
+    if (0 != db_basepoint_insert_ret(pLsapi->pDb, xStr, yStr, zStr, isVirtualStr, &basepoint)) {
+        yyjson_doc_free(pJson);
+        db_user_free(&user);
+        free((void*)xStr);
+        free((void*)yStr);
+        free((void*)zStr);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to insert basepoint");
+    }
+
+    free((void*)xStr);
+    free((void*)yStr);
+    free((void*)zStr);
+    xStr = __lsapi_dtoa(basepoint.x);
+    yStr = __lsapi_dtoa(basepoint.y);
+    zStr = __lsapi_dtoa(basepoint.z);
+    isVirtualStr = basepoint.is_virtual ? "true" : "false";
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Basepoint inserted successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add basepoint data as sub-object
+    yyjson_mut_val* pBasepoint = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_obj_add_str(pJsonResp, pBasepoint, "x", xStr);
+    yyjson_mut_obj_add_str(pJsonResp, pBasepoint, "y", yStr);
+    yyjson_mut_obj_add_str(pJsonResp, pBasepoint, "z", zStr);
+    yyjson_mut_obj_add_str(pJsonResp, pBasepoint, "is_virtual", isVirtualStr);
+    // add basepoint object to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "basepoint", pBasepoint);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    db_user_free(&user);
+    db_basepoint_free(&basepoint);
+    return 0;
+}
+
+static int __lsapi_endpoint_basepoint_get(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    return __lsapi_endpoint_x_get(pH2oHandler, pReq, pLsapi, __LSAPI_X_TYPE_BASEPOINT);
+}
+
+int lsapi_endpoint_basepoint(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("PUT"))) {
+        return __lsapi_endpoint_basepoint_put(pH2oHandler, pReq, pLsapi);
+    } else if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("GET"))) {
+        return __lsapi_endpoint_basepoint_get(pH2oHandler, pReq, pLsapi);
+    } else {
+        return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
+    }
+}
+
+//TODO add RBAC here and also for other handlers like this
+//TODO limit read size to prevent abuse?
+//TODO handle yyjson return bools?
+// curl -X POST -d '{timeFrom: "<timeFrom>", timeTo: "<timeTo>", epc: "<epc>", username: "<username>", "session_key": "<sesskey>"}' http://localhost:7890/api/localization_results
+static int __lsapi_endpoint_localization_results_post(h2o_handler_t* pH2oHandler, h2o_req_t* pReq, lsapi_t* pLsapi) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    assert(pLsapi != NULL);
+    yyjson_doc* pJson = yyjson_read(pReq->entity.base, pReq->entity.len, 0);
+    if (pJson == NULL) {
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Invalid JSON");
+    }
+    yyjson_val* pRoot = yyjson_doc_get_root(pJson);
+    if (pRoot == NULL || !yyjson_is_obj(pRoot)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing JSON root object");
+    }
+    yyjson_val* pTimeFrom = yyjson_obj_get(pRoot, "timeFrom");
+    if (pTimeFrom == NULL || !yyjson_is_str(pTimeFrom)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid timeFrom");
+    }
+    yyjson_val* pTimeTo = yyjson_obj_get(pRoot, "timeTo");
+    if (pTimeTo == NULL || !yyjson_is_str(pTimeTo)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid timeTo");
+    }
+    yyjson_val* pEpc = yyjson_obj_get(pRoot, "epc");
+    if (pEpc == NULL || !yyjson_is_str(pEpc)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid epc");
+    }
+    yyjson_val* pUsername = yyjson_obj_get(pRoot, "username");
+    if (pUsername == NULL || !yyjson_is_str(pUsername)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid username");
+    }
+    yyjson_val* pSessionKey = yyjson_obj_get(pRoot, "session_key");
+    if (pSessionKey == NULL || !yyjson_is_str(pSessionKey)) {
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 400, "Bad Request", "Missing or invalid session_key");
+    }
+
+    const char* timeFrom = yyjson_get_str(pTimeFrom);
+    const char* timeTo = yyjson_get_str(pTimeTo);
+    const char* epc = yyjson_get_str(pEpc);
+    const char* username = yyjson_get_str(pUsername);
+    const char* userProvidedSessionKey = yyjson_get_str(pSessionKey);
+
+    assert(timeFrom != NULL);
+    assert(timeTo != NULL);
+    assert(epc != NULL);
+    assert(username != NULL);
+    assert(userProvidedSessionKey != NULL);
+
+    // get user data from database so that we can verify the session key
+    db_user_t user;
+    int rv = db_user_get_by_username(pLsapi->pDb, username, &user);
+    if (0 != rv) {
+        if (rv == -2) {
+            LOG_W("__lsapi_endpoint_localization_results_post: Username %s does not match any user", username);
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 404, "Not Found", "The given username does not match any user");
+        } else {
+            yyjson_doc_free(pJson);
+            return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get user data from database");
+        }
+    }
+
+    if (0 == strlen(user.sesskey_hash)) {
+        LOG_W("__lsapi_endpoint_localization_results_post: User %s has no session key set", username);
+        db_user_free(&user);
+        yyjson_doc_free(pJson);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "User has no session key set");
+    }
+
+    // TODO extract verification into a middleware function? (same in other handlers)
+    // verify session key
+    char userProvidedSessionKeyHash[BCRYPT_HASHSIZE];
+    assert(user.sesskey_hash != NULL);
+    assert(strlen(user.sesskey_hash) == BCRYPT_HASHSIZE - 4);
+    assert(user.sesskey_salt != NULL);
+    assert(strlen(user.sesskey_salt) == (BCRYPT_HASHSIZE - 4)/2 - 1);
+
+    assert(0 == bcrypt_hashpw(userProvidedSessionKey, user.sesskey_salt, userProvidedSessionKeyHash));
+    assert(userProvidedSessionKeyHash[BCRYPT_HASHSIZE - 4] == '\0');
+    assert(strlen(userProvidedSessionKeyHash) == BCRYPT_HASHSIZE - 4);
+    LOG_V("__lsapi_endpoint_localization_results_post: user-provided session key: %s", userProvidedSessionKey);
+    LOG_V("__lsapi_endpoint_localization_results_post: userProvidedSessionKeyHash: %s, user.sesskey_hash: %s, user.sesskey_salt: %s", userProvidedSessionKeyHash, user.sesskey_hash, user.sesskey_salt);
+
+    if (0 != strcmp(userProvidedSessionKeyHash, user.sesskey_hash)) {
+        yyjson_doc_free(pJson);
+        db_user_free(&user);
+        return __lsapi_endpoint_error(pReq, 403, "Forbidden", "Invalid session key");
+    }
+
+    // get localization results data from database so that we can include it in the http response
+    db_localization_result_t* pLocalizationResults = NULL;
+    int nLocalizationResults = 0;
+    rv = db_localization_results_read_time_window_filtered_by_epc(pLsapi->pDb, timeFrom, timeTo, epc, &pLocalizationResults, &nLocalizationResults);
+    if (0 != rv) {
+        // if (rv == -2) {
+        //     LOG_W("__lsapi_endpoint_localization_results_post: EPC %s does not match any localization results", epc);
+        //     yyjson_doc_free(pJson);
+        //     db_user_free(&user);
+        //     return __lsapi_endpoint_error(pReq, 404, "Not Found", "The given epc does not match any localization results");
+        // } else {
+        //     yyjson_doc_free(pJson);
+        //     db_user_free(&user);
+        //     return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get localization results data from database");
+        // }
+        LOG_E("__lsapi_endpoint_localization_results_post: db_localization_results_read_time_window_filtered_by_epc failed with rv=%d", rv);
+        yyjson_doc_free(pJson);
+        db_user_free(&user);
+        return __lsapi_endpoint_error(pReq, 500, "Internal Server Error", "Failed to get localization results data from database");
+    }
+
+    static h2o_generator_t generator = {NULL, NULL};
+    pReq->res.status = 200;
+    pReq->res.reason = "OK";
+    h2o_add_header(&pReq->pool, &pReq->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("application/json"));
+    h2o_start_response(pReq, &generator);
+
+    const char* status = "success";
+    const char* message = "Localization results read successfully";
+
+    // create json response
+    yyjson_mut_doc* pJsonResp = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val* pRootResp = yyjson_mut_obj(pJsonResp);
+    yyjson_mut_doc_set_root(pJsonResp, pRootResp);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "status", status);
+    yyjson_mut_obj_add_str(pJsonResp, pRootResp, "message", message);
+    // add localization results data as an array
+    yyjson_mut_val* pLocalizationResultsArr = yyjson_mut_arr(pJsonResp);
+    for (int i = 0; i < nLocalizationResults; i++) {
+        yyjson_mut_val* pLocalizationResult = yyjson_mut_obj(pJsonResp);
+        yyjson_mut_obj_add_str(pJsonResp, pLocalizationResult, "t", pLocalizationResults[i].time);
+        yyjson_mut_obj_add_str(pJsonResp, pLocalizationResult, "epc", pLocalizationResults[i].inventory_epc);
+        const char* xStr = __lsapi_dtoa(pLocalizationResults[i].x);
+        const char* yStr = __lsapi_dtoa(pLocalizationResults[i].y);
+        const char* zStr = __lsapi_dtoa(pLocalizationResults[i].z);
+        yyjson_mut_obj_add_strcpy(pJsonResp, pLocalizationResult, "x", xStr);
+        yyjson_mut_obj_add_strcpy(pJsonResp, pLocalizationResult, "y", yStr);
+        yyjson_mut_obj_add_strcpy(pJsonResp, pLocalizationResult, "z", zStr);
+        free((void*)xStr);
+        free((void*)yStr);
+        free((void*)zStr);
+        yyjson_mut_arr_add_val(pLocalizationResultsArr, pLocalizationResult);
+    }
+    // add localization results array to root
+    yyjson_mut_obj_add_val(pJsonResp, pRootResp, "localization-results", pLocalizationResultsArr);
+
+    char* respText = yyjson_mut_write(pJsonResp, 0, NULL);
+    assert(respText != NULL);
+    h2o_iovec_t body = h2o_strdup(&pReq->pool, respText, SIZE_MAX);
+    h2o_send(pReq, &body, 1, 1);
+
+    free((void*)respText);
+    yyjson_doc_free(pJson);
+    yyjson_mut_doc_free(pJsonResp);
+    assert(pLocalizationResults != NULL);
+    for (int i = 0; i < nLocalizationResults; i++) {
+        db_localization_result_free(&pLocalizationResults[i]);
+    }
+    free(pLocalizationResults);
+    db_user_free(&user);
+    return 0;
+}
+
+int lsapi_endpoint_localization_results(h2o_handler_t* pH2oHandler, h2o_req_t* pReq) {
+    assert(pH2oHandler != NULL);
+    assert(pReq != NULL);
+    lsapi_t* pLsapi = __lsapi_self_from_h2o_handler(pH2oHandler);
+    if (h2o_memis(pReq->method.base, pReq->method.len, H2O_STRLIT("POST"))) {
+        return __lsapi_endpoint_localization_results_post(pH2oHandler, pReq, pLsapi);
     } else {
         return __lsapi_endpoint_error(pReq, 405, "Method Not Allowed", "Method Not Allowed");
     }

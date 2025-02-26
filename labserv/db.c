@@ -421,7 +421,18 @@ void db_antenna_free(db_antenna_t* pAntenna) {
 }
 void db_invm_free(db_invm_t* pInvm) {
   assert(pInvm != NULL);
+  free(pInvm->time);
   free(pInvm->inventory_epc);
+}
+
+void db_basepoint_free(db_basepoint_t* pBasepoint) {
+  assert(pBasepoint != NULL);
+}
+
+void db_localization_result_free(db_localization_result_t* pLocalizationResult) {
+  assert(pLocalizationResult != NULL);
+  free(pLocalizationResult->time);
+  free(pLocalizationResult->inventory_epc);
 }
 
 void db_init(db_t* pDb) {
@@ -479,6 +490,8 @@ typedef enum __db_x_type {
     __DB_X_TYPE_FACULTY,
     __DB_X_TYPE_LAB,
     __DB_X_TYPE_INVENTORY_ITEM,
+    __DB_X_TYPE_BASEPOINT,
+    __DB_X_TYPE_LOCALIZATION_RESULT,
     __DB_X_TYPE_ANTENNA,
 
     __DB_X_TYPE__FIRST = __DB_X_TYPE_REAGTYPE,
@@ -2613,4 +2626,539 @@ int db_invm_insert_ret(db_t* pDb,
   PQclear(pResult);
   __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
   return 0; // Success
+}
+
+int db_basepoint_insert(db_t* pDb, 
+                        const char* x, 
+                        const char* y, 
+                        const char* z, 
+                        const char* is_virtual) {
+  assert(pDb != NULL);
+  assert(x != NULL);
+  assert(y != NULL);
+  assert(z != NULL);
+  assert(is_virtual != NULL);
+  const char* pQuery = "INSERT INTO public.basepoints (x, y, z, is_virtual) VALUES ($1, $2, $3, $4)";
+  const char* pParams[4] = {x, y, z, is_virtual};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 4, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_basepoint_insert: Failed to insert basepoint (x \"%s\", y \"%s\" z \"%s\"): %s", x, y, z, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_basepoint_t db_basepoint_clone(db_basepoint_t dbBasepoint) {
+  return (db_basepoint_t) {
+    .basepoint_id = dbBasepoint.basepoint_id,
+    .x = dbBasepoint.x,
+    .y = dbBasepoint.y,
+    .z = dbBasepoint.z,
+    .is_virtual = dbBasepoint.is_virtual
+  };
+}
+
+int db_basepoint_insert_ret(db_t* pDb, 
+                            const char* x, 
+                            const char* y, 
+                            const char* z, 
+                            const char* is_virtual, 
+                            db_basepoint_t* pBasepoint_out) {
+  assert(pDb != NULL);
+  assert(x != NULL);
+  assert(y != NULL);
+  assert(z != NULL);
+  assert(is_virtual != NULL);
+  assert(pBasepoint_out != NULL);
+  const char* pQuery = "INSERT INTO public.basepoints (x, y, z, is_virtual) VALUES ($1, $2, $3, $4) RETURNING *";
+  const char* pParams[4] = {x, y, z, is_virtual};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 4, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_basepoint_insert_ret: Failed to ret-insert basepoint (x \"%s\", y \"%s\" z \"%s\"): %s", x, y, z, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_basepoint_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_basepoint_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_basepoint_t basepoint;
+  basepoint.basepoint_id = atoi(PQgetvalue(pResult, 0, 0));
+  basepoint.x = atof(PQgetvalue(pResult, 0, 1));
+  basepoint.y = atof(PQgetvalue(pResult, 0, 2));
+  basepoint.z = atof(PQgetvalue(pResult, 0, 3));
+  basepoint.is_virtual = PQgetvalue(pResult, 0, 4)[0] == 't' ? 1 : 0;
+
+  *pBasepoint_out = db_basepoint_clone(basepoint);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+static int db_basepoint_get_by_x(db_t* pDb,
+                                 const char* pQuery,
+                                 const char** pParams,
+                                 int nParams,
+                                 db_basepoint_t* pBasepoint_out) {
+  assert(pDb != NULL);
+  assert(pQuery != NULL);
+  assert(pParams != NULL);
+  assert(nParams > 0);
+  assert(pBasepoint_out != NULL);
+
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 1, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_basepoint_get_by_x: Failed to get basepoint: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  if (PQntuples(pResult) == 0) {
+    LOG_I("db_basepoint_get_by_x: No basepoint found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -2; // No basepoint found
+  }
+  if (PQntuples(pResult) > 1) {
+    LOG_I("db_basepoint_get_by_x: Multiple basepoints found");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3; // Multiple basepoints found
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_basepoint_get_by_x: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+
+  db_basepoint_t basepoint;
+  basepoint.basepoint_id = atoi(PQgetvalue(pResult, 0, 0));
+  basepoint.x = atof(PQgetvalue(pResult, 0, 1));
+  basepoint.y = atof(PQgetvalue(pResult, 0, 2));
+  basepoint.z = atof(PQgetvalue(pResult, 0, 3));
+  basepoint.is_virtual = PQgetvalue(pResult, 0, 4)[0] == 't' ? 1 : 0;
+
+  *pBasepoint_out = db_basepoint_clone(basepoint);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_basepoint_get_by_id(db_t* pDb, const char* basepoint_id_in, db_basepoint_t* pBasepoint_out) {
+  assert(pDb != NULL);
+  assert(basepoint_id_in > 0);
+  assert(pBasepoint_out != NULL);
+  const char* pQuery = "SELECT * FROM public.basepoints WHERE basepoint_id = $1";
+  const char* pParams[1] = {basepoint_id_in};
+  return db_basepoint_get_by_x(pDb, pQuery, pParams, 1, pBasepoint_out);
+}
+
+int db_basepoints_get_total_count(db_t* pDb, int* pCount_out) {
+  return db_x_get_total_count(pDb, pCount_out, __DB_X_TYPE_BASEPOINT);
+}
+
+int db_basepoints_read_page_filtered(db_t* pDb, 
+                                     const char* offset, 
+                                     const char* page_size, 
+                                     db_basepoint_t** ppBasepoints_out, 
+                                     int* pN_out, 
+                                     db_basepoint_filter_type_t filter_type, 
+                                     const char* filter_value) {
+  assert(pDb != NULL);
+  assert(offset != NULL);
+  assert(page_size != NULL);
+  assert(ppBasepoints_out != NULL);
+  assert(pN_out != NULL);
+  assert(filter_value != NULL);
+  const char* pQuery = NULL;
+  switch (filter_type) {
+    case DB_BASEPOINT_FILTER_TYPE_NONE:
+      pQuery = "SELECT * FROM public.basepoints WHERE $1 = $1 ORDER BY basepoint_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_BASEPOINT_FILTER_TYPE_IS_VIRTUAL:
+      pQuery = "SELECT * FROM public.basepoints WHERE is_virtual = $1 ORDER BY basepoint_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_BASEPOINT_FILTER_TYPE_LAB_ID:
+      pQuery = "SELECT b.* FROM public.basepoints b JOIN public.inventory i ON b.basepoint_id = i.basepoint_id WHERE i.lab_id = $1 ORDER BY b.basepoint_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_BASEPOINT_FILTER_TYPE_LID_VIRT:
+      pQuery = "SELECT b.* FROM public.basepoints b JOIN public.inventory i ON b.basepoint_id = i.basepoint_id WHERE i.lab_id = $1 AND b.is_virtual ORDER BY b.basepoint_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT:
+      pQuery = "SELECT b.* FROM public.basepoints b JOIN public.inventory i ON b.basepoint_id = i.basepoint_id WHERE i.lab_id = $1 AND NOT b.is_virtual ORDER BY b.basepoint_id OFFSET $2 LIMIT $3";
+      break;
+    case DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT_EXT:
+      pQuery = "SELECT b.*, i.epc FROM public.basepoints b JOIN public.inventory i ON b.basepoint_id = i.basepoint_id WHERE i.lab_id = $1 AND NOT b.is_virtual ORDER BY b.basepoint_id OFFSET $2 LIMIT $3";
+      break;
+    default:
+      LOG_E("db_basepoints_read_page_filtered: Unexpected filter type: %d", filter_type);
+      exit(EXIT_FAILURE);
+  }
+  const char* pParams[3] = {filter_value, offset, page_size};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_basepoints_read_page_filtered: Failed to read basepoints page: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_basepoints_read_page_filtered: No basepoints found");
+    //PQclear(pResult);
+    //__db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    //return -2; // No basepoints found
+  }
+  if (filter_type == DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT_EXT) {
+    if (PQnfields(pResult) != 6) {
+      LOG_E("db_basepoints_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    if (PQnfields(pResult) != 5) {
+      LOG_E("db_basepoints_read_page_filtered: Unexpected number of fields in result: %d", PQnfields(pResult));
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      exit(EXIT_FAILURE);
+    }
+  }
+  
+  db_basepoint_t* pBasepoints = malloc(nTuples * sizeof(db_basepoint_t));                
+  if (pBasepoints == NULL) {
+    LOG_E("db_basepoints_read_page_filtered: Failed to allocate memory for basepoints");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pBasepoints[i].basepoint_id = atoi(PQgetvalue(pResult, i, 0));
+    pBasepoints[i].x = atof(PQgetvalue(pResult, i, 1));
+    pBasepoints[i].y = atof(PQgetvalue(pResult, i, 2));
+    pBasepoints[i].z = atof(PQgetvalue(pResult, i, 3));
+    pBasepoints[i].is_virtual = PQgetvalue(pResult, i, 4)[0] == 't' ? 1 : 0;
+
+  }
+  if (filter_type == DB_BASEPOINT_FILTER_TYPE_LID_NONVIRT_EXT) {
+    for (int i = 0; i < nTuples; i++) {
+      const char* epc = PQgetvalue(pResult, i, 5);
+      assert(pBasepoints[i].ext.epc == strncpy(pBasepoints[i].ext.epc, epc, 24)); // TODO make dynamic?
+      pBasepoints[i].ext.epc[24] = '\0';
+    }
+  }
+  *ppBasepoints_out = pBasepoints;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;  
+}
+
+int db_localization_result_insert(db_t* pDb,
+                                  const char* time,
+                                  const char* inventory_epc,
+                                  const char* x,
+                                  const char* y,
+                                  const char* z) {
+  assert(pDb != NULL);
+  assert(time != NULL);
+  assert(inventory_epc != NULL);
+  assert(x != NULL);
+  assert(y != NULL);
+  assert(z != NULL);
+  const char* pQuery = "INSERT INTO public.localization_results (time, inventory_epc, x, y, z) VALUES ($1, $2, $3, $4, $5)";
+  const char* pParams[5] = {time, inventory_epc, x, y, z};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 5, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_COMMAND_OK != PQresultStatus(pResult)) {
+    LOG_E("db_localization_result_insert: Failed to insert localization result (time \"%s\"): %s", time, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+#define __DB_LOCALIZATION_RESULT_INSERT_BULK_MAX 1024
+int db_localization_result_insert_bulk(db_t* pDb,
+                                       const size_t nLocalizationResults,
+                                       const char* times[],
+                                       const char* inventory_epcs[],
+                                       const char* xs[],
+                                       const char* ys[],
+                                       const char* zs[]) {
+  assert(pDb != NULL);
+  assert(nLocalizationResults > 0);
+  assert(times != NULL);
+  assert(inventory_epcs != NULL);
+  assert(xs != NULL);
+  assert(ys != NULL);
+  assert(zs != NULL);
+  for (size_t i = 0; i < nLocalizationResults; i++) {
+    assert(times[i] != NULL);
+    assert(inventory_epcs[i] != NULL);
+    assert(xs[i] != NULL);
+    assert(ys[i] != NULL);
+    assert(zs[i] != NULL);
+  }
+  const char* pQuery = "COPY public.localization_results (time, inventory_epc, x, y, z) FROM STDIN";
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexec(pDbConnection->pConn, pQuery);
+  if (PGRES_COPY_IN != PQresultStatus(pResult)) {
+    LOG_E("db_localization_result_insert_bulk: Failed to start bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+
+  //Stream data
+  for (size_t i = 0; i < nLocalizationResults; i++) {
+    size_t timeStrlen = strlen(times[i]);
+    size_t epcStrlen = strlen(inventory_epcs[i]);
+    size_t xStrlen = strlen(xs[i]);
+    size_t yStrlen = strlen(ys[i]);
+    size_t zStrlen = strlen(zs[i]);
+    
+    size_t lineStrlen = timeStrlen + epcStrlen + xStrlen + yStrlen + zStrlen + 10;
+    char* line = (char*)malloc(lineStrlen + 1);
+    line[lineStrlen] = '\0';
+    if (line == NULL) {
+      LOG_E("db_localization_result_insert_bulk: Failed to allocate memory for line");
+      if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to allocate memory for line")) {
+        LOG_E("db_localization_result_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+      }
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      return -1;
+    }
+    int rv = snprintf(line, lineStrlen+1, "%s\t%s\t%s\t%s\t%s\n", times[i], inventory_epcs[i], xs[i], ys[i], zs[i]);
+    if (rv != lineStrlen) {
+      LOG_E("db_localization_result_insert_bulk: Failed to format line (snprintf returned %d, expected %d)", rv, lineStrlen);
+      if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to format line")) {
+        LOG_E("db_localization_result_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+      }
+      free(line);
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      return -1;
+    }
+    LOG_V("db_localization_result_insert_bulk: lineStrlen: %d, strlen(line): %d, line: [%s]", lineStrlen, strlen(line), line);
+    assert(strlen(line) == lineStrlen);
+    rv = PQputCopyData(pDbConnection->pConn, line, lineStrlen);
+    free(line);
+    if (rv != 1) {
+      LOG_E("db_localization_result_insert_bulk: Failed to stream data: %s", PQerrorMessage(pDbConnection->pConn));
+      if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to stream data")) {
+        LOG_E("db_localization_result_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+      }
+      PQclear(pResult);
+      __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+      return -1;
+    }
+  }
+  int rv = PQputCopyEnd(pDbConnection->pConn, NULL);
+  if (rv != 1) {
+    LOG_E("db_localization_result_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
+}
+
+static db_localization_result_t db_localization_result_clone(db_localization_result_t dbLocalizationResult) {
+  return (db_localization_result_t) {
+    .time = p_strdup(dbLocalizationResult.time),
+    .inventory_epc = p_strdup(dbLocalizationResult.inventory_epc),
+    .x = dbLocalizationResult.x,
+    .y = dbLocalizationResult.y,
+    .z = dbLocalizationResult.z
+  };
+}
+
+int db_localization_result_insert_ret(db_t* pDb,
+                                      const char* time,
+                                      const char* inventory_epc,
+                                      const char* x,
+                                      const char* y,
+                                      const char* z,
+                                      db_localization_result_t* pLocalizationResult_out) {
+  assert(pDb != NULL);
+  assert(time != NULL);
+  assert(inventory_epc != NULL);
+  assert(x != NULL);
+  assert(y != NULL);
+  assert(z != NULL);
+  assert(pLocalizationResult_out != NULL);
+  const char* pQuery = "INSERT INTO public.localization_results (time, inventory_epc, x, y, z) VALUES ($1, $2, $3, $4, $5) RETURNING *";
+  const char* pParams[5] = {time, inventory_epc, x, y, z};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 5, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_localization_result_insert_ret: Failed to ret-insert localization result (time \"%s\"): %s", time, PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  if (PQntuples(pResult) != 1) {
+    LOG_E("db_localization_result_insert_ret: Unexpected number of tuples in result: %d", PQntuples(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_localization_result_insert_ret: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE); 
+  }
+
+  db_localization_result_t localizationResult;
+  localizationResult.time = PQgetvalue(pResult, 0, 0);
+  localizationResult.inventory_epc = PQgetvalue(pResult, 0, 1);
+  localizationResult.x = atof(PQgetvalue(pResult, 0, 2));
+  localizationResult.y = atof(PQgetvalue(pResult, 0, 3));
+  localizationResult.z = atof(PQgetvalue(pResult, 0, 4));
+
+  *pLocalizationResult_out = db_localization_result_clone(localizationResult);
+
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0; // Success
+}
+
+int db_localization_results_read_time_window(db_t* pDb, 
+                                             const char* start_time, 
+                                             const char* end_time, 
+                                             db_localization_result_t** ppLocalizationResults_out, 
+                                             int* pN_out) {
+  assert(pDb != NULL);
+  assert(start_time != NULL);
+  assert(end_time != NULL);
+  assert(ppLocalizationResults_out != NULL);
+  assert(pN_out != NULL);
+  const char* pQuery = "SELECT * FROM public.localization_results WHERE time >= $1 AND time <= $2";
+  const char* pParams[2] = {start_time, end_time};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 2, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_localization_results_read_time_window: Failed to read localization results: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_localization_results_read_time_window: No localization results found");
+    //PQclear(pResult);
+    //__db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    //return -2; // No localization results found
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_localization_results_read_time_window: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_localization_result_t* pLocalizationResults = malloc(nTuples * sizeof(db_localization_result_t));
+  if (pLocalizationResults == NULL) {
+    LOG_E("db_localization_results_read_time_window: Failed to allocate memory for localization results");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pLocalizationResults[i].time = p_strdup(PQgetvalue(pResult, i, 0));
+    pLocalizationResults[i].inventory_epc = p_strdup(PQgetvalue(pResult, i, 1));
+    pLocalizationResults[i].x = atof(PQgetvalue(pResult, i, 2));
+    pLocalizationResults[i].y = atof(PQgetvalue(pResult, i, 3));
+    pLocalizationResults[i].z = atof(PQgetvalue(pResult, i, 4));
+  }
+  *ppLocalizationResults_out = pLocalizationResults;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;                                              
+}
+
+int db_localization_results_read_time_window_filtered_by_epc(db_t* pDb, 
+                                                             const char* start_time, 
+                                                             const char* end_time, 
+                                                             const char* epc, 
+                                                             db_localization_result_t** ppLocalizationResults_out, 
+                                                             int* pN_out) {
+  assert(pDb != NULL);
+  assert(start_time != NULL);
+  assert(end_time != NULL);
+  assert(epc != NULL);
+  assert(ppLocalizationResults_out != NULL);
+  assert(pN_out != NULL);
+  const char* pQuery = "SELECT * FROM public.localization_results WHERE time >= $1 AND time <= $2 AND inventory_epc = $3";
+  const char* pParams[3] = {start_time, end_time, epc};
+  db_connection_t* pDbConnection = __db_connection_take_from_pool(&pDb->connection_pool);
+  PGresult* pResult = PQexecParams(pDbConnection->pConn, pQuery, 3, NULL, pParams, NULL, NULL, 0);
+  if (PGRES_TUPLES_OK != PQresultStatus(pResult)) {
+    LOG_E("db_localization_results_read_time_window_filtered_by_epc: Failed to read localization results: %s", PQerrorMessage(pDbConnection->pConn));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -1;
+  }
+  int nTuples = PQntuples(pResult);
+  if (nTuples == 0) {
+    LOG_I("db_localization_results_read_time_window_filtered_by_epc: No localization results found");
+    //PQclear(pResult);
+    //__db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    //return -2; // No localization results found
+  }
+  if (PQnfields(pResult) != 5) {
+    LOG_E("db_localization_results_read_time_window_filtered_by_epc: Unexpected number of fields in result: %d", PQnfields(pResult));
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    exit(EXIT_FAILURE);
+  }
+  db_localization_result_t* pLocalizationResults = malloc(nTuples * sizeof(db_localization_result_t));
+  if (pLocalizationResults == NULL) {
+    LOG_E("db_localization_results_read_time_window_filtered_by_epc: Failed to allocate memory for localization results");
+    PQclear(pResult);
+    __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+    return -3;
+  }
+  for (int i = 0; i < nTuples; i++) {
+    pLocalizationResults[i].time = p_strdup(PQgetvalue(pResult, i, 0));
+    pLocalizationResults[i].inventory_epc = p_strdup(PQgetvalue(pResult, i, 1));
+    pLocalizationResults[i].x = atof(PQgetvalue(pResult, i, 2));
+    pLocalizationResults[i].y = atof(PQgetvalue(pResult, i, 3));
+    pLocalizationResults[i].z = atof(PQgetvalue(pResult, i, 4));
+  }
+  *ppLocalizationResults_out = pLocalizationResults;
+  *pN_out = nTuples;
+  PQclear(pResult);
+  __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);
+  return 0;
 }
