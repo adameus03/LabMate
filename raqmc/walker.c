@@ -20,6 +20,7 @@ struct walker_transmit_readings_buffer_entry {
   int mt;
   char* timestamp;
   char* epc;
+  int isSentry;
 };
 
 #define __WALKER_TRANSMIT_READINGS_BUFFER_MAX_LEN 32
@@ -180,6 +181,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
   pNewEntry->mt = mt;
   pNewEntry->timestamp = walker_get_timestamp_precise_now();
   pNewEntry->epc = NULL;
+  pNewEntry->isSentry = (int)(flags & 0x1U);
   LOG_V("walker_transmit_readings_buffered: Calling rscall_ie_get_path");
   const char* iePath = rscall_ie_get_path(ieIndex);
   LOG_V("walker_transmit_readings_buffered: Calling rscall_ie_get_epc");
@@ -220,7 +222,7 @@ static void walker_transmit_readings_buffered(walker_t* pWalker, const int ieInd
       yyjson_mut_obj_add_int(pJson, pInvm, "rkt", -1); //TODO Future (ref @fgbefaw)
       yyjson_mut_obj_add_int(pJson, pInvm, "rkp", -1); //TODO Future (ref @awdfefe)
 
-      yyjson_mut_obj_add_bool(pJson, pInvm, "is_sentry", i == 0);
+      yyjson_mut_obj_add_bool(pJson, pInvm, "is_sentry", pEntry->isSentry ? true : false);
       // Add inventory management object to the array
       yyjson_mut_arr_add_val(pInvms, pInvm);
     }

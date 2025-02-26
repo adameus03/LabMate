@@ -380,8 +380,7 @@ static tracker_target_timed_location_array_t tracker_localize_v0(const tracker_m
                                                                  const int nBasepoints) {
   //TODO this is a stub
   const char* _ts = "2025-02-26T00:00:00Z";
-  char* timestamp = p_strdup(_ts);
-  return (tracker_target_timed_location_array_t) {
+  tracker_target_timed_location_array_t locations = {
     .nLocations = 1,
     .pLocations = {
       {
@@ -389,11 +388,12 @@ static tracker_target_timed_location_array_t tracker_localize_v0(const tracker_m
           .x = 0.1,
           .y = 0.2,
           .z = 0.3
-        },
-        .timestamp = timestamp
+        }
       }
     }
   };
+  assert(strncpy(locations.pLocations[0].timestamp, _ts, TRACKER_TIMESTAMP_LEN_MAX) == locations.pLocations[0].timestamp);
+  return locations;
 }
 
 //TODO add data validation to check if the cycles are in the correct order and contain the correct number of records?
@@ -588,6 +588,7 @@ int tracker_process_data(tracker_t* pTracker,
     // }
     for (int i = 0; i < nBasepoints; i++) {
       assert(pTrackerBasepoints[i].mmvector.nMvectors == nCycles);
+      assert(pTrackerBasepoints[i].mmvector.mvectors != NULL);
       for (int j = 0; j < nCycles; j++) {
         assert(pTrackerBasepoints[i].mmvector.mvectors[j].componentCount == nComponents);
       }
@@ -680,7 +681,7 @@ int tracker_process_data(tracker_t* pTracker,
       pZsToInsert[i] = __tracker_itoa(targetLocations.pLocations[i].location.z);
     }
 
-    rv = db_localization_result_insert_bulk(pDb, targetLocations.nLocations, pTimesToInsert, pInputEpcs, pXsToInsert, pYsToInsert, pZsToInsert);
+    rv = db_localization_result_insert_bulk(pDb, targetLocations.nLocations, (const char**)pTimesToInsert, (const char**)pInputEpcs, (const char**)pXsToInsert, (const char**)pYsToInsert, (const char**)pZsToInsert);
     for (int i = 0; i < nBasepoints; i++) {
       db_basepoint_free(&pBasepoints[i]);
     }
@@ -830,7 +831,7 @@ int tracker_process_data_buffered(tracker_t* pTracker,
         //add to buffer for cyclic completion and process data up to the last sentry (exclusive)
         int nInvmToProcess = sentry_positions[nSentries - 1];
         tracker_lab_buffer_concat(pLabBuffer, nInvmToProcess, pTimes, pEpcs, pAntnos, pRxsss, pRxrates, pTxps, pRxlats, pMtypes, pRkts, pRkps);
-        rv = tracker_process_data(pTracker, pLabBuffer->buf_len, nSentries, pLabBuffer->pTimes, pLabBuffer->pEpcs, pLabBuffer->pAntnos, pLabBuffer->pRxsss, pLabBuffer->pRxrates, pLabBuffer->pTxps, pLabBuffer->pRxlats, pLabBuffer->pMtypes, pLabBuffer->pRkts, pLabBuffer->pRkps);
+        rv = tracker_process_data(pTracker, pLabBuffer->buf_len, nSentries, (const char**)pLabBuffer->pTimes, (const char**)pLabBuffer->pEpcs, (const char**)pLabBuffer->pAntnos, (const char**)pLabBuffer->pRxsss, (const char**)pLabBuffer->pRxrates, (const char**)pLabBuffer->pTxps, (const char**)pLabBuffer->pRxlats, (const char**)pLabBuffer->pMtypes, (const char**)pLabBuffer->pRkts, (const char**)pLabBuffer->pRkps);
         if (rv != 0) {
           LOG_E("tracker_process_data_buffered: tracker_process_data failed: %d", rv);
           free(sentry_positions);
