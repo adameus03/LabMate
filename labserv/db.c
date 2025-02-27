@@ -2912,12 +2912,16 @@ int db_localization_result_insert_bulk(db_t* pDb,
                                        const char* ys[],
                                        const char* zs[]) {
   assert(pDb != NULL);
-  assert(nLocalizationResults > 0);
+  assert(nLocalizationResults >= 0);
   assert(times != NULL);
   assert(inventory_epcs != NULL);
   assert(xs != NULL);
   assert(ys != NULL);
   assert(zs != NULL);
+  if (nLocalizationResults == 0) {
+    LOG_W("db_localization_result_insert_bulk: No localization results to insert. Returning success.");
+    return 0;
+  }
   for (size_t i = 0; i < nLocalizationResults; i++) {
     assert(times[i] != NULL);
     assert(inventory_epcs[i] != NULL);

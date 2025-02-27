@@ -375,6 +375,7 @@ typedef struct tracker_physical_basepoint {
 typedef struct tracker_target_timed_location {
   tracker_target_location_t location;
   char timestamp[TRACKER_TIMESTAMP_LEN_MAX+1];
+  tracker_mmvector_t* pIob; // corresponding input mmvector
 } tracker_target_timed_location_t;
 
 #define TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN 256
@@ -384,6 +385,7 @@ typedef struct tracker_target_timed_location_array {
   int nLocations;
 } tracker_target_timed_location_array_t;
 
+//TODO move to localizers/v0.c ? And move related definitions either to tracker.h or localizers/common.h ?
 /**
  * @brief v0 - discrete localization using RSSI vector similarity
  */
@@ -391,34 +393,43 @@ static tracker_target_timed_location_array_t tracker_localize_v0(const tracker_m
                                                                  const tracker_physical_basepoint_t* pBasepoints,
                                                                  const int nInputs,
                                                                  const int nBasepoints) {
-  //TODO this is a stub
-  assert(nInputs <= TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN);
-  //format 2025-02-27 14:22:59.706880
-  //const char* _ts1 = "2025-02-26T00:00:00Z";
-  //const char* _ts2 = "2025-02-26T00:00:01Z";
-  const char* _ts1 = "2025-02-26 00:00:00.000000";
-  const char* _ts2 = "2025-02-26 00:00:01.000000";
+  int total_input_mvectors = 0;
+  for (int i = 0; i < nInputs; i++) {
+    total_input_mvectors += pInputs[i].nMvectors;
+  }
   tracker_target_timed_location_array_t locations = {
-    .nLocations = 2,
-    .pLocations = {
-      {
-        .location = {
-          .x = 0.1,
-          .y = 0.2,
-          .z = 0.3
+    .nLocations = total_input_mvectors,
+    .pLocations = {0}
+  };
+  assert(locations.nLocations <= TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN);
+
+  // Each input contains measurements from different i-cycles (inventory cycles)
+  // For each input measurement, we first determine the most similar basepoint
+  // Then we assign the (x, y, z) coordinates of that basepoint to the input location
+  // We also assign the timestamp of the input measurement to the input timed location
+
+  int lix = 0; // timed location index
+  for (int i = 0; i < nInputs; i++) {
+    for (int j = 0; j < pInputs[i].nMvectors; j++, lix++) {
+      int max_similarity = -1;
+      int max_similarity_basepoint_ix = -1;
+      for (int k = 0; k < nBasepoints; k++) {
+        int similarity = 0;
+        for (int l = 0; l < pInputs[i].mvectors[j].componentCount; l++) {
+          similarity += abs(pInputs[i].mvectors[j].rssi[l] - pBasepoints[k].mmvector.mvectors[j].rssi[l]);
         }
-      },
-      {
-        .location = {
-          .x = 0.5,
-          .y = 0.6,
-          .z = 0.7
+        if (similarity > max_similarity) {
+          max_similarity = similarity;
+          max_similarity_basepoint_ix = k;
         }
       }
+      assert(max_similarity_basepoint_ix >= 0 && max_similarity_basepoint_ix < nBasepoints);
+      locations.pLocations[lix].location = pBasepoints[max_similarity_basepoint_ix].point;
+      assert(strncpy(locations.pLocations[lix].timestamp, pInputs[i].mvectors[j].timestamp, TRACKER_TIMESTAMP_LEN_MAX+1) == locations.pLocations[lix].timestamp);
+      locations.pLocations[lix].pIob = (tracker_mmvector_t*)&pInputs[i];
     }
-  };
-  assert(strncpy(locations.pLocations[0].timestamp, _ts1, TRACKER_TIMESTAMP_LEN_MAX) == locations.pLocations[0].timestamp);
-  assert(strncpy(locations.pLocations[1].timestamp, _ts2, TRACKER_TIMESTAMP_LEN_MAX) == locations.pLocations[1].timestamp);
+  }
+
   return locations;
 }
 
@@ -679,8 +690,10 @@ int tracker_process_data(tracker_t* pTracker,
           pMvectorIxs_Inputs[aerial_cycle_counter_trg]++;
           //const int mvector_ix = pMvectorIxs_Inputs[input_ix];
           const int mvector_ix = pMvectorIxs_Inputs[aerial_cycle_counter_trg];
+          LOG_V("tracker_process_data: #voidj i = %d, aerial_cycle_counter_trg = %d, mvector_ix = %d, nCycles = %d", i, aerial_cycle_counter_trg, mvector_ix, nCycles);
           assert(mvector_ix >= 0 && mvector_ix < nCycles);
-          pInputs[input_ix].mvectors[mvector_ix].componentCount = nComponents;
+          //pInputs[input_ix].mvectors[mvector_ix].componentCount = nComponents;
+          pInputs[aerial_cycle_counter_trg].mvectors[mvector_ix].componentCount = nComponents;
         }
         const int mvector_ix = pMvectorIxs_Inputs[aerial_cycle_counter_trg]; // TODO input_ix and aerial_cycle_counter_trg are the same (double-check it), so we should probably refactor it for clarity
         assert(mvector_ix >= 0 && mvector_ix < nCycles);
@@ -689,18 +702,25 @@ int tracker_process_data(tracker_t* pTracker,
         
         const int component_ix = atoi(pAntnos[i]);
         assert(component_ix >= 0 && component_ix <= TRACKER_MVECTOR_NDIMS_MAX);
-        pInputs[input_ix].mvectors[mvector_ix].rssi[component_ix] = atoi(pRxsss[i]);
+        //pInputs[input_ix].mvectors[mvector_ix].rssi[component_ix] = atoi(pRxsss[i]);
+        pInputs[aerial_cycle_counter_trg].mvectors[mvector_ix].rssi[component_ix] = atoi(pRxsss[i]);
         assert(strlen(pTimes[i]) <= TRACKER_TIMESTAMP_LEN_MAX);
-        assert(strncpy(pInputs[input_ix].mvectors[mvector_ix].timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pInputs[input_ix].mvectors[mvector_ix].timestamp);
+        //assert(strncpy(pInputs[input_ix].mvectors[mvector_ix].timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pInputs[input_ix].mvectors[mvector_ix].timestamp);
+        assert(strncpy(pInputs[aerial_cycle_counter_trg].mvectors[mvector_ix].timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pInputs[aerial_cycle_counter_trg].mvectors[mvector_ix].timestamp);
       }
     }
 
     // Call tracker localize function
     tracker_target_timed_location_array_t targetLocations = tracker_localize_v0(pInputs, pTrackerBasepoints, nInputs, nBasepoints);
-    assert(targetLocations.nLocations > 0);
+    assert(targetLocations.nLocations >= 0);
+    if (targetLocations.nLocations == 0) {
+      LOG_W("tracker_process_data: No target locations for insertion");
+      //TODO return earlier? (but any neccessary cleanup still needs to be done)
+    }
 
     //Call db_localization_result_insert_bulk
     char** pTimesToInsert = (char**)malloc(targetLocations.nLocations * sizeof(char*));
+    char** pEpcsToInsert = (char**)malloc(targetLocations.nLocations * sizeof(char*));
     char** pXsToInsert = (char**)malloc(targetLocations.nLocations * sizeof(char*));
     char** pYsToInsert = (char**)malloc(targetLocations.nLocations * sizeof(char*));
     char** pZsToInsert = (char**)malloc(targetLocations.nLocations * sizeof(char*));
@@ -711,6 +731,9 @@ int tracker_process_data(tracker_t* pTracker,
     for (int i = 0; i < targetLocations.nLocations; i++) {
       assert(strlen(targetLocations.pLocations[i].timestamp) <= TRACKER_TIMESTAMP_LEN_MAX);
       pTimesToInsert[i] = p_strdup(targetLocations.pLocations[i].timestamp);
+      int epcIndex = (int)(targetLocations.pLocations[i].pIob - pInputs);
+      assert(epcIndex >= 0 && epcIndex < nInputs);
+      pEpcsToInsert[i] = pInputEpcs[epcIndex];
       pXsToInsert[i] = __tracker_dtoa((double)targetLocations.pLocations[i].location.x);
       pYsToInsert[i] = __tracker_dtoa((double)targetLocations.pLocations[i].location.y);
       pZsToInsert[i] = __tracker_dtoa((double)targetLocations.pLocations[i].location.z);
@@ -723,7 +746,7 @@ int tracker_process_data(tracker_t* pTracker,
     // pInputEpcs[0] = "aaaaaaaaaaaaaaaaaaaaaaaa";
     // pInputEpcs[1] = "bbbbbbbbbbbbbbbbbbbbbbbb";
     // ///</tmp_test>
-    rv = db_localization_result_insert_bulk(pDb, targetLocations.nLocations, (const char**)pTimesToInsert, (const char**)pInputEpcs, (const char**)pXsToInsert, (const char**)pYsToInsert, (const char**)pZsToInsert);
+    rv = db_localization_result_insert_bulk(pDb, targetLocations.nLocations, (const char**)pTimesToInsert, (const char**)pEpcsToInsert, (const char**)pXsToInsert, (const char**)pYsToInsert, (const char**)pZsToInsert);
     for (int i = 0; i < nBasepoints; i++) {
       db_basepoint_free(&pBasepoints[i]);
     }
@@ -744,6 +767,7 @@ int tracker_process_data(tracker_t* pTracker,
       free(pZsToInsert[i]);
     }
     free(pTimesToInsert);
+    free(pEpcsToInsert);
     free(pXsToInsert);
     free(pYsToInsert);
     free(pZsToInsert);

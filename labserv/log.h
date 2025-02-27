@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define LOG_LEVEL LOG_DBG
+#define LOG_LEVEL LOG_VERBOSE
 
 //PMutex* __log_global_pMutex = NULL;
 
