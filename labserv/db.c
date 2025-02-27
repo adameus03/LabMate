@@ -2943,7 +2943,7 @@ int db_localization_result_insert_bulk(db_t* pDb,
     size_t yStrlen = strlen(ys[i]);
     size_t zStrlen = strlen(zs[i]);
     
-    size_t lineStrlen = timeStrlen + epcStrlen + xStrlen + yStrlen + zStrlen + 10;
+    size_t lineStrlen = timeStrlen + epcStrlen + xStrlen + yStrlen + zStrlen + 5;
     char* line = (char*)malloc(lineStrlen + 1);
     line[lineStrlen] = '\0';
     if (line == NULL) {
@@ -2961,6 +2961,7 @@ int db_localization_result_insert_bulk(db_t* pDb,
       if (1 != PQputCopyEnd(pDbConnection->pConn, "Labserv failed to format line")) {
         LOG_E("db_localization_result_insert_bulk: Failed to end bulk insert: %s", PQerrorMessage(pDbConnection->pConn));
       }
+      assert(0);
       free(line);
       PQclear(pResult);
       __db_connection_return_to_pool(pDbConnection, &pDb->connection_pool);

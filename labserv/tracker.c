@@ -317,6 +317,7 @@ static int __tracker_get_lab(db_t* pDb, const char* epc, db_lab_t* pLab_out) {
   return 0;
 }
 
+//TODO move these tracker and lsapi functions to a separate utils file?
 /**
  * @warning You need to free the returned buffer after use
  */
@@ -327,6 +328,18 @@ static char* __tracker_itoa(int n) {
       return NULL;
   }
   snprintf(buf, 12, "%d", n);
+  return buf;
+}
+
+/**
+ * @warning You need to free the returned buffer after use
+ */
+static char* __tracker_dtoa(double d) {
+  char* buf = (char*)malloc(32); // 32 bytes should be enough for double
+  if (buf == NULL) {
+      return NULL;
+  }
+  snprintf(buf, 32, "%f", d);
   return buf;
 }
 
@@ -364,7 +377,7 @@ typedef struct tracker_target_timed_location {
   char timestamp[TRACKER_TIMESTAMP_LEN_MAX+1];
 } tracker_target_timed_location_t;
 
-#define TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN 1
+#define TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN 256
 
 typedef struct tracker_target_timed_location_array {
   tracker_target_timed_location_t pLocations[TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN];
@@ -379,9 +392,14 @@ static tracker_target_timed_location_array_t tracker_localize_v0(const tracker_m
                                                                  const int nInputs,
                                                                  const int nBasepoints) {
   //TODO this is a stub
-  const char* _ts = "2025-02-26T00:00:00Z";
+  assert(nInputs <= TRACKER_TARGET_TIMED_LOCATION_ARRAY_MAXLEN);
+  //format 2025-02-27 14:22:59.706880
+  //const char* _ts1 = "2025-02-26T00:00:00Z";
+  //const char* _ts2 = "2025-02-26T00:00:01Z";
+  const char* _ts1 = "2025-02-26 00:00:00.000000";
+  const char* _ts2 = "2025-02-26 00:00:01.000000";
   tracker_target_timed_location_array_t locations = {
-    .nLocations = 1,
+    .nLocations = 2,
     .pLocations = {
       {
         .location = {
@@ -389,10 +407,18 @@ static tracker_target_timed_location_array_t tracker_localize_v0(const tracker_m
           .y = 0.2,
           .z = 0.3
         }
+      },
+      {
+        .location = {
+          .x = 0.5,
+          .y = 0.6,
+          .z = 0.7
+        }
       }
     }
   };
-  assert(strncpy(locations.pLocations[0].timestamp, _ts, TRACKER_TIMESTAMP_LEN_MAX) == locations.pLocations[0].timestamp);
+  assert(strncpy(locations.pLocations[0].timestamp, _ts1, TRACKER_TIMESTAMP_LEN_MAX) == locations.pLocations[0].timestamp);
+  assert(strncpy(locations.pLocations[1].timestamp, _ts2, TRACKER_TIMESTAMP_LEN_MAX) == locations.pLocations[1].timestamp);
   return locations;
 }
 
@@ -498,6 +524,7 @@ int tracker_process_data(tracker_t* pTracker,
     assert(pRkts != NULL);
     assert(pRkps != NULL);
 
+    LOG_V("tracker_process_data: nInvm = %d, nCycles = %d", nInvm, nCycles);
     assert(nCycles > 0);
     assert(nInvm % nCycles == 0);
     //const int nComponents = nInvm / nCycles; // wrong
@@ -529,7 +556,7 @@ int tracker_process_data(tracker_t* pTracker,
     }
     if (nBasepoints > TRACKER_BASEPOINTS_LIMIT) {
       LOG_E("tracker_process_data: Too many basepoints for lab #%d. Current limit is %d", lab.lab_id, TRACKER_BASEPOINTS_LIMIT);
-      tracker_invm_free(nInvm, pTimes, pEpcs, pAntnos, pRxsss, pRxrates, pTxps, pRxlats, pMtypes, pRkts, pRkps);
+      //tracker_invm_free(nInvm, pTimes, pEpcs, pAntnos, pRxsss, pRxrates, pTxps, pRxlats, pMtypes, pRkts, pRkps);
       return -3;
     }
     if (nBasepoints == 0) {
@@ -557,25 +584,39 @@ int tracker_process_data(tracker_t* pTracker,
       assert(pTrackerBasepoints[i].mmvector.mvectors != NULL);
     }
 
-    int mvector_ix = -1;
+    //int mvector_ix = -1;
+    int* pMvectorIxs_Basepoints = (int*)malloc(nBasepoints * sizeof(int));
+    assert(pMvectorIxs_Basepoints != NULL);
+    for (int i = 0; i < nBasepoints; i++) {
+      pMvectorIxs_Basepoints[i] = -1;
+    }
+    int aerial_cycle_counter_bp = -1;
     for (int i = 0; i < nInvm; i++) {
       //check if it's a basepoint
       assert(pEpcs[i] != NULL);
       for (int j = 0; j < nBasepoints; j++) {
         if (strcmp(pEpcs[i], pBasepoints[j].ext.epc) == 0) {
           if (strcmp(pAntnos[i], "0") == 0) {
-            mvector_ix++;
+            aerial_cycle_counter_bp++;
+            if (aerial_cycle_counter_bp == nBasepoints) {
+              aerial_cycle_counter_bp = 0;
+            }
+            pMvectorIxs_Basepoints[aerial_cycle_counter_bp]++;
+            const int mvector_ix = pMvectorIxs_Basepoints[aerial_cycle_counter_bp];
+            LOG_V("#sboji tracker_process_data:i = %d, j = %d, mvector_ix = %d, nCycles = %d, aerial_cycle_counter_bp = %d", i, j, mvector_ix, nCycles, aerial_cycle_counter_bp);
+            assert(mvector_ix >= 0 && mvector_ix < nCycles);
+            //LOG_V("tracker_process_data:j = %d, mvector_ix = %d", j, mvector_ix);
             pTrackerBasepoints[j].mmvector.mvectors[mvector_ix].componentCount = nComponents;
           }
-          //assert(pTrackerBasepoints[j].mvector.componentCount < TRACKER_MVECTOR_NDIMS_MAX);
+          const int mvector_ix = pMvectorIxs_Basepoints[aerial_cycle_counter_bp];
+          LOG_V("tracker_process_data: i = %d, j = %d, mvector_ix = %d, nCycles = %d, aerial_cycle_counter_bp = %d", i, j, mvector_ix, nCycles, aerial_cycle_counter_bp);
+          assert(mvector_ix >= 0 && mvector_ix < nCycles);
+          
           const int component_ix = atoi(pAntnos[i]);
           assert(component_ix >= 0 && component_ix <= TRACKER_MVECTOR_NDIMS_MAX);
-          //pTrackerBasepoints[j].mvector.rssi[pTrackerBasepoints[j].mvector.componentCount] = atoi(pRxsss[i]);
           pTrackerBasepoints[j].mmvector.mvectors[mvector_ix].rssi[component_ix] = atoi(pRxsss[i]);
           assert(strlen(pTimes[i]) <= TRACKER_TIMESTAMP_LEN_MAX);
-          //assert(strncpy(pTrackerBasepoints[j].mvector.timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pTrackerBasepoints[j].mvector.timestamp);
           assert(strncpy(pTrackerBasepoints[j].mmvector.mvectors[mvector_ix].timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pTrackerBasepoints[j].mmvector.mvectors[mvector_ix].timestamp);
-          //pTrackerBasepoints[j].mvector.componentCount++;
           break;
         }
       }
@@ -590,6 +631,9 @@ int tracker_process_data(tracker_t* pTracker,
       assert(pTrackerBasepoints[i].mmvector.nMvectors == nCycles);
       assert(pTrackerBasepoints[i].mmvector.mvectors != NULL);
       for (int j = 0; j < nCycles; j++) {
+        LOG_V("tracker_process_data: pTrackerBasepoints[i].mmvector.mvectors[j].componentCount = %d", pTrackerBasepoints[i].mmvector.mvectors[j].componentCount);
+        LOG_V("tracker_process_data: nComponents = %d", nComponents);
+        LOG_V("tracker_process_data: i = %d, j = %d", i, j);
         assert(pTrackerBasepoints[i].mmvector.mvectors[j].componentCount == nComponents);
       }
     }
@@ -606,7 +650,13 @@ int tracker_process_data(tracker_t* pTracker,
       pInputs[i].mvectors = (tracker_mvector_t*)malloc(nCycles * sizeof(tracker_mvector_t));
       assert(pInputs[i].mvectors != NULL);
     }
-    mvector_ix = -1;
+    //mvector_ix = -1;
+    int* pMvectorIxs_Inputs = (int*)malloc(nInputs * sizeof(int));
+    assert(pMvectorIxs_Inputs != NULL);
+    for (int i = 0; i < nInputs; i++) {
+      pMvectorIxs_Inputs[i] = -1;
+    }
+    int aerial_cycle_counter_trg = -1;
     int input_ix = -1;
     for (int i = 0; i < nInvm; i++) {
       //check if it's a basepoint
@@ -620,43 +670,28 @@ int tracker_process_data(tracker_t* pTracker,
       }
       if (!is_basepoint) {
         input_ix++;
-        pInputEpcs[input_ix] = p_strdup(pEpcs[i]);
+        //pInputEpcs[input_ix] = p_strdup(pEpcs[i]); //#osidvid
         if (strcmp(pAntnos[i], "0") == 0) {
-          mvector_ix++;
+          aerial_cycle_counter_trg++;
+          if (aerial_cycle_counter_trg == nInputs) {
+            aerial_cycle_counter_trg = 0;
+          }
+          pMvectorIxs_Inputs[aerial_cycle_counter_trg]++;
+          //const int mvector_ix = pMvectorIxs_Inputs[input_ix];
+          const int mvector_ix = pMvectorIxs_Inputs[aerial_cycle_counter_trg];
+          assert(mvector_ix >= 0 && mvector_ix < nCycles);
           pInputs[input_ix].mvectors[mvector_ix].componentCount = nComponents;
         }
-        //assert(pInputs[input_ix].mvector.componentCount < TRACKER_MVECTOR_NDIMS_MAX);
+        const int mvector_ix = pMvectorIxs_Inputs[aerial_cycle_counter_trg]; // TODO input_ix and aerial_cycle_counter_trg are the same (double-check it), so we should probably refactor it for clarity
+        assert(mvector_ix >= 0 && mvector_ix < nCycles);
+
+        pInputEpcs[aerial_cycle_counter_trg] = p_strdup(pEpcs[i]); //@osidvid
+        
         const int component_ix = atoi(pAntnos[i]);
         assert(component_ix >= 0 && component_ix <= TRACKER_MVECTOR_NDIMS_MAX);
-        //pInputs[input_ix].mvector.rssi[pInputs[input_ix].mvector.componentCount] = atoi(pRxsss[i]);
         pInputs[input_ix].mvectors[mvector_ix].rssi[component_ix] = atoi(pRxsss[i]);
         assert(strlen(pTimes[i]) <= TRACKER_TIMESTAMP_LEN_MAX);
-        //assert(strncpy(pInputs[input_ix].mvector.timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pInputs[input_ix].mvector.timestamp);
         assert(strncpy(pInputs[input_ix].mvectors[mvector_ix].timestamp, pTimes[i], TRACKER_TIMESTAMP_LEN_MAX+1) == pInputs[input_ix].mvectors[mvector_ix].timestamp);
-        //pInputs[input_ix].mvector.componentCount++;
-      
-        // //find measurements for other antennas
-        // int _j = i;
-        // for (; _j < nInvm; _j++) {
-        //   if (strcmp(pEpcs[_j], pEpcs[i]) != 0) {
-        //     break;
-        //   }
-        // }
-        // int 
-
-        // assert(localizationResults_counter < localizationResults_Max);
-        
-        // //tracker_mvector_t 
-        
-        // db_localization_result_t localizationResult;
-        // localizationResult.time = p_strdup(pTimes[i]);
-        // localizationResult.inventory_epc = p_strdup(pEpcs[i]);
-        // // <<<
-        // localizationResult.x = 0.0f;
-        // localizationResult.y = 0.0f;
-        // localizationResult.z = 0.0f;
-        // //  >>>
-        // pLocalizationResults[localizationResults_counter++] = localizationResult;
       }
     }
 
@@ -676,11 +711,18 @@ int tracker_process_data(tracker_t* pTracker,
     for (int i = 0; i < targetLocations.nLocations; i++) {
       assert(strlen(targetLocations.pLocations[i].timestamp) <= TRACKER_TIMESTAMP_LEN_MAX);
       pTimesToInsert[i] = p_strdup(targetLocations.pLocations[i].timestamp);
-      pXsToInsert[i] = __tracker_itoa(targetLocations.pLocations[i].location.x);
-      pYsToInsert[i] = __tracker_itoa(targetLocations.pLocations[i].location.y);
-      pZsToInsert[i] = __tracker_itoa(targetLocations.pLocations[i].location.z);
+      pXsToInsert[i] = __tracker_dtoa((double)targetLocations.pLocations[i].location.x);
+      pYsToInsert[i] = __tracker_dtoa((double)targetLocations.pLocations[i].location.y);
+      pZsToInsert[i] = __tracker_dtoa((double)targetLocations.pLocations[i].location.z);
     }
 
+    // ///<tmp_test>
+    // free (pInputEpcs);
+    // pInputEpcs = (char**)malloc(2 * sizeof(char*));
+    // assert(pInputEpcs != NULL);
+    // pInputEpcs[0] = "aaaaaaaaaaaaaaaaaaaaaaaa";
+    // pInputEpcs[1] = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    // ///</tmp_test>
     rv = db_localization_result_insert_bulk(pDb, targetLocations.nLocations, (const char**)pTimesToInsert, (const char**)pInputEpcs, (const char**)pXsToInsert, (const char**)pYsToInsert, (const char**)pZsToInsert);
     for (int i = 0; i < nBasepoints; i++) {
       db_basepoint_free(&pBasepoints[i]);
@@ -706,8 +748,10 @@ int tracker_process_data(tracker_t* pTracker,
     free(pYsToInsert);
     free(pZsToInsert);
 
-    tracker_invm_free(nInvm, pTimes, pEpcs, pAntnos, pRxsss, pRxrates, pTxps, pRxlats, pMtypes, pRkts, pRkps);
+    //tracker_invm_free(nInvm, pTimes, pEpcs, pAntnos, pRxsss, pRxrates, pTxps, pRxlats, pMtypes, pRkts, pRkps);
     free(pLocalizationResults);
+    free(pMvectorIxs_Basepoints);
+    free(pMvectorIxs_Inputs);
     if (0 != rv) {
       LOG_E("tracker_process_data: db_localization_result_insert_bulk failed: %d", rv);
       return -8;
