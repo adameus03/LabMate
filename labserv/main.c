@@ -271,6 +271,7 @@ int main(int argc, char **argv)
     pathconf = register_handler(hostconf, "/api/antenna", lsapi_endpoint_antenna, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/localize", lsapi_endpoint_localize, (void*)pLsapi, logfh);
     pathconf = register_handler(hostconf, "/api/basepoint", lsapi_endpoint_basepoint, (void*)pLsapi, logfh);
+    pathconf = register_handler(hostconf, "/api/localization-results", lsapi_endpoint_localization_results, (void*)pLsapi, logfh);
 
     pathconf = h2o_config_register_path(hostconf, "/", 0);
     h2o_file_register(pathconf, "htdocs", NULL, NULL, 0);
