@@ -753,6 +753,57 @@
       }
     }
 
+    async function fetchLocalizationResults(timeFrom, timeTo, epc, username, sesskey) {
+      //POST -d '{timeFrom: "<timeFrom>", timeTo: "<timeTo>", epc: "<epc>", username: "<username>", "session_key": "<sesskey>"}' /api/localization-results
+      assert(typeof timeFrom === "string", "timeFrom is not a string");
+      assert(typeof timeTo === "string", "timeTo is not a string");
+      assert(typeof epc === "string", "EPC is not a string");
+      assert(typeof username === "string", "Username is not a string");
+      assert(typeof sesskey === "string", "Session key is not a string");
+
+      //showSpinner(globals.elements);
+      try {
+        const response = await fetch(`${LABSERV_API_URL}/localization-results`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            timeFrom: timeFrom,
+            timeTo: timeTo,
+            epc: epc,
+            username: username,
+            session_key: sesskey
+          })
+        });
+        assert(response.ok, "Failed to fetch localization results");
+        const data = await response.json();
+
+        assert(data, "data is falsy");
+        console.log(`POST ${LABSERV_API_URL}/localization-results`, data);
+        assert(data.status, "status is falsy");
+        if (data.status !== "success") {
+          assert(false, `Failed to fetch localization results! Message from LABSERV: ${data.message}`);
+          return [];
+        } else {
+          assert(data['localization-results'], "localization-results is falsy");
+          assert(Array.isArray(data['localization-results']), "localization-results is not an array");
+          if (!(data['localization-results'].length > 0)) {
+            console.log("No localization results found");
+            return [];
+          }
+          return data['localization-results'];
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        assert(false, `Failed to fetch localization results: ${error}`);
+        return [];
+      } finally {
+        //hideSpinner(globals.elements);
+        //spinnerCaptionRestoreDefault();
+      }
+    }
+
     function __removeFilterValueElementIfExists() {
       let filterSelectWhat = globals.elements.inventoryFilterSelectWhat;
       if (filterSelectWhat) {
@@ -881,6 +932,7 @@
         trackButton.onclick = function() {
           globals.tracking_lab_id = inventoryItems[i].lab_id;
           globals.tracking_inventory_item_id = inventoryItems[i].inventory_item_id;
+          globals.tracking_inventory_item_epc = inventoryItems[i].epc;
 
           const cModal = new bootstrap.Modal('#canvasModal');
           cModal.show();
@@ -1014,7 +1066,39 @@
       context.stroke();
     }
 
-    function __setActions_canvasModalOpen() {
+    /**
+     * @brief Draws a load location on the lab map canvas accounting for locations obtained by the server in the last `timeWindowMs` milliseconds
+     */
+    async function __drawLoadLocation(context, epc, timeWindowMs, username, sesskey) {
+      //set timeTo to present precise datetime (with milliseconds)
+      //TODO - handle timezones dynamically
+      const now = new Date(new Date() - (-60*60*1000)); //UTC+1
+      const timeTo = now.toISOString().slice(0, 23).replace("T", " ");
+      //set timeFrom to `timeWindowMs` milliseconds before now
+      const timeFrom = new Date(now - timeWindowMs).toISOString().slice(0, 23).replace("T", " ");
+
+      //fetch localization results for the given EPC and time window
+      const locations = await fetchLocalizationResults(timeFrom, timeTo, epc, username, sesskey);
+      console.log("Locations:", locations);
+
+      globals.__dot(52, 190);
+      globals.__dot(192, 195); 
+      globals.__dot(357, 278);
+      globals.__dot(422, 262);
+      globals.__dot(442, 227);
+      
+      //draw the locations on the canvas
+      for (let i = 0; i < locations.length; i++) {
+        let canvasX = locations[i].x * globals.elements.labMapCanvas.width;
+        let canvasY = locations[i].y * globals.elements.labMapCanvas.height;
+        console.log(`Calling __drawCircle with x: ${canvasX}, y: ${canvasY}`);
+        __drawCircle(context, canvasX, canvasY, 5, "yellow");
+      }
+    }
+
+    function __setActions_canvasModalOpenClose(username, sesskey) {
+      let localizerInterval = null;
+      //handle modal open event
       globals.elements.canvasModal.addEventListener("show.bs.modal", function () {
         let context = globals.elements.labMapCanvas.getContext("2d");
         console.log(`Tracking - Lab ID: ${globals.tracking_lab_id}, Inventory item ID: ${globals.tracking_inventory_item_id}`);
@@ -1027,13 +1111,33 @@
             __drawCircle(context, x, y, 5, "red");
           }
           console.log(globals);
-          globals.__dot(52, 190)
-          globals.__dot(192, 195) 
-          globals.__dot(357, 278) 
-          globals.__dot(422, 262)
-          globals.__dot(442, 227)
+          globals.__dot(52, 190);
+          globals.__dot(192, 195); 
+          globals.__dot(357, 278);
+          globals.__dot(422, 262);
+          globals.__dot(442, 227);
         }
         labMapImage.src = `/labmaps/${globals.tracking_lab_id}.jpeg`;
+        console.log({
+          __drawLoadLocation: __drawLoadLocation,
+          globals: globals,
+          username: username,
+          sesskey: sesskey,
+          epc: globals.tracking_inventory_item_epc,
+          canvas_context: context
+        })
+        // start localizer interval
+        localizerInterval = setInterval(async function() {
+          await __drawLoadLocation(context, globals.tracking_inventory_item_epc, 5000, username, sesskey);
+        }, 1000);
+      });
+      // handle modal close event
+      globals.elements.canvasModal.addEventListener("hide.bs.modal", function () {
+        clearInterval(localizerInterval);
+        // clear canvas
+        let context = globals.elements.labMapCanvas.getContext("2d");
+        context.clearRect(0, 0, globals.elements.labMapCanvas.width, globals.elements.labMapCanvas.height);
+        console.log("MODAL CLOSED");
       });
     }
 
@@ -1041,7 +1145,7 @@
       __setActions_inventoryFormSubmission(elements, reagentId);
       __setActions_inventoryFilterOptionsChange(elements);
       __setActions_inventoryFilterApply(elements, reagentId, username, sesskey);
-      __setActions_canvasModalOpen();
+      __setActions_canvasModalOpenClose(username, sesskey);
     }
 
     window.onload = async function() {
