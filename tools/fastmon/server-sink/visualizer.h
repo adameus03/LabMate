@@ -6,14 +6,25 @@
 
 #define VISUALIZER_DATA_CONTEXT_MAX_TAGS 100
 
-typedef struct visualizer_data_context {
-  uint32_t ids[VISUALIZER_DATA_CONTEXT_MAX_TAGS];
-  uint8_t rssi0[VISUALIZER_DATA_CONTEXT_MAX_TAGS];
-  uint8_t rssi1[VISUALIZER_DATA_CONTEXT_MAX_TAGS];
-} visualizer_data_context_t;
+typedef struct Visualizer Visualizer_t;
+typedef struct Visualizer_ColorRGBA {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+} Visualizer_ColorRGBA_t;
 
-void Visualizer_DrawCircle(SDL_Renderer* renderer, int32_t centreX, int32_t centreY, int32_t radius);
-void Visualizer_DrawHollowCircle(SDL_Renderer* renderer, int32_t centreX, int32_t centreY, int32_t radius);
-int Visualizer_DisplayVisualizationWindow();
+Visualizer_t* Visualizer_Create();
+void Visualizer_Destroy(Visualizer_t* visualizer);
+
+void Visualizer_DrawCircle(Visualizer_t* visualizer, int32_t centreX, int32_t centreY, int32_t radius, Visualizer_ColorRGBA_t color);
+void Visualizer_DrawHollowCircle(Visualizer_t* visualizer, int32_t centreX, int32_t centreY, int32_t radius, Visualizer_ColorRGBA_t color);
+int Visualizer_DisplayVisualizationWindow(Visualizer_t* visualizer);
+void Visualizer_Coordinates_Unit2Absolute(Visualizer_t* visualizer, float xUnit_in, float yUnit_in, int32_t* xAbsolute_out, int32_t* yAbsolute_out);
+unsigned int Visualizer_GetWindowWidth(Visualizer_t* visualizer);
+unsigned int Visualizer_GetWindowHeight(Visualizer_t* visualizer);
+void Visualizer_Render(Visualizer_t* visualizer);
+
+void Visualizer_Delay(Visualizer_t* visualizer, uint32_t ms);
 
 #endif // VISUALIZER_H
