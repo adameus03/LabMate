@@ -30,7 +30,7 @@ void main_uhfman_poll_handler(uint16_t handle, void* pUserData) {
 }
 
 int main() {
-    struct telemetry telem = telemetry_init_client("pc6.home", 8080);
+    struct telemetry telem = telemetry_init_client("192.168.1.10", 8080);
     telemetry_connect(&telem);
     telemetry_print_sockopts(&telem);
 
