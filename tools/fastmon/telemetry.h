@@ -13,6 +13,7 @@ struct telemetry {
 struct telemetry_packet {
   uint8_t rssi0;
   uint8_t rssi1;
+  uint8_t epc[12];
 } __attribute__((packed));
 
 struct telemetry telemetry_init_client(const char* serverAddr, int port);

@@ -49,6 +49,7 @@ struct telemetry telemetry_init_server(int port) {
     }
     else
         printf("Server listening..\n");
+    t.flags = 1; // server
     return t;
 }
 
@@ -88,7 +89,7 @@ void telemetry_connect(struct telemetry* t) {
 }
 
 void telemetry_send(struct telemetry* t, struct telemetry_packet* packet) {
-    assert(sizeof(struct telemetry_packet) == 2);
+    assert(sizeof(struct telemetry_packet) == 14);
     int n = write(t->sockfd, packet, sizeof(struct telemetry_packet));
     if (n != sizeof(struct telemetry_packet)) {
         printf("write failed...\n");

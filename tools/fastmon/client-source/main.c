@@ -22,6 +22,10 @@ void main_uhfman_poll_handler(uint16_t handle, void* pUserData) {
         .rssi0 = tag.rssi[0],
         .rssi1 = tag.rssi[1]
     };
+    assert(YPDR200_X22_NTF_PARAM_EPC_LENGTH == 12);
+    for (uint32_t i = 0; i < YPDR200_X22_NTF_PARAM_EPC_LENGTH; i++) {
+        telemetry_packet.epc[i] = tag.epc[i];
+    }
     telemetry_send(&telem, &telemetry_packet);
 }
 
@@ -224,7 +228,7 @@ int main() {
     // }
 
     fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
-    err = uhfman_multiple_polling(&uhfmanCtx, 60000000, (void*)&telem);
+    err = uhfman_multiple_polling(&uhfmanCtx, 5000000, (void*)&telem);
     if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
         P_ERROR("USB related error");
         fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);

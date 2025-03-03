@@ -11,7 +11,11 @@ int main() {
   struct telemetry_packet packet;
   while(1) {
     telemetry_receive(&t, &packet);
-    printf("RSSI0: %d, RSSI1: %d\n", packet.rssi0, packet.rssi1);
+    printf("EPC: ");
+    for (int i = 0; i < 12; i++) {
+      printf("%02X", packet.epc[i]);
+    }
+    printf(", RSSI0: %d, RSSI1: %d\n", packet.rssi0, packet.rssi1);
   }
   return 0;
 }
