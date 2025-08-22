@@ -242,7 +242,7 @@ int main() {
     // }
 
     fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
-    err = uhfman_multiple_polling(&uhfmanCtx, 60000000, NULL);
+    err = uhfman_multiple_polling(&uhfmanCtx, 5000000, NULL);
     if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
         P_ERROR("USB related error");
         fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);

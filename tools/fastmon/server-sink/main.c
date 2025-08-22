@@ -60,11 +60,18 @@ static Visualizer_ColorRGBA_t main_epc_get_color(const char* epc, epc_color_dict
 
 static void main_rssi2unit(uint8_t rssi_in, float* rssi_out) {
   assert(rssi_out != NULL);
-  assert(rssi_in <= 200 && (rssi_in >= 180 || rssi_in == 0));
+  printf("[debug] rssi_in = %d\n", rssi_in);
+  //assert(rssi_in <= 210 && (rssi_in >= 180 || rssi_in == 0));
+  if (rssi_in > 210 || (rssi_in < 180 && rssi_in != 0)) {
+    //print in red
+    printf("\033[0;31m");
+    printf("main_rssi2unit: rssi_in out of range: %d\n", rssi_in);
+    printf("\033[0m");
+  }
   if (rssi_in == 0) {
     *rssi_out = 0.0f;
   } else {
-    *rssi_out = ((float)(rssi_in - 180)) / 20.0f;
+    *rssi_out = ((float)(rssi_in - 180)) / 30.0f;
   }
 }
 
