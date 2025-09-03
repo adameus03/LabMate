@@ -1,0 +1,880 @@
+{
+  "device_info": {
+    "hardware_version": "M100 26dBm V1.0",
+    "software_version": "V2.3.5",
+    "manufacturer": "MagicRf"
+  },
+  "requested_config": {
+    "select_target": 4,
+    "select_action": 0,
+    "select_membank": 1,
+    "select_ptr": 32,
+    "select_mask_len": 0,
+    "select_truncate": 0,
+    "query_sel": 3,
+    "query_session": 0,
+    "query_target": 0,
+    "query_q": 4,
+    "transmit_power": 25.0,
+    "select_mode": 0
+  },
+  "actual_config": {
+    "actual_select_target": 4,
+    "actual_select_action": 0,
+    "actual_select_membank": 1,
+    "actual_select_ptr": 32,
+    "actual_select_mask_len": 0,
+    "actual_select_truncate": 0,
+    "actual_select_mask": "",
+    "actual_query_sel": 3,
+    "actual_query_session": 0,
+    "actual_query_target": 0,
+    "actual_query_q": 4,
+    "actual_transmit_power": 25.0,
+    "actual_select_mode_placeholder": 0,
+    "actual_working_channel": 10,
+    "actual_work_area": 3,
+    "actual_mixer_gain": 2,
+    "actual_if_gain": 6,
+    "actual_threshold": 176
+  },
+  "experiment_metadata": {
+    "start_time": 1756830204,
+    "end_time": 1756830210,
+    "polling_duration_ms": 5000,
+    "success": true,
+    "measurement_count": 166
+  },
+  "measurements": [
+    {
+      "timestamp": 1756830204,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 207
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 207
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 203
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 193
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 203
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 208
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 209
+    },
+    {
+      "timestamp": 1756830205,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 208
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 201
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830206,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 207
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 211
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 211
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 200
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830207,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 201
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 211
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 203
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 210
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 208
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 211
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830208,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 214
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 212
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 215
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 217
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 209
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 203
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 210
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 216
+    },
+    {
+      "timestamp": 1756830209,
+      "epc": "BBBBBBBBBBBBBBBBBBBBBBBB",
+      "rssi": 213
+    }
+  ]
+}
