@@ -1,0 +1,237 @@
+.section .data
+
+string_msg_version_label:
+  .ascii "Version: "
+string_msg_version_label_len = . - string_msg_version_label
+string_msg_version_llrp_v_1_0_1:
+  .ascii "LLRP 1.0.1"
+string_msg_version_llrp_v_1_0_1_len = . - string_msg_version_llrp_v_1_0_1
+string_msg_version_llrp_v_1_1:
+  .ascii "LLRP 1.1"
+string_msg_version_llrp_v_1_1_len = . - string_msg_version_llrp_v_1_1
+string_msg_version_llrp_v_2_0:
+  .ascii "LLRP 2.0"
+string_msg_version_llrp_v_2_0_len = . - string_msg_version_llrp_v_2_0
+
+string_msg_type_label:
+  .ascii "Message Type: "
+string_msg_type_label_len = . - string_msg_type_label
+
+string_msg_length_label:
+  .ascii "Message Length: "
+string_msg_length_label_len = . - string_msg_length_label
+
+string_msg_id_label:
+  .ascii "Message ID: "
+string_msg_id_label_len = . - string_msg_id_label
+
+server_addr:
+  .short 2 # AF_INET = 2
+  .short 0xdc13 # port 5084 (0x13dc big-endian stored as 0xdc13)
+  .long 0x2b12a8c0 # IP 192.168.18.43 (0x2b120164 big-endian stored as 0x6401122b)
+  .space 8, 0 # sin_zero[8]
+
+error_msg_header_rsvd_nonzero = 1
+error_msg_header_ver_unknown = 2
+
+msg_header_buf_size = 10
+msg_header_buf:
+  .space msg_header_buf_size, 0 # buffer for reading header
+
+.section .text
+.global _start
+
+# Check if msg_header_buf first byte has 3 most significant bits zero
+assert_msg_header_rsvd_zero:
+  movb msg_header_buf(%rip), %al
+  andb $0xe0, %al # mask with 11100000
+  cmpb $0, %al
+  jne assert_msg_header_rsvd_zero_fail
+  ret
+  assert_msg_header_rsvd_zero_fail:
+    movq $error_msg_header_rsvd_nonzero, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+
+print_msg_ver:
+  movb msg_header_buf(%rip), %al
+  andb $0x1c, %al # mask with 00011100
+  shrb $2, %al # shift right by 2 to get version in least significant bits
+  call print_al_hex
+  ret
+
+print_msg_type:
+  movb msg_header_buf(%rip), %ah
+  movb msg_header_buf+1(%rip), %al
+  andw $0x3ff, %ax # mask with 00000011 11111111
+  # ax now has the message type
+  call print_ah_hex
+  call print_al_hex
+  ret
+
+print_msg_len:
+  movb msg_header_buf+2(%rip), %ah
+  movb msg_header_buf+3(%rip), %al
+  movb msg_header_buf+4(%rip), %bh
+  movb msg_header_buf+5(%rip), %bl
+  # ax:bx now has the message length
+  call print_ah_hex
+  call print_al_hex
+  call print_bh_hex
+  call print_bl_hex
+  ret
+
+print_msg_id:
+  movb msg_header_buf+6(%rip), %ah
+  movb msg_header_buf+7(%rip), %al
+  movb msg_header_buf+8(%rip), %bh
+  movb msg_header_buf+9(%rip), %bl
+  # ax:bx now has the message id
+  call print_ah_hex
+  call print_al_hex
+  call print_bh_hex
+  call print_bl_hex
+  ret
+
+print_msg_ver_description:
+  movb msg_header_buf(%rip), %al
+  andb $0x1c, %al # mask with 00011100
+  shrb $2, %al # shift right by 2 to get version in least significant bits
+  cmpb $1, %al
+  je print_msg_ver_description_llrp_v_1_0_1
+  cmpb $2, %al
+  je print_msg_ver_description_llrp_v_1_1
+  cmpb $3, %al
+  je print_msg_ver_description_llrp_v_2_0
+  # unknown version
+  movq $error_msg_header_ver_unknown, %rdi
+  movq $60, %rax # syscall: exit
+  syscall
+
+  print_msg_ver_description_llrp_v_1_0_1:
+    movq $1, %rax            # syscall: write
+    movq $1, %rdi            # fd = stdout
+    leaq string_msg_version_llrp_v_1_0_1(%rip), %rsi
+    movq $string_msg_version_llrp_v_1_0_1_len, %rdx
+    syscall
+    ret
+
+  print_msg_ver_description_llrp_v_1_1:
+    movq $1, %rax            # syscall: write
+    movq $1, %rdi            # fd = stdout
+    leaq string_msg_version_llrp_v_1_1(%rip), %rsi
+    movq $string_msg_version_llrp_v_1_1_len, %rdx
+    syscall
+    ret
+
+  print_msg_ver_description_llrp_v_2_0:
+    movq $1, %rax            # syscall: write
+    movq $1, %rdi            # fd = stdout
+    leaq string_msg_version_llrp_v_2_0(%rip), %rsi
+    movq $string_msg_version_llrp_v_2_0_len, %rdx
+    syscall
+    ret
+
+print_msg_ver_wrapped:
+  # print "Version: "
+  movq $1, %rax            # syscall: write
+  movq $1, %rdi            # fd = stdout
+  leaq string_msg_version_label(%rip), %rsi
+  movq $string_msg_version_label_len, %rdx
+  syscall
+
+  call print_0x
+  call print_msg_ver
+  call print_space
+  call print_open_paren
+  call print_msg_ver_description
+  call print_close_paren
+  call print_newline
+  ret
+
+print_msg_type_wrapped:
+  # print "Message Type: "
+  movq $1, %rax            # syscall: write
+  movq $1, %rdi            # fd = stdout
+  leaq string_msg_type_label(%rip), %rsi
+  movq $string_msg_type_label_len, %rdx
+  syscall
+
+  call print_0x
+  call print_msg_type
+  call print_newline
+  ret
+
+print_msg_length_wrapped:
+  # print "Message Length: "
+  movq $1, %rax            # syscall: write
+  movq $1, %rdi            # fd = stdout
+  leaq string_msg_length_label(%rip), %rsi
+  movq $string_msg_length_label_len, %rdx
+  syscall
+
+  call print_0x
+  call print_msg_len
+  call print_newline
+  ret
+
+print_msg_id_wrapped:
+  # print "Message ID: "
+  movq $1, %rax            # syscall: write
+  movq $1, %rdi            # fd = stdout
+  leaq string_msg_id_label(%rip), %rsi
+  movq $string_msg_id_label_len, %rdx
+  syscall
+
+  call print_0x
+  call print_msg_id
+  call print_newline
+  ret
+
+_start:
+  # socket(AF_INET=2, SOCK_STREAM=1, 0)
+  movq $41, %rax # syscall: socket
+  movq $2, %rdi # AF_INET
+  movq $1, %rsi # SOCK_STREAM
+  xorq %rdx, %rdx # protocol 0
+  syscall
+  movq %rax, %r12 # save fd in r12
+
+  # connect(fd, &server_addr, 16)
+  movq $42, %rax # syscall: connect
+  movq %r12, %rdi # fd
+  leaq server_addr(%rip), %rsi # &server_addr
+  movq $16, %rdx # addrlen
+  syscall
+
+  # read(fd, buf, header_buf_size)
+  movq $0, %rax # syscall: read
+  movq %r12, %rdi # fd
+  leaq msg_header_buf(%rip), %rsi # msg_header_buf
+  movq $msg_header_buf_size, %rdx # count
+  syscall
+  movq %rax, %r13 # save num bytes read in r13
+
+  call assert_msg_header_rsvd_zero
+  call print_msg_ver_wrapped
+  call print_msg_type_wrapped
+  call print_msg_length_wrapped
+  call print_msg_id_wrapped
+
+  # write(1, buf, num_bytes_read)
+  # movq $1, %rax # syscall: write
+  # movq $1, %rdi # fd = stdout
+  # leaq msg_header_buf(%rip), %rsi # msg_header_buf
+  # movq %r13, %rdx # count = num bytes read
+  # syscall
+
+  # close(fd)
+  movq $3, %rax # syscall: close
+  movq %r12, %rdi # fd
+  syscall
+
+  # exit(0)
+  movq $60, %rax # syscall: exit
+  xorq %rdi, %rdi # status 0
+  syscall
+
