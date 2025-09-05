@@ -33,10 +33,15 @@ server_addr:
 
 error_msg_header_rsvd_nonzero = 1
 error_msg_header_ver_unknown = 2
+error_receive_msg_header_overflow = 3 # should never happen
 
 msg_header_buf_size = 10
 msg_header_buf:
-  .space msg_header_buf_size, 0 # buffer for reading header
+  .space msg_header_buf_size, 0 # buffer for reading message header
+
+msg_body_buf_size = 256
+msg_body_buf:
+  .space msg_body_buf_size, 0 # buffer for reading message body
 
 .section .text
 .global _start
@@ -188,6 +193,25 @@ print_msg_id_wrapped:
   call print_newline
   ret
 
+# Assumes r12 contains the socket fd
+# Assumes r13 contains the number of bytes read into msg_header_buf (should be initialized to 0 by the caller)
+receive_msg_header:
+  movq $0, %rax # syscall: read
+  movq %r12, %rdi # fd
+  leaq msg_header_buf(%rip), %rsi # msg_header_buf
+  movq $msg_header_buf_size, %rdx # count
+  subq %r13, %rdx # count = msg_header_buf_size - num_bytes_read
+  syscall
+  addq %rax, %r13 # update num_bytes_read
+  cmpq $msg_header_buf_size, %r13
+  jl receive_msg_header
+  jg receive_msg_header_overflow_error
+  ret
+  receive_msg_header_overflow_error:
+    movq $error_receive_msg_header_overflow, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+
 _start:
   # socket(AF_INET=2, SOCK_STREAM=1, 0)
   movq $41, %rax # syscall: socket
@@ -204,13 +228,16 @@ _start:
   movq $16, %rdx # addrlen
   syscall
 
-  # read(fd, buf, header_buf_size)
-  movq $0, %rax # syscall: read
-  movq %r12, %rdi # fd
-  leaq msg_header_buf(%rip), %rsi # msg_header_buf
-  movq $msg_header_buf_size, %rdx # count
-  syscall
-  movq %rax, %r13 # save num bytes read in r13
+  # read(fd, buf, msg_header_buf_size)
+  # movq $0, %rax # syscall: read
+  # movq %r12, %rdi # fd
+  # leaq msg_header_buf(%rip), %rsi # msg_header_buf
+  # movq $msg_header_buf_size, %rdx # count
+  # syscall
+  # movq %rax, %r13 # save num bytes read in r13
+
+  xorq %r13, %r13 # num bytes read = 0
+  call receive_msg_header
 
   call assert_msg_header_rsvd_zero
   call print_msg_ver_wrapped
