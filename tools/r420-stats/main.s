@@ -34,6 +34,10 @@ server_addr:
 error_msg_header_rsvd_nonzero = 1
 error_msg_header_ver_unknown = 2
 error_receive_msg_header_overflow = 3 # should never happen
+error_connection_closed_by_peer = 4
+error_receive_msg_body_read_overflow = 5 # should never happen
+error_not_implemented = 6
+error_msg_body_param_tlv_rsvd_nonzero = 7
 
 msg_header_buf_size = 10
 msg_header_buf:
@@ -202,6 +206,10 @@ receive_msg_header:
   movq $msg_header_buf_size, %rdx # count
   subq %r13, %rdx # count = msg_header_buf_size - num_bytes_read
   syscall
+
+  cmpq $0, %rax
+  je receive_msg_header_connection_closed_by_peer
+  
   addq %rax, %r13 # update num_bytes_read
   cmpq $msg_header_buf_size, %r13
   jl receive_msg_header
@@ -209,6 +217,82 @@ receive_msg_header:
   ret
   receive_msg_header_overflow_error:
     movq $error_receive_msg_header_overflow, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+  receive_msg_header_connection_closed_by_peer:
+    movq $error_connection_closed_by_peer, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+
+# output the message length in eax
+get_msg_length_from_header:
+  movl msg_header_buf+2(%rip), %eax
+  bswapl %eax
+  # eax now has the message length
+  ret
+
+# Assumes r12 contains the socket fd
+receive_msg_body:
+  call get_msg_length_from_header
+  cmpl $msg_header_buf_size, %eax
+  jg receive_msg_body_nonempty
+  ret
+  receive_msg_body_nonempty:
+    # receive first byte of body
+    movq $0, %rax # syscall: read
+    movq %r12, %rdi # fd
+    leaq msg_body_buf(%rip), %rsi # msg_body_buf
+    movq $1, %rdx # count
+    syscall
+
+    # check for errors
+    cmpq $0, %rax
+    je receive_msg_body_connection_closed_by_peer
+    cmpq $1, %rax
+    jne receive_msg_body_read_overflow_error
+
+    # check if the parameter is TLV or TV encoded
+    movb msg_body_buf(%rip), %al
+    andb $0x80, %al # mask with 10000000
+    cmpb $0, %al
+    je receive_msg_body_param_tlv
+
+    # TV is not implemented yet
+    movq $error_not_implemented, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+
+  receive_msg_body_param_tlv:
+    # check if the reserved bits are zero
+    andb $0xfc, %al # mask with 11111100
+    cmpb $0, %al
+    jne receive_msg_body_param_tlv_rsvd_nonzero_error
+
+    
+
+    # movb msg_body_buf+2(%rip), %
+    # TODO
+
+
+  receive_msg_body_param_tlv_get_type:
+    movb msg_body_buf(%rip), %ah
+    movb msg_body_buf+1(%rip), %al
+    andw $0x3ff, %ax # mask with 00000011 11111111
+    # ax now has the parameter type
+    ret
+
+  receive_msg_body_param_tlv_get_len:
+    movb msg_body_buf+2(%rip), %ah
+    movb msg_body_buf+3(%rip), %al
+    # ax now has the parameter length
+    ret
+
+  receive_msg_body_connection_closed_by_peer:
+    movq $error_connection_closed_by_peer, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+  receive_msg_body_read_overflow_error:
+    movq $error_receive_msg_body_read_overflow, %rdi
     movq $60, %rax # syscall: exit
     syscall
 
@@ -244,6 +328,8 @@ _start:
   call print_msg_type_wrapped
   call print_msg_length_wrapped
   call print_msg_id_wrapped
+
+  call receive_msg_body
 
   # write(1, buf, num_bytes_read)
   # movq $1, %rax # syscall: write
