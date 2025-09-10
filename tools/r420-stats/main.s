@@ -38,6 +38,7 @@ error_connection_closed_by_peer = 4
 error_receive_msg_body_read_overflow = 5 # should never happen
 error_not_implemented = 6
 error_msg_body_param_tlv_rsvd_nonzero = 7
+error_msg_body_length_exceeds_buffer = 8
 
 msg_header_buf_size = 10
 msg_header_buf:
@@ -203,6 +204,7 @@ receive_msg_header:
   movq $0, %rax # syscall: read
   movq %r12, %rdi # fd
   leaq msg_header_buf(%rip), %rsi # msg_header_buf
+  addq %r13, %rsi # msg_header_buf + num_bytes_read
   movq $msg_header_buf_size, %rdx # count
   subq %r13, %rdx # count = msg_header_buf_size - num_bytes_read
   syscall
@@ -231,6 +233,23 @@ get_msg_length_from_header:
   # eax now has the message length
   ret
 
+# assumes the first 3 bytes of msg_body_buf contain the TLV header
+# outputs the parameter type into ax
+get_tlv_param_type_from_body:
+  movb msg_body_buf(%rip), %ah
+  movb msg_body_buf+1(%rip), %al
+  andw $0x3ff, %ax # mask with 00000011 11111111
+  # ax now has the parameter type
+  ret
+
+# assumes the first 3 bytes of msg_body_buf contain the TLV header
+# outputs the parameter length into ax
+get_tlv_param_length_from_body:
+  movb msg_body_buf+2(%rip), %ah
+  movb msg_body_buf+3(%rip), %al
+  # ax now has the parameter length
+  ret
+
 # Assumes r12 contains the socket fd
 receive_msg_body:
   call get_msg_length_from_header
@@ -238,6 +257,16 @@ receive_msg_body:
   jg receive_msg_body_nonempty
   ret
   receive_msg_body_nonempty:
+    # rax now has the total message length
+    # check if our body buffer is large enough
+    subl $msg_header_buf_size, %eax
+    cmpl $msg_body_buf_size, %eax
+    jg receive_msg_body_length_exceeds_buffer_error
+
+    # save message body length in r14d
+    movl %eax, %r14d 
+    # TODO
+
     # receive first byte of body
     movq $0, %rax # syscall: read
     movq %r12, %rdi # fd
@@ -268,11 +297,35 @@ receive_msg_body:
     cmpb $0, %al
     jne receive_msg_body_param_tlv_rsvd_nonzero_error
 
-    
+    # Receive the next 3 bytes to complete the TLV header
+    # Using r13 to count received bytes
+    xorq %r13, %r13 # num bytes read = 0
+    call receive_msg_body_param_tlv_complete_receiving_header
 
-    # movb msg_body_buf+2(%rip), %
+    # Now we have the complete TLV header in msg_body_buf and we are ready to get the param length from it
+    call get_tlv_param_length_from_body
     # TODO
 
+
+  
+  # Assumes r13 is initialized to 0
+  receive_msg_body_param_tlv_complete_receiving_header:
+    movq $0, %rax # syscall: read
+    movq %r12, %rdi # fd
+    leaq msg_body_buf+1(%rip), %rsi # msg_body_buf + 1
+    addq %r13, %rsi # msg_body_buf + 1 + num_bytes_read
+    movq $3, %rdx # count
+    subq %r13, %rdx # count = 3 - num_bytes_read
+    syscall
+
+    cmpq $0, %rax
+    je receive_msg_body_connection_closed_by_peer
+
+    addq %rax, %r13 # update num_bytes_read
+    cmpq $3, %rax
+    jl receive_msg_body_param_tlv_complete_receiving_header
+    jg receive_msg_body_read_overflow_error
+    ret
 
   receive_msg_body_param_tlv_get_type:
     movb msg_body_buf(%rip), %ah
@@ -295,6 +348,13 @@ receive_msg_body:
     movq $error_receive_msg_body_read_overflow, %rdi
     movq $60, %rax # syscall: exit
     syscall
+  receive_msg_body_length_exceeds_buffer_error:
+    movq $error_msg_body_length_exceeds_buffer, %rdi
+    movq $60, %rax # syscall: exit
+    syscall
+  receive_msg_body_param_tlv_rsvd_nonzero_error:
+    movq $error_msg_body_param_tlv_rsvd_nonzero, %rdi
+    movq $60, %rax # syscall: exit
 
 _start:
   # socket(AF_INET=2, SOCK_STREAM=1, 0)
