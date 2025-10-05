@@ -28,7 +28,9 @@ string_msg_id_label_len = . - string_msg_id_label
 server_addr:
   .short 2 # AF_INET = 2
   .short 0xdc13 # port 5084 (0x13dc big-endian stored as 0xdc13)
-  .long 0x2b12a8c0 # IP 192.168.18.43 (0x2b120164 big-endian stored as 0x6401122b)
+  # .short 0xa00f # port 4000 (0x0fa0 big-endian stored as 0xa00f)
+  .long 0x2b12a8c0 # IP 192.168.18.43 (0xc0a8122b big-endian stored as 0x2b12a8c0)
+  # .long 0x0100007f # IP 127.0.0.1 (0x7f000001 big-endian stored as 0x0100007f)
   .space 8, 0 # sin_zero[8]
 
 error_msg_header_rsvd_nonzero = 1
