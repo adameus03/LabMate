@@ -219,20 +219,33 @@
 #define R420_PARAM_TYPE_C1G2_GET_BLOCK_PERMALOCK_STATUS_OPSPEC_RESULT 362
 #define R420_PARAM_TYPE_C1G2_UNTRACABLE_OPSPEC_RESULT 364
 
+
+struct r420_ctx;
+typedef struct r420_msg_hdr {
+  uint16_t attrs;
+  uint32_t message_length;
+  uint32_t message_id;
+} __attribute__((__packed__)) r420_msg_hdr_t;
+
+// Loop callback function type
+typedef void (*r420_loop_callback_t)(const struct r420_ctx *pCtx);
+// Log callback function type
+typedef void (*r420_log_callback_t)(const struct r420_ctx *pCtx, const char *pMsg);
+
 typedef struct r420_ctx {
   int fd;
+  //uint32_t flags;
+  r420_loop_callback_t loop_handler;
+  r420_log_callback_t log_handler;
+  uint32_t next_tx_msg_id;
+  void* pUserData;
+  int terminate_flag; // Set to 1 to non-zero value to stop `r420_loop()`
 } r420_ctx_t;
 
 typedef struct r420_connection_parameters {
   uint32_t ip;
   uint16_t port;
 } r420_connection_parameters_t;
-
-typedef struct r420_msg_hdr {
-  uint16_t attrs;
-  uint32_t message_length;
-  uint32_t message_id;
-} __attribute__((__packed__)) r420_msg_hdr_t;
 
 // reserved: bits 15-13
 #define R420_MSG_HDR_RESERVED(hdr) ((ntohs((hdr).attrs) >> 13) & 0x7)
@@ -243,15 +256,18 @@ typedef struct r420_msg_hdr {
 #define R420_MSG_HDR_MSG_LENGTH(hdr) (ntohl((hdr).message_length))
 #define R420_MSG_HDR_MSG_ID(hdr) (ntohl((hdr).message_id))
 
-// Loop callback function type
-typedef void (*r420_loop_callback_t)(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr);
-
 r420_ctx_t r420_connect(const r420_connection_parameters_t conn_params);
+
+void r420_ctx_set_loop_handler(r420_ctx_t *pCtx, r420_loop_callback_t loop_handler);
+
+void r420_ctx_set_log_handler(r420_ctx_t *pCtx, r420_log_callback_t log_handler);
 
 void r420_close(r420_ctx_t *pCtx);
 
 r420_msg_hdr_t r420_receive_header(const r420_ctx_t *pCtx);
 
-void r420_loop(const r420_ctx_t *pCtx, r420_loop_callback_t loop_handler);
+void r420_loop(r420_ctx_t *pCtx, void* pArg);
+
+void r420_unloop(r420_ctx_t *pCtx);
 
 #endif // R420_H

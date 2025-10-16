@@ -21,6 +21,22 @@ uint32_t get_ip_addr(const char *ip_str) {
   return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
 }
 
+
+void main_r420_loop_handler(const r420_ctx_t *pCtx) {
+  uint32_t *pCounter = (uint32_t *)pCtx->pUserData;
+  (*pCounter)++;
+  printf("main_r420_loop_handler: Iteration %u\n", *pCounter);
+  if (*pCounter >= 2) {
+    printf("main_r420_loop_handler: Reached %u iterations, exiting loop.\n", *pCounter);
+    r420_unloop((r420_ctx_t *)pCtx);
+    printf("main_r420_loop_handler: Exited loop.\n");
+  }
+}
+
+void main_r420_log_handler(const r420_ctx_t *pCtx, const char *pMsg) {
+  printf("R420 Log: %s\n", pMsg);
+}
+
 int main(int argc, char **argv) {
   r420_connection_parameters_t conn_params = {
     .ip = get_ip_addr(READER_IP_ADDR),
@@ -29,18 +45,28 @@ int main(int argc, char **argv) {
   printf("Connecting to reader at %s:%u...\n", READER_IP_ADDR, READER_PORT);
   r420_ctx_t ctx = r420_connect(conn_params);
   printf("Connected.\n");
-  printf("Receiving message header...\n");
-  r420_msg_hdr_t hdr = r420_receive_header(&ctx);
-  printf("Received message header.\n");
-  printf("Printing message header:\n");
-  printf("Raw data:\n");
-  const uint8_t *pHdrBytes = (const uint8_t *)&hdr;
-  for (size_t i = 0; i < sizeof(hdr); i++) {
-    printf(" %02X", pHdrBytes[i]);
-  }
-  printf("\n");
-  print_header(&hdr);
+  // printf("Receiving message header...\n");
+  // r420_msg_hdr_t hdr = r420_receive_header(&ctx);
+  // printf("Received message header.\n");
+  // printf("Printing message header:\n");
+  // printf("Raw data:\n");
+  // const uint8_t *pHdrBytes = (const uint8_t *)&hdr;
+  // for (size_t i = 0; i < sizeof(hdr); i++) {
+  //   printf(" %02X", pHdrBytes[i]);
+  // }
+  // printf("\n");
+  // print_header(&hdr);
+  // printf("Terminating connection.\n");
+  // r420_close(&ctx);
+  uint32_t r420_loop_counter = 0;
+  r420_ctx_set_loop_handler(&ctx, main_r420_loop_handler);
+  r420_ctx_set_log_handler(&ctx, main_r420_log_handler);
+  printf("Entering r420 loop...\n");
+  r420_loop(&ctx, &r420_loop_counter);
+  printf("Exited r420 loop after %u iterations.\n", r420_loop_counter);
   printf("Terminating connection.\n");
   r420_close(&ctx);
+  printf("Terminated.\n");
+
   return 0;
 }
