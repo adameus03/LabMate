@@ -26,7 +26,7 @@ void main_r420_loop_handler(const r420_ctx_t *pCtx) {
   uint32_t *pCounter = (uint32_t *)pCtx->pUserData;
   (*pCounter)++;
   printf("main_r420_loop_handler: Iteration %u\n", *pCounter);
-  if (*pCounter >= 2) {
+  if (*pCounter >= 3) {
     printf("main_r420_loop_handler: Reached %u iterations, exiting loop.\n", *pCounter);
     r420_unloop((r420_ctx_t *)pCtx);
     printf("main_r420_loop_handler: Exited loop.\n");
