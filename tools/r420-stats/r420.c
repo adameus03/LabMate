@@ -63,7 +63,7 @@ r420_ctx_t r420_connect(const r420_connection_parameters_t conn_params) {
     .sin_addr.s_addr = htonl(conn_params.ip)  // Convert to network byte order
   };
   assert(0 == connect(fd, (struct sockaddr *)&addr, sizeof(addr)));
-  return (r420_ctx_t){ .fd = fd, .loop_handler = NULL, .log_handler = NULL, .next_tx_msg_id = 1, .terminate_flag = 0 };
+  return (r420_ctx_t){ .fd = fd, .loop_handler = NULL, .log_handler = NULL, .next_tx_msg_id = 1, .llrp_version = 1, .terminate_flag = 0 };
 }
 
 void r420_ctx_set_loop_handler(r420_ctx_t *pCtx, r420_loop_callback_t loop_handler) {
@@ -189,6 +189,23 @@ void r420_process_get_supported_version_response_msg(const r420_ctx_t *pCtx, con
   // TODO Handle the error description and error params
 }
 
+void r420_process_get_reader_capabilities_response_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // First 4 bytes - TLV header for LLRPStatus parameter
+  // Next 2 bytes - StatusCode
+  // Next 2 bytes - Error Description ByteCount
+  // ...
+  assert(pBody->len >= 8); // We expect at least 8 bytes
+  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
+  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+  assert(status_code == 0); // We expect StatusCode=M_Success
+  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+  // We ignore the error description and error params for now
+  // TODO Handle the error description and error params
+  // TODO Parse other parameters in the GetReaderCapabilitiesResponse message
+}
+
 void r420_send_message(r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, const r420_msg_body_t *pBody) {
   // Send header
   ssize_t remaining_snd_bytes = sizeof(*pHdr);
@@ -209,12 +226,42 @@ void r420_send_message(r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, const r420_
 
 void r420_send_get_supported_version_msg(r420_ctx_t *pCtx) {
   r420_msg_hdr_t hdr = {
-    /* version = 2, message type = R420_MSG_TYPE_GET_SUPPORTED_VERSION */
-    .attrs = htons((2 << 10) | R420_MSG_TYPE_GET_SUPPORTED_VERSION),
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_GET_SUPPORTED_VERSION */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_GET_SUPPORTED_VERSION),
     .message_length = htonl(sizeof(r420_msg_hdr_t)), // No body
     .message_id = htonl(pCtx->next_tx_msg_id)
   };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_GET_SUPPORTED_VERSION);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t));
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+
   r420_msg_body_t body = { .buf = {0}, .len = 0 };
+  r420_send_message(pCtx, &hdr, &body);
+}
+
+#define R420_GET_READER_CAPABILITIES_REQUESTED_DATA_ALL 0
+#define R420_GET_READER_CAPABILITIES_REQUESTED_DATA_GENERAL_DEVICE_CAPABILITIES 1
+#define R420_GET_READER_CAPABILITIES_REQUESTED_DATA_LLRP_CAPABILITIES 2
+#define R420_GET_READER_CAPABILITIES_REQUESTED_DATA_REGULATORY_CAPABILITIES 3
+#define R420_GET_READER_CAPABILITIES_REQUESTED_DATA_AIR_PROTOCOL_CAPABILITIES 4
+
+void r420_send_get_reader_capabilities_msg(r420_ctx_t *pCtx) {
+  uint8_t requested_data = R420_GET_READER_CAPABILITIES_REQUESTED_DATA_ALL;
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(requested_data) };
+  body.buf[0] = requested_data;
+
+  r420_msg_hdr_t hdr = {
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_GET_READER_CAPABILITIES */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_GET_READER_CAPABILITIES),
+    .message_length = htonl(sizeof(r420_msg_hdr_t) + body.len),
+    .message_id = htonl(pCtx->next_tx_msg_id)
+  };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_GET_READER_CAPABILITIES);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+
   r420_send_message(pCtx, &hdr, &body);
 }
 
@@ -223,10 +270,14 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
   switch(R420_MSG_HDR_MESSAGE_TYPE(*pHdr)) {
     case R420_MSG_TYPE_READER_EVENT_NOTIFICATION:
       r420_process_reader_event_notification_msg(pCtx, pBody);
-      r420_send_get_supported_version_msg((r420_ctx_t*)pCtx);
+      //r420_send_get_supported_version_msg((r420_ctx_t*)pCtx);
+      r420_send_get_reader_capabilities_msg((r420_ctx_t*)pCtx);
       break;
     case R420_MSG_TYPE_GET_SUPPORTED_VERSION_RESPONSE:
       r420_process_get_supported_version_response_msg(pCtx, pBody);
+      break;
+    case R420_MSG_TYPE_GET_READER_CAPABILITIES_RESPONSE:
+      r420_process_get_reader_capabilities_response_msg(pCtx, pBody);
       break;
     default:
       assert(0);

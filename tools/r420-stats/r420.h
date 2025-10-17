@@ -238,6 +238,7 @@ typedef struct r420_ctx {
   r420_loop_callback_t loop_handler;
   r420_log_callback_t log_handler;
   uint32_t next_tx_msg_id;
+  uint16_t llrp_version;
   void* pUserData;
   int terminate_flag; // Set to 1 to non-zero value to stop `r420_loop()`
 } r420_ctx_t;
