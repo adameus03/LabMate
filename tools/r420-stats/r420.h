@@ -241,6 +241,7 @@ typedef struct r420_ctx {
   uint16_t llrp_version;
   void* pUserData;
   int terminate_flag; // Set to 1 to non-zero value to stop `r420_loop()`
+  int rospec_added;
 } r420_ctx_t;
 
 typedef struct r420_connection_parameters {
