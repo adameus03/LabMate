@@ -159,6 +159,7 @@ void r420_process_reader_event_notification_msg(const r420_ctx_t *pCtx, const r4
         break;
       default:
         // Unknown parameter type, we just skip it
+        r420_logf(pCtx, "r420_process_reader_event_notification_msg: Skipping unknown parameter type 0x%X", param_info.type);
         //TODO Add a ctx handler to pass this event to the user
         break;
     }
@@ -314,6 +315,40 @@ void r420_process_disable_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_b
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
   assert(status_code == 0); // We expect StatusCode=M_Success
   pCtx->rospec_enabled = 0;
+  pCtx->rospec_started = 0;
+  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+  // We ignore the error description and error params for now
+  // TODO Handle the error description and error params
+}
+
+void r420_process_start_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // First 4 bytes - TLV header for LLRPStatus parameter
+  // Next 2 bytes - StatusCode
+  // Next 2 bytes - Error Description ByteCount
+  // ...
+  assert(pBody->len >= 8); // We expect at least 8 bytes
+  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
+  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+  assert(status_code == 0); // We expect StatusCode=M_Success
+  pCtx->rospec_started = 1;
+  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+  // We ignore the error description and error params for now
+  // TODO Handle the error description and error params
+}
+
+void r420_process_stop_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // First 4 bytes - TLV header for LLRPStatus parameter
+  // Next 2 bytes - StatusCode
+  // Next 2 bytes - Error Description ByteCount
+  // ...
+  assert(pBody->len >= 8); // We expect at least 8 bytes
+  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
+  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+  assert(status_code == 0); // We expect StatusCode=M_Success
   pCtx->rospec_started = 0;
   //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
   // We ignore the error description and error params for now
@@ -593,13 +628,58 @@ void r420_send_disable_rospec_msg(r420_ctx_t* pCtx) {
   r420_send_message(pCtx, &hdr, &body);
 }
 
+void r420_send_start_rospec_msg(r420_ctx_t* pCtx) {
+  uint32_t rospec_id = 1;
+
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(rospec_id) };
+  *(uint32_t *)(body.buf) = htonl(rospec_id);
+
+  r420_msg_hdr_t hdr = {
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_START_ROSPEC */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_START_ROSPEC),
+    .message_length = htonl(sizeof(r420_msg_hdr_t) + body.len),
+    .message_id = htonl(pCtx->next_tx_msg_id)
+  };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_START_ROSPEC);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+
+  r420_send_message(pCtx, &hdr, &body);
+}
+
+void r420_send_stop_rospec_msg(r420_ctx_t* pCtx) {
+  uint32_t rospec_id = 1;
+
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(rospec_id) };
+  *(uint32_t *)(body.buf) = htonl(rospec_id);
+
+  r420_msg_hdr_t hdr = {
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_STOP_ROSPEC */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_STOP_ROSPEC),
+    .message_length = htonl(sizeof(r420_msg_hdr_t) + body.len),
+    .message_id = htonl(pCtx->next_tx_msg_id)
+  };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_STOP_ROSPEC);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+
+  r420_send_message(pCtx, &hdr, &body);
+}
+
 void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, const r420_msg_body_t *pBody) {
   r420_logf(pCtx, "Received message: Type=0x%X, Length=%u, ID=%u", R420_MSG_HDR_MESSAGE_TYPE(*pHdr), R420_MSG_HDR_MSG_LENGTH(*pHdr), R420_MSG_HDR_MSG_ID(*pHdr));
   switch(R420_MSG_HDR_MESSAGE_TYPE(*pHdr)) {
     case R420_MSG_TYPE_READER_EVENT_NOTIFICATION:
       r420_process_reader_event_notification_msg(pCtx, pBody);
-      //r420_send_get_supported_version_msg((r420_ctx_t*)pCtx);
-      r420_send_get_reader_capabilities_msg((r420_ctx_t*)pCtx);
+      if (pCtx->rospec_started) {
+        // For now, stop the ROSpec after receiving the first ReaderEventNotification
+        r420_send_stop_rospec_msg((r420_ctx_t*)pCtx);
+      } else {
+        //r420_send_get_supported_version_msg((r420_ctx_t*)pCtx);
+        r420_send_get_reader_capabilities_msg((r420_ctx_t*)pCtx);
+      }
       break;
     case R420_MSG_TYPE_GET_SUPPORTED_VERSION_RESPONSE:
       r420_process_get_supported_version_response_msg(pCtx, pBody);
@@ -616,8 +696,13 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       r420_process_get_rospecs_response_msg((r420_ctx_t*)pCtx, pBody);
       if (pCtx->rospec_added) {
         if (pCtx->rospec_enabled) {
-          r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
-          r420_unloop((r420_ctx_t*)pCtx); // Terminate for now
+          if (pCtx->rospec_started) {
+            r420_logf(pCtx, "ROSPEC already started. No further action.");
+          } else {
+            r420_send_start_rospec_msg((r420_ctx_t*)pCtx);
+            //r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
+            //r420_unloop((r420_ctx_t*)pCtx); // Terminate
+          }
         } else {
           r420_send_enable_rospec_msg((r420_ctx_t*)pCtx);
         }
@@ -633,8 +718,24 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       r420_process_enable_rospec_response_msg((r420_ctx_t*)pCtx, pBody);
       r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
       break;
+    case R420_MSG_TYPE_DISABLE_ROSPEC_RESPONSE:
+      r420_process_disable_rospec_response_msg((r420_ctx_t*)pCtx, pBody);
+      r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
+      break;
+    case R420_MSG_TYPE_START_ROSPEC_RESPONSE:
+      r420_process_start_rospec_response_msg((r420_ctx_t*)pCtx, pBody);
+      r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
+      break;
+    case R420_MSG_TYPE_STOP_ROSPEC_RESPONSE:
+      r420_process_stop_rospec_response_msg((r420_ctx_t*)pCtx, pBody);
+      //r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
+      r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
+      r420_unloop((r420_ctx_t*)pCtx); // Terminate
+      break;
     default:
-      assert(0);
+      //assert(0);
+      r420_logf(pCtx, "Unhandled message type: 0x%X", R420_MSG_HDR_MESSAGE_TYPE(*pHdr));
+      r420_send_stop_rospec_msg((r420_ctx_t*)pCtx);
       break;
   }
 
