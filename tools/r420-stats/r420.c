@@ -225,6 +225,22 @@ void r420_process_get_reader_config_response_msg(const r420_ctx_t *pCtx, const r
   // TODO Parse other parameters in the GetReaderConfigResponse message
 }
 
+void r420_process_set_reader_config_response_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // First 4 bytes - TLV header for LLRPStatus parameter
+  // Next 2 bytes - StatusCode
+  // Next 2 bytes - Error Description ByteCount
+  // ...
+  assert(pBody->len >= 8); // We expect at least 8 bytes
+  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
+  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+  assert(status_code == 0); // We expect StatusCode=M_Success
+  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+  // We ignore the error description and error params for now
+  // TODO Handle the error description and error params
+}
+
 void r420_process_get_rospecs_response_msg(r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
   // First 4 bytes - TLV header for LLRPStatus parameter
   // Next 2 bytes - StatusCode
@@ -440,6 +456,168 @@ void r420_send_get_reader_config_msg(r420_ctx_t* pCtx) {
   r420_send_message(pCtx, &hdr, &body);
 }
 
+#define IMPINJ_VENDOR_ID 25882
+
+void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
+  uint8_t reset_to_factory_default = 0; // don't reset
+  uint8_t reserved = 0;
+  uint8_t flags = reset_to_factory_default | (reserved << 1);
+
+  uint8_t ro_report_trigger = 2; // Upon N TagReportData Parameters or End of ROSpec
+  uint16_t n = 1; // N=1
+
+  // TagReportContentSelector
+  uint16_t enable_rospec_id = 0;
+  uint16_t enable_spec_index = 0;
+  uint16_t enable_inventory_parameter_spec_id = 0;
+  uint16_t enable_antenna_id = 1;
+  uint16_t enable_channel_index = 0;
+  uint16_t enable_peak_rssi = 1;
+  uint16_t enable_first_seen_timestamp = 1;
+  uint16_t enable_last_seen_timestamp = 0;
+  uint16_t enable_tag_seen_count = 0;
+  uint16_t enable_access_spec_id = 0;
+  uint16_t tag_report_content_selector_reserved = 0;
+
+  uint16_t tag_report_content_selector_flags = enable_rospec_id |
+                                               (enable_spec_index << 1) |
+                                               (enable_inventory_parameter_spec_id << 2) |
+                                               (enable_antenna_id << 3) |
+                                               (enable_channel_index << 4) |
+                                               (enable_peak_rssi << 5) |
+                                               (enable_first_seen_timestamp << 6) |
+                                               (enable_last_seen_timestamp << 7) |
+                                               (enable_tag_seen_count << 8) |
+                                               (enable_access_spec_id << 9) |
+                                               (tag_report_content_selector_reserved << 10);
+
+  // C1G2EPCMemorySelector
+  uint8_t enable_crc = 0;
+  uint8_t enable_pc_bits = 0;
+  uint8_t c1g2_epc_memory_selector_reserved = 0;
+
+  uint8_t c1g2_epc_memory_selector_flags = enable_crc |
+                                           (enable_pc_bits << 1) |
+                                           (c1g2_epc_memory_selector_reserved << 2);
+
+  //ImpinjTagReportContentSelector
+  uint32_t impinj_tag_report_content_selector_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_tag_report_content_selector_subtype = 50;
+
+  //ImpinjEnableRFPhaseAngle
+  uint32_t impinj_enable_rf_phase_angle_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_enable_rf_phase_angle_subtype = 52;
+  uint16_t rf_phase_angle_mode = 1; // Enable
+
+  //ImpinjEnableRFDopplerFrequency
+  uint32_t impinj_enable_rf_doppler_frequency_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_enable_rf_doppler_frequency_subtype = 67;
+  uint16_t rf_doppler_frequency_mode = 1; // Enable
+
+  // Construct the headers for body parameters
+  r420_msg_body_param_tlv_hdr_t impinj_enable_rf_phase_angle_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_enable_rf_phase_angle_vendor_id) + sizeof(impinj_enable_rf_phase_angle_subtype) + sizeof(rf_phase_angle_mode))
+  };
+
+  r420_msg_body_param_tlv_hdr_t impinj_enable_rf_doppler_frequency_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_enable_rf_doppler_frequency_vendor_id) + sizeof(impinj_enable_rf_doppler_frequency_subtype) + sizeof(rf_doppler_frequency_mode))
+  };
+
+  r420_msg_body_param_tlv_hdr_t impinj_tag_report_content_selector_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_tag_report_content_selector_vendor_id) + sizeof(impinj_tag_report_content_selector_subtype) + ntohs(impinj_enable_rf_phase_angle_param_hdr.param_len) + ntohs(impinj_enable_rf_doppler_frequency_param_hdr.param_len))
+  };
+
+  r420_msg_body_param_tlv_hdr_t c1g2_epc_memory_selector_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_MEMORY_SELECTOR), // reserved=0, type=C1G2EPCMemorySelector
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_epc_memory_selector_flags))
+  };
+
+  r420_msg_body_param_tlv_hdr_t tag_report_content_selector_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_TAG_REPORT_CONTENT_SELECTOR), // reserved=0, type=TagReportContentSelector
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(tag_report_content_selector_flags) + ntohs(c1g2_epc_memory_selector_param_hdr.param_len))
+  };
+
+  r420_msg_body_param_tlv_hdr_t ro_report_spec_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_RO_REPORT_SPEC), // reserved=0, type=ROReportSpec
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(ro_report_trigger) + sizeof(n) + ntohs(tag_report_content_selector_param_hdr.param_len) + ntohs(impinj_tag_report_content_selector_param_hdr.param_len))
+  };
+
+  /* Construct the message body */
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(flags) + ntohs(ro_report_spec_param_hdr.param_len) };
+  size_t offset = 0;
+  body.buf[offset] = flags;
+  offset += sizeof(flags);
+  // Copy ROReportSpec tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = ro_report_spec_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy ROReportTrigger
+  body.buf[offset] = ro_report_trigger;
+  offset += sizeof(ro_report_trigger);
+  // Copy N
+  *(uint16_t *)(body.buf + offset) = htons(n);
+  offset += sizeof(n);
+  // Copy TagReportContentSelector tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = tag_report_content_selector_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy TagReportContentSelector flags
+  *(uint16_t *)(body.buf + offset) = htons(tag_report_content_selector_flags);
+  offset += sizeof(tag_report_content_selector_flags);
+  // Copy C1G2EPCMemorySelector tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_epc_memory_selector_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy C1G2EPCMemorySelector flags
+  *(uint8_t *)(body.buf + offset) = c1g2_epc_memory_selector_flags;
+  offset += sizeof(c1g2_epc_memory_selector_flags);
+  // Copy ImpinjTagReportContentSelector tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_enable_rf_doppler_frequency_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy ImpinjTagReportContentSelector vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_tag_report_content_selector_vendor_id);
+  offset += sizeof(impinj_tag_report_content_selector_vendor_id);
+  // Copy ImpinjTagReportContentSelector subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_tag_report_content_selector_subtype);
+  offset += sizeof(impinj_tag_report_content_selector_subtype);
+  // Copy ImpinjEnableRFPhaseAngle tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_enable_rf_phase_angle_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy ImpinjEnableRFPhaseAngle vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_enable_rf_phase_angle_vendor_id);
+  offset += sizeof(impinj_enable_rf_phase_angle_vendor_id);
+  // Copy ImpinjEnableRFPhaseAngle subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_enable_rf_phase_angle_subtype);
+  offset += sizeof(impinj_enable_rf_phase_angle_subtype);
+  // Copy RFPhaseAngleMode
+  *(uint16_t *)(body.buf + offset) = htons(rf_phase_angle_mode);
+  offset += sizeof(rf_phase_angle_mode);
+  // Copy ImpinjEnableRFDopplerFrequency tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_enable_rf_doppler_frequency_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy ImpinjEnableRFDopplerFrequency vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_enable_rf_doppler_frequency_vendor_id);
+  offset += sizeof(impinj_enable_rf_doppler_frequency_vendor_id);
+  // Copy ImpinjEnableRFDopplerFrequency subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_enable_rf_doppler_frequency_subtype);
+  offset += sizeof(impinj_enable_rf_doppler_frequency_subtype);
+  // Copy RFDopplerFrequencyMode
+  *(uint16_t *)(body.buf + offset) = htons(rf_doppler_frequency_mode);
+  offset += sizeof(rf_doppler_frequency_mode);
+  assert(offset == body.len);
+  r420_msg_hdr_t hdr = {
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_SET_READER_CONFIG */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_SET_READER_CONFIG),
+    .message_length = htonl(sizeof(r420_msg_hdr_t) + body.len),
+    .message_id = htonl(pCtx->next_tx_msg_id)
+  };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_SET_READER_CONFIG);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+  r420_send_message(pCtx, &hdr, &body);
+}
+
 void r420_send_get_rospecs_msg(r420_ctx_t* pCtx) {
   r420_msg_body_t body = { .buf = {0}, .len = 0 }; // No body
 
@@ -574,7 +752,8 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy ProtocolID
   body.buf[offset] = protocol_id;
   offset += sizeof(protocol_id);
-  body.len = offset; // Set final body length
+  //body.len = offset; // Set final body length
+  assert(offset == body.len);
   r420_msg_hdr_t hdr = {
     /* version = ctx->llrp_version, message type = R420_MSG_TYPE_ADD_ROSPEC */
     .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_ADD_ROSPEC),
@@ -699,9 +878,9 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
           if (pCtx->rospec_started) {
             r420_logf(pCtx, "ROSPEC already started. No further action.");
           } else {
-            r420_send_start_rospec_msg((r420_ctx_t*)pCtx);
-            //r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
-            //r420_unloop((r420_ctx_t*)pCtx); // Terminate
+            //r420_send_start_rospec_msg((r420_ctx_t*)pCtx);
+            r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
+            r420_unloop((r420_ctx_t*)pCtx); // Terminate
           }
         } else {
           r420_send_enable_rospec_msg((r420_ctx_t*)pCtx);
