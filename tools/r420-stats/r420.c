@@ -479,17 +479,17 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   uint16_t enable_access_spec_id = 0;
   uint16_t tag_report_content_selector_reserved = 0;
 
-  uint16_t tag_report_content_selector_flags = enable_rospec_id |
-                                               (enable_spec_index << 1) |
-                                               (enable_inventory_parameter_spec_id << 2) |
-                                               (enable_antenna_id << 3) |
-                                               (enable_channel_index << 4) |
-                                               (enable_peak_rssi << 5) |
-                                               (enable_first_seen_timestamp << 6) |
-                                               (enable_last_seen_timestamp << 7) |
-                                               (enable_tag_seen_count << 8) |
-                                               (enable_access_spec_id << 9) |
-                                               (tag_report_content_selector_reserved << 10);
+  uint16_t tag_report_content_selector_flags = tag_report_content_selector_reserved |
+                                                (enable_access_spec_id << 6) |
+                                                (enable_tag_seen_count << 7) |
+                                                (enable_last_seen_timestamp << 8) |
+                                                (enable_first_seen_timestamp << 9) |
+                                                (enable_peak_rssi << 10) |
+                                                (enable_channel_index << 11) |
+                                                (enable_antenna_id << 12) |
+                                                (enable_inventory_parameter_spec_id << 13) |
+                                                (enable_spec_index << 14) |
+                                                (enable_rospec_id << 15);
 
   // C1G2EPCMemorySelector
   uint8_t enable_crc = 0;
@@ -572,7 +572,7 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   *(uint8_t *)(body.buf + offset) = c1g2_epc_memory_selector_flags;
   offset += sizeof(c1g2_epc_memory_selector_flags);
   // Copy ImpinjTagReportContentSelector tlv header
-  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_enable_rf_doppler_frequency_param_hdr;
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_tag_report_content_selector_param_hdr;
   offset += sizeof(r420_msg_body_param_tlv_hdr_t);
   // Copy ImpinjTagReportContentSelector vendor ID
   *(uint32_t *)(body.buf + offset) = htonl(impinj_tag_report_content_selector_vendor_id);
@@ -865,11 +865,15 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       break;
     case R420_MSG_TYPE_GET_READER_CAPABILITIES_RESPONSE:
       r420_process_get_reader_capabilities_response_msg(pCtx, pBody);
-      r420_send_get_reader_config_msg((r420_ctx_t*)pCtx);
+      r420_send_set_reader_config_msg((r420_ctx_t*)pCtx);
       break;
     case R420_MSG_TYPE_GET_READER_CONFIG_RESPONSE:
       r420_process_get_reader_config_response_msg(pCtx, pBody);
       r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
+      break;
+    case R420_MSG_TYPE_SET_READER_CONFIG_RESPONSE:
+      r420_process_set_reader_config_response_msg((r420_ctx_t*)pCtx, pBody);
+      r420_send_get_reader_config_msg((r420_ctx_t*)pCtx);
       break;
     case R420_MSG_TYPE_GET_ROSPECS_RESPONSE:
       r420_process_get_rospecs_response_msg((r420_ctx_t*)pCtx, pBody);

@@ -4,6 +4,8 @@
 
 #define READER_IP_ADDR "192.168.18.43"
 #define READER_PORT 5084
+// #define READER_IP_ADDR "127.0.0.1"
+// #define READER_PORT 4000
 
 void print_header(const r420_msg_hdr_t *pHdr) {
   printf("Message header:\n");
