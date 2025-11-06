@@ -208,6 +208,25 @@ void r420_process_get_reader_capabilities_response_msg(const r420_ctx_t *pCtx, c
   // TODO Parse other parameters in the GetReaderCapabilitiesResponse message
 }
 
+void r420_process_impinj_enable_extensions_response_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // First 4 bytes - vendor ID
+  // Next 1 byte - subtype
+  // Next 4 bytes - TLV header for LLRPStatus parameter
+  // Next 2 bytes - StatusCode
+  // Next 2 bytes - Error Description ByteCount
+  // ...
+  assert(pBody->len >= 13); // We expect at least 13 bytes
+  r420_msg_param_info_t param_info = r420_process_param(pBody, 5);
+  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
+  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+  assert(status_code == 0); // We expect StatusCode=M_Success
+  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+  // We ignore the error description and error params for now
+  // TODO Handle the error description and error params
+  // TODO Parse other parameters in the ImpinjEnableExtensionsResponse message
+}
+
 void r420_process_get_reader_config_response_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
   // First 4 bytes - TLV header for LLRPStatus parameter
   // Next 2 bytes - StatusCode
@@ -430,6 +449,34 @@ void r420_send_get_reader_capabilities_msg(r420_ctx_t *pCtx) {
   r420_send_message(pCtx, &hdr, &body);
 }
 
+#define IMPINJ_VENDOR_ID R420_CUSTOM_MESSAGE_VENDOR_ID_IMPINJ
+
+void r420_send_impinj_enable_extensions_msg(r420_ctx_t* pCtx) {
+  uint32_t vendor_id = IMPINJ_VENDOR_ID;
+  uint8_t subtype = R420_CUSTOM_MESSAGE_SUBTYPE_IMPINJ_ENABLE_EXTENSIONS;
+  uint32_t reserved = 0;
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(vendor_id) + sizeof(subtype) + sizeof(reserved) };
+  size_t offset = 0;
+  *(uint32_t *)(body.buf + offset) = htonl(vendor_id);
+  offset += sizeof(vendor_id);
+  *(uint8_t *)(body.buf + offset) = subtype;
+  offset += sizeof(subtype);
+  *(uint32_t *)(body.buf + offset) = htonl(reserved);
+  offset += sizeof(reserved);
+  assert(offset == body.len);
+  r420_msg_hdr_t hdr = {
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_CUSTOM_MESSAGE */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_CUSTOM_MESSAGE),
+    .message_length = htonl(sizeof(r420_msg_hdr_t) + body.len),
+    .message_id = htonl(pCtx->next_tx_msg_id)
+  };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_CUSTOM_MESSAGE);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+  r420_send_message(pCtx, &hdr, &body);
+}
+
 void r420_send_get_reader_config_msg(r420_ctx_t* pCtx) {
   uint16_t antenna_id = 0; // 0 means all antennas
   uint8_t requested_data = 0; // 0 means all config data
@@ -455,8 +502,6 @@ void r420_send_get_reader_config_msg(r420_ctx_t* pCtx) {
 
   r420_send_message(pCtx, &hdr, &body);
 }
-
-#define IMPINJ_VENDOR_ID 25882
 
 void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   uint8_t reset_to_factory_default = 0; // don't reset
@@ -865,7 +910,21 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       break;
     case R420_MSG_TYPE_GET_READER_CAPABILITIES_RESPONSE:
       r420_process_get_reader_capabilities_response_msg(pCtx, pBody);
-      r420_send_set_reader_config_msg((r420_ctx_t*)pCtx);
+      r420_send_impinj_enable_extensions_msg((r420_ctx_t*)pCtx);
+      break;
+    case R420_MSG_TYPE_CUSTOM_MESSAGE:
+      assert(pBody->len >= 5);
+      uint8_t subtype = *(pBody->buf + 4);
+      switch (subtype) {
+        case R420_CUSTOM_MESSAGE_SUBTYPE_IMPINJ_ENABLE_EXTENSIONS_RESPONSE:
+          r420_process_impinj_enable_extensions_response_msg(pCtx, pBody);
+          r420_send_set_reader_config_msg((r420_ctx_t*)pCtx);
+          break;
+        default:
+          r420_logf(pCtx, "Unhandled custom message subtype: 0x%X", subtype);
+          r420_send_stop_rospec_msg((r420_ctx_t*)pCtx);
+          break;
+      }
       break;
     case R420_MSG_TYPE_GET_READER_CONFIG_RESPONSE:
       r420_process_get_reader_config_response_msg(pCtx, pBody);
