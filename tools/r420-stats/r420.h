@@ -282,4 +282,6 @@ void r420_loop(r420_ctx_t *pCtx, void* pArg);
 
 void r420_unloop(r420_ctx_t *pCtx);
 
+void r420_stop(r420_ctx_t *pCtx);
+
 #endif // R420_H

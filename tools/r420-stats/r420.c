@@ -390,6 +390,11 @@ void r420_process_stop_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body
   // TODO Handle the error description and error params
 }
 
+void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // TODO Parse the ROAccessReport message and extract tag reports
+  r420_logf(pCtx, "r420_process_ro_access_report_msg: Received ROAccessReport message of length %zu bytes", pBody->len);
+}
+
 void r420_send_message(r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, const r420_msg_body_t *pBody) {
   // Send header
   ssize_t remaining_snd_bytes = sizeof(*pHdr);
@@ -941,9 +946,9 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
           if (pCtx->rospec_started) {
             r420_logf(pCtx, "ROSPEC already started. No further action.");
           } else {
-            //r420_send_start_rospec_msg((r420_ctx_t*)pCtx);
-            r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
-            r420_unloop((r420_ctx_t*)pCtx); // Terminate
+            r420_send_start_rospec_msg((r420_ctx_t*)pCtx);
+            //r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
+            //r420_unloop((r420_ctx_t*)pCtx); // Terminate
           }
         } else {
           r420_send_enable_rospec_msg((r420_ctx_t*)pCtx);
@@ -973,6 +978,9 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       //r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
       r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
       r420_unloop((r420_ctx_t*)pCtx); // Terminate
+      break;
+    case R420_MSG_TYPE_RO_ACCESS_REPORT:
+      r420_process_ro_access_report_msg(pCtx, pBody);
       break;
     default:
       //assert(0);
@@ -1004,4 +1012,8 @@ void r420_loop(r420_ctx_t *pCtx, void* pArg) {
 
 void r420_unloop(r420_ctx_t *pCtx) {
   pCtx->terminate_flag = 1;
+}
+
+void r420_stop(r420_ctx_t *pCtx) {
+  r420_send_stop_rospec_msg(pCtx);
 }

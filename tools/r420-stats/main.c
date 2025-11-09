@@ -23,7 +23,7 @@ uint32_t get_ip_addr(const char *ip_str) {
   return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
 }
 
-
+#define STOP_ITERATION_NO 30
 void main_r420_loop_handler(const r420_ctx_t *pCtx) {
   uint32_t *pCounter = (uint32_t *)pCtx->pUserData;
   (*pCounter)++;
@@ -33,6 +33,11 @@ void main_r420_loop_handler(const r420_ctx_t *pCtx) {
   //   r420_unloop((r420_ctx_t *)pCtx);
   //   printf("main_r420_loop_handler: Exited loop.\n");
   // }
+
+  if(*pCounter == STOP_ITERATION_NO) {
+    printf("main_r420_loop_handler: Reached iteration %u, calling r420_stop().\n", *pCounter);
+    r420_stop((r420_ctx_t *)pCtx);
+  }
 }
 
 void main_r420_log_handler(const r420_ctx_t *pCtx, const char *pMsg) {
