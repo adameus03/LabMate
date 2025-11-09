@@ -5,9 +5,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 #include "r420.h"
 
 #define R420_MSG_BODY_MAX_SIZE 4096
+#define IMPINJ_VENDOR_ID R420_CUSTOM_MESSAGE_VENDOR_ID_IMPINJ
 
 typedef struct r420_msg_body {
   uint8_t buf[R420_MSG_BODY_MAX_SIZE];
@@ -32,7 +34,7 @@ typedef struct r420_msg_body_param_tv_hdr {
 // reserved: bit 7
 #define R420_MSG_BODY_PARAM_TV_HDR_RESERVED(hdr) ((ntohs((hdr).attrs) >> 7) & 1)
 // type: bits 6-0
-#define R420_MSG_BODY_PARAM_TV_HDR_TYPE(hdr) (ntohs((hdr).attrs) & 0x7F)
+#define R420_MSG_BODY_PARAM_TV_HDR_TYPE(hdr) ((hdr).attrs & 0x7F)
 
 typedef struct r420_msg_body_param_utc_timestamp_value {
   uint64_t microseconds;
@@ -109,16 +111,25 @@ typedef struct r420_msg_param_info {
   size_t value_offset; // Offset of the value field within the parameter (after header)
 } r420_msg_param_info_t;
 
-r420_msg_param_info_t r420_process_param(const r420_msg_body_t *pBody, size_t offset) {
+r420_msg_param_info_t r420_process_param(const r420_ctx_t* pCtx, const r420_msg_body_t *pBody, size_t offset) {
   assert(offset < pBody->len);
-  if (pBody->buf[0] & 0x80) { // check if the parameter is TLV or TV encoded
+  if (pBody->buf[offset] & 0x80) { // check if the parameter is TLV or TV encoded
     // TV encoded
     r420_msg_body_param_tv_hdr_t tv_hdr = *(r420_msg_body_param_tv_hdr_t *)(pBody->buf + offset);
     uint8_t type = R420_MSG_BODY_PARAM_TV_HDR_TYPE(tv_hdr);
     uint16_t len = 0xffff; // TV has no length field
     switch (type) {
       // TODO We should handle all TV parameter lengths here
+      case R420_PARAM_TYPE_PEAK_RSSI:
+        return (r420_msg_param_info_t){ .type = type, .len = 2, .value_offset = offset + sizeof(tv_hdr) };
+      case R420_PARAM_TYPE_EPC_96:
+        return (r420_msg_param_info_t){ .type = type, .len = 13, .value_offset = offset + sizeof(tv_hdr) };
+      case R420_PARAM_TYPE_ANTENNA_ID:
+        return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
+      case R420_PARAM_TYPE_FIRST_SEEN_TIMESTAMP_UTC:
+        return (r420_msg_param_info_t){ .type = type, .len = 9, .value_offset = offset + sizeof(tv_hdr) };
       default:
+        r420_logf(pCtx, "r420_process_param: Unknown TV parameter type 0x%X, cannot determine length", type);
         break;
     }
     return (r420_msg_param_info_t){ .type = type, .len = 0xffff, .value_offset = offset + sizeof(tv_hdr) }; // TV has no length field
@@ -149,7 +160,7 @@ void r420_process_reader_event_notification_msg(const r420_ctx_t *pCtx, const r4
   //Handle selected parameters in a loop
   size_t offset = 16; // Start after the mandatory parameters
   while (offset < pBody->len) {
-    r420_msg_param_info_t param_info = r420_process_param(pBody, offset);
+    r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, offset);
     switch(param_info.type) {
       case R420_PARAM_TYPE_UTC_TIMESTAMP:
         break;
@@ -163,8 +174,8 @@ void r420_process_reader_event_notification_msg(const r420_ctx_t *pCtx, const r4
         //TODO Add a ctx handler to pass this event to the user
         break;
     }
-    assert(param_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing
-    offset = param_info.value_offset + param_info.len;
+    assert(param_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+    offset += param_info.len;
   }
 }
 
@@ -181,7 +192,7 @@ void r420_process_get_supported_version_response_msg(const r420_ctx_t *pCtx, con
   r420_logf(pCtx, "R420 Protocol Version: Current=%u, Supported=%u", current_version, supported_version);
   assert(current_version == 2); // We expect version 2
   assert(supported_version == 2); // We expect version 2
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 2);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 2);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -197,7 +208,7 @@ void r420_process_get_reader_capabilities_response_msg(const r420_ctx_t *pCtx, c
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -216,7 +227,7 @@ void r420_process_impinj_enable_extensions_response_msg(const r420_ctx_t *pCtx, 
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 13); // We expect at least 13 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 5);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 5);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -233,7 +244,7 @@ void r420_process_get_reader_config_response_msg(const r420_ctx_t *pCtx, const r
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -250,7 +261,7 @@ void r420_process_set_reader_config_response_msg(const r420_ctx_t *pCtx, const r
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -266,7 +277,7 @@ void r420_process_get_rospecs_response_msg(r420_ctx_t *pCtx, const r420_msg_body
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -281,7 +292,7 @@ void r420_process_get_rospecs_response_msg(r420_ctx_t *pCtx, const r420_msg_body
     r420_logf(pCtx, "ROSPECS already present in reader.");
     pCtx->rospec_added = 1;
     // Check CurrentState of the first ROSpec
-    r420_msg_param_info_t rospec_param_info = r420_process_param(pBody, offset);
+    r420_msg_param_info_t rospec_param_info = r420_process_param(pCtx, pBody, offset);
     assert(rospec_param_info.type == R420_PARAM_TYPE_ROSPEC);
     assert(rospec_param_info.len >= 12);
     uint8_t current_state = *(uint8_t *)(pBody->buf + rospec_param_info.value_offset + 5); // CurrentState is at offset 5 within the ROSpec parameter value
@@ -311,7 +322,7 @@ void r420_process_add_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body_
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -328,7 +339,7 @@ void r420_process_enable_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_bo
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -344,7 +355,7 @@ void r420_process_disable_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_b
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -362,7 +373,7 @@ void r420_process_start_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_bod
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -379,7 +390,7 @@ void r420_process_stop_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pBody, 0);
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
   assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
   assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
@@ -391,8 +402,118 @@ void r420_process_stop_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body
 }
 
 void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
-  // TODO Parse the ROAccessReport message and extract tag reports
+  assert(pBody->len >= 0);
   r420_logf(pCtx, "r420_process_ro_access_report_msg: Received ROAccessReport message of length %zu bytes", pBody->len);
+  
+  size_t offset = 0;
+  while (offset < pBody->len) {
+    r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, offset);
+    switch(param_info.type) {
+      case R420_PARAM_TYPE_TAG_REPORT_DATA:
+        assert(param_info.len >= 0);
+
+        uint8_t peak_rssi;
+        uint8_t epc96[12] = {0};
+        uint16_t antenna_id;
+        uint16_t rf_phase_angle;
+        int16_t rf_doppler_frequency;
+        int peak_rssi_is_set = 0;
+        int epc96_is_set = 0;
+        int antenna_id_is_set = 0;
+        int rf_phase_angle_is_set = 0;
+        int rf_doppler_frequency_is_set = 0;
+
+        size_t suboffset = 0;
+
+        while (param_info.value_offset + suboffset < param_info.len) {
+          r420_msg_param_info_t subparam_info = r420_process_param(pCtx, pBody, param_info.value_offset + suboffset);
+          switch(subparam_info.type) {
+            case R420_PARAM_TYPE_EPC_96:
+              assert(epc96_is_set == 0);
+              assert(NULL != memcpy(epc96, pBody->buf + subparam_info.value_offset, sizeof(epc96)));
+              epc96_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_ANTENNA_ID:
+              assert(antenna_id_is_set == 0);
+              antenna_id = *(uint16_t*)(pBody->buf + subparam_info.value_offset);
+              antenna_id_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_PEAK_RSSI:
+              assert(peak_rssi_is_set == 0);
+              peak_rssi = *(uint8_t*)(pBody->buf + subparam_info.value_offset);
+              peak_rssi_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_CUSTOM_PARAMETER:
+              uint32_t vendor_id = ntohl(*(uint32_t *)(pBody->buf + subparam_info.value_offset));
+              uint32_t subtype = ntohl(*(uint32_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id)));
+              switch (vendor_id) {
+                case IMPINJ_VENDOR_ID:
+                  switch (subtype) {
+                    case R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_RF_PHASE_ANGLE:
+                      assert(rf_phase_angle_is_set == 0);
+                      //rf_phase_angle = *(uint16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype));
+                      rf_phase_angle = ntohs(*(uint16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
+                      rf_phase_angle_is_set = 1;
+                      break;
+                    case R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_RF_DOPPLER_FREQUENCY:
+                      assert(rf_doppler_frequency_is_set == 0);
+                      //rf_doppler_frequency = *(int16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype));
+                      rf_doppler_frequency = ntohs(*(int16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
+                      rf_doppler_frequency_is_set = 1;
+                      break;
+                    default:
+                      //TODO
+                      break;
+                  }
+                  break;
+                default:
+                  //TODO
+                  break;
+              }
+              break;
+            default:
+              //TODO
+              break;
+          }
+          assert(subparam_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+          suboffset += subparam_info.len;
+        }
+        
+        if (peak_rssi_is_set && epc96_is_set && antenna_id_is_set && rf_phase_angle_is_set && rf_doppler_frequency_is_set) {
+          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %u, RF Phase Angle: %d, RF Doppler Frequency: %d",
+            epc96[0], epc96[1], epc96[2], epc96[3], epc96[4], epc96[5],
+            epc96[6], epc96[7], epc96[8], epc96[9], epc96[10], epc96[11],
+            antenna_id, peak_rssi, rf_phase_angle, rf_doppler_frequency);
+        } else {
+          r420_logf(pCtx, "Incomplete tag report data received.");
+          //TODO pass to user handler
+          if (!peak_rssi_is_set) {
+            r420_logf(pCtx, "  Missing Peak RSSI");
+          }
+          if (!epc96_is_set) {
+            r420_logf(pCtx, "  Missing EPC-96");
+          }
+          if (!antenna_id_is_set) {
+            r420_logf(pCtx, "  Missing Antenna ID");
+          }
+          if (!rf_phase_angle_is_set) {
+            r420_logf(pCtx, "  Missing RF Phase Angle");
+          }
+          if (!rf_doppler_frequency_is_set) {
+            r420_logf(pCtx, "  Missing RF Doppler Frequency");
+          }
+        }
+        
+        break;
+      case R420_PARAM_TYPE_RF_SURVEY_REPORT_DATA:
+        break;
+      default:
+        //TODO
+        break;
+    }
+    assert(param_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+    offset += param_info.len;
+  }
 }
 
 void r420_send_message(r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, const r420_msg_body_t *pBody) {
@@ -453,8 +574,6 @@ void r420_send_get_reader_capabilities_msg(r420_ctx_t *pCtx) {
 
   r420_send_message(pCtx, &hdr, &body);
 }
-
-#define IMPINJ_VENDOR_ID R420_CUSTOM_MESSAGE_VENDOR_ID_IMPINJ
 
 void r420_send_impinj_enable_extensions_msg(r420_ctx_t* pCtx) {
   uint32_t vendor_id = IMPINJ_VENDOR_ID;
