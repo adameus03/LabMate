@@ -435,7 +435,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
               break;
             case R420_PARAM_TYPE_ANTENNA_ID:
               assert(antenna_id_is_set == 0);
-              antenna_id = *(uint16_t*)(pBody->buf + subparam_info.value_offset);
+              antenna_id = ntohs(*(uint16_t*)(pBody->buf + subparam_info.value_offset));
               antenna_id_is_set = 1;
               break;
             case R420_PARAM_TYPE_PEAK_RSSI:
@@ -1067,7 +1067,7 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
           } else {
             r420_send_start_rospec_msg((r420_ctx_t*)pCtx);
             //r420_send_disable_rospec_msg((r420_ctx_t*)pCtx);
-            //r420_unloop((r420_ctx_t*)pCtx); // Terminate
+            // r420_unloop((r420_ctx_t*)pCtx); // Terminate
           }
         } else {
           r420_send_enable_rospec_msg((r420_ctx_t*)pCtx);

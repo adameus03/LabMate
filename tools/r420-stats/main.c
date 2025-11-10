@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
+#include <signal.h>
 #include "r420.h"
 
 #define READER_IP_ADDR "192.168.18.43"
@@ -23,28 +25,59 @@ uint32_t get_ip_addr(const char *ip_str) {
   return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
 }
 
+int should_stop = 0;
+
+static void signal_handler(int sig){
+    if (sig == SIGINT) {
+      printf("Caught SIGINT, preparing to stop...\n");
+      should_stop = 1;
+    }
+}
+
 #define STOP_ITERATION_NO 30
 void main_r420_loop_handler(const r420_ctx_t *pCtx) {
   uint32_t *pCounter = (uint32_t *)pCtx->pUserData;
   (*pCounter)++;
-  printf("main_r420_loop_handler: Iteration %u\n", *pCounter);
+  //printf("main_r420_loop_handler: Iteration %u\n", *pCounter);
   // if (*pCounter >= 6) {
   //   printf("main_r420_loop_handler: Reached %u iterations, exiting loop.\n", *pCounter);
   //   r420_unloop((r420_ctx_t *)pCtx);
   //   printf("main_r420_loop_handler: Exited loop.\n");
   // }
 
-  if(*pCounter == STOP_ITERATION_NO) {
-    printf("main_r420_loop_handler: Reached iteration %u, calling r420_stop().\n", *pCounter);
+  //if(*pCounter == STOP_ITERATION_NO || should_stop) {
+  if (should_stop) {
+    //printf("main_r420_loop_handler: Reached iteration %u, calling r420_stop().\n", *pCounter);
     r420_stop((r420_ctx_t *)pCtx);
   }
 }
 
+int main_log_filter(const char *pMsg) {
+  return 1;
+  if (strstr(pMsg, "EPC:") == NULL) {
+    return 0;
+  }
+  // if (strstr(pMsg, "BBBBBBBBBBBBBBBBBBBBBBBB") != NULL) {
+  //   return 1;
+  // }
+  if (strstr(pMsg, "CCCCCCCCCCCCCCCCCCCCCCCC") != NULL) {
+    return 1;
+  }
+  // if (strstr(pMsg, "DDDDDDDDDDDDDDDDDDDDDDDD") != NULL) {
+  //   return 1;
+  // }
+  return 0;
+}
+
 void main_r420_log_handler(const r420_ctx_t *pCtx, const char *pMsg) {
+  if (!main_log_filter(pMsg)) {
+    return;
+  }
   printf("R420 Log: %s\n", pMsg);
 }
 
 int main(int argc, char **argv) {
+  signal(SIGINT, signal_handler);
   r420_connection_parameters_t conn_params = {
     .ip = get_ip_addr(READER_IP_ADDR),
     .port = READER_PORT
