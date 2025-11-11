@@ -91,6 +91,7 @@ void main_r420_log_handler(const r420_ctx_t *pCtx, const char *pMsg) {
 
 int main(int argc, char **argv) {
   signal(SIGINT, signal_handler);
+  setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered stdout
   r420_connection_parameters_t conn_params = {
     .ip = get_ip_addr(READER_IP_ADDR),
     .port = READER_PORT

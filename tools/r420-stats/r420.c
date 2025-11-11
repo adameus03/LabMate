@@ -457,7 +457,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
         uint16_t antenna_id;
         uint16_t rf_phase_angle;
         int16_t rf_doppler_frequency;
-        uint16_t peak_rssi_16bit;
+        int16_t peak_rssi_16bit;
         uint64_t first_seen_timestamp_utc_microseconds;
         uint64_t last_seen_timestamp_utc_microseconds;
         uint16_t tag_seen_count;
@@ -532,7 +532,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
                       break;
                     case R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_PEAK_RSSI:
                       assert(peak_rssi_16bit_is_set == 0);                      
-                      peak_rssi_16bit = ntohs(*(uint16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
+                      peak_rssi_16bit = ntohs(*(int16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
                       peak_rssi_16bit_is_set = 1;
                       break;
                     default:
@@ -554,7 +554,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
         }
         
         if (peak_rssi_is_set && epc96_is_set && antenna_id_is_set && rf_phase_angle_is_set && rf_doppler_frequency_is_set &  peak_rssi_16bit_is_set && first_seen_timestamp_utc_microseconds_is_set && last_seen_timestamp_utc_microseconds_is_set && tag_seen_count_is_set && channel_index_is_set) {
-          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %u, RF Phase Angle: %d, RF Doppler Frequency: %d, 16-bit peak rssi: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u",
+          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %d, RF Phase Angle: %d, RF Doppler Frequency: %d, 16-bit peak rssi: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u",
             epc96[0], epc96[1], epc96[2], epc96[3], epc96[4], epc96[5],
             epc96[6], epc96[7], epc96[8], epc96[9], epc96[10], epc96[11],
             antenna_id, peak_rssi, rf_phase_angle, rf_doppler_frequency, peak_rssi_16bit,
