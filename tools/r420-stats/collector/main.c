@@ -46,15 +46,44 @@ typedef struct {
   uint16_t channel_index;
 } epc_stats_t;
 
+epc_stats_t parse_r420_log_line(const char *log_line) {
+  epc_stats_t stats;
+  memset(&stats, 0, sizeof(stats));
+  sscanf(log_line, "R420 Log: Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %d, RF Phase Angle: %d, RF Doppler Frequency: %d, 16-bit peak rssi: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u",
+    &stats.epc[0], &stats.epc[1], &stats.epc[2], &stats.epc[3], &stats.epc[4], &stats.epc[5],
+    &stats.epc[6], &stats.epc[7], &stats.epc[8], &stats.epc[9], &stats.epc[10], &stats.epc[11],
+    &stats.antenna_id, &stats.peak_rssi, &stats.rf_phase_angle, &stats.rf_doppler_frequency,
+    &stats.peak_rssi_16bit, &stats.first_seen_timestamp_utc_microseconds,
+    &stats.last_seen_timestamp_utc_microseconds, &stats.tag_seen_count, &stats.channel_index);
+  return stats;
+}
+
+/**
+ * Check if the log line starts with "R420 Log: Tag EPC: "
+ * @return 1 if it does, 0 otherwise.
+ */
+int filter_log_line(const char *log_line) {
+  const char *prefix = "R420 Log: Tag EPC: ";
+  return strncmp(log_line, prefix, strlen(prefix)) == 0;
+} 
+
 int main(void) {
   setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered stdout
   setvbuf(stdin, NULL, _IOLBF, 0);  // line-buffered stdin
   char line[512];
   while (fgets(line, sizeof(line), stdin)) {
     line[strcspn(line, "\n")] = 0; // Remove newline
-    printf("Processing line: %s\n", line);
-    //TODO
-    fflush(stdout);
+    //printf("Processing line: %s\n", line);
+    if (!filter_log_line(line)) {
+      continue;
+    }
+    epc_stats_t stats = parse_r420_log_line(line);
+    printf("EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %d, RF Phase Angle: %d, RF Doppler Frequency: %d, 16-bit peak rssi: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u\n",
+      stats.epc[0], stats.epc[1], stats.epc[2], stats.epc[3], stats.epc[4], stats.epc[5],
+      stats.epc[6], stats.epc[7], stats.epc[8], stats.epc[9], stats.epc[10], stats.epc[11],
+      stats.antenna_id, stats.peak_rssi, stats.rf_phase_angle, stats.rf_doppler_frequency,
+      stats.peak_rssi_16bit, (unsigned long long)stats.first_seen_timestamp_utc_microseconds,
+      (unsigned long long)stats.last_seen_timestamp_utc_microseconds, stats.tag_seen_count, stats.channel_index);
   }
   fprintf(stderr, "Input stream closed. Exiting.\n");
   return 0;
