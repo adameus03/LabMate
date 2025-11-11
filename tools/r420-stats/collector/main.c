@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
 
 /*
   Relevant log lines begin with "R420 Log: "
@@ -27,10 +31,31 @@ const uint32_t freq_hop_table[TOTAL_CHANNELS] = {
  * @param channel_index Channel index (1-based)
  * @return Frequency in kHz
  */
-uint32_t get_channel_frequency(uint8_t channel_index) {
+uint32_t get_channel_frequency(uint16_t channel_index) {
   assert(channel_index >= 1);
-  assert(channel_index < TOTAL_CHANNELS);
+  assert(channel_index < TOTAL_CHANNELS + 1);
   return freq_hop_table[channel_index - 1];
+}
+
+const char* output_paths[] = {
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__rssi8_time.dat",
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__rssi16_time.dat",
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__phase_freq.dat",
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__doppler_freq.dat"
+};
+
+FILE* output_files[4] = { NULL, NULL, NULL, NULL };
+
+static void signal_handler(int sig){
+  if (sig == SIGINT) {
+    printf("Caught SIGINT, closing output files...\n");
+    for (int i = 0; i < 4; i++) {
+      if (output_files[i]) {
+        fclose(output_files[i]);
+        output_files[i] = NULL;
+      }
+    }
+  }
 }
 
 typedef struct {
@@ -45,6 +70,113 @@ typedef struct {
   uint16_t tag_seen_count;
   uint16_t channel_index;
 } epc_stats_t;
+
+/**
+ * Make sure the ./output directory is freshly created.
+ */
+void prepare_output_dir() {
+  const char *dir_path = "./output";
+  struct stat st = {0};
+  if (stat(dir_path, &st) == -1) {
+    assert(0 == mkdir(dir_path, 0700));
+  } else {
+    for (int i = 0; i < 4; i++) {
+      // delete output_paths[i]
+      int rv = remove(output_paths[i]);
+      if (rv != 0 && errno != ENOENT) {
+        fprintf(stderr, "Failed to remove existing output file %s, errno: %d\n", output_paths[i], errno);
+        assert(0);
+      }
+    }
+    //int rv = rmdir(dir_path);
+    int rv = remove(dir_path);
+    if (rv != 0) {
+      fprintf(stderr, "Failed to remove existing output directory, errno: %d\n", errno);
+      assert(0);
+    }
+    assert(0 == mkdir(dir_path, 0700));
+  }   
+}
+
+void handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi8_time(const epc_stats_t* stats) {
+  for (int i = 0; i < 12; i++) {
+    if (stats->epc[i] != 0xBB) {
+      return;
+    }
+  }
+
+  if (output_files[0] == NULL) {
+    output_files[0] = fopen(output_paths[0], "a");
+    if (output_files[0] == NULL) {
+      perror("Failed to open output file for RSSI 8-bit vs Time");
+      return;
+    }
+    setvbuf(output_files[0], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[0], "%llu\t%d\n",
+          (unsigned long long)stats->last_seen_timestamp_utc_microseconds,
+          stats->peak_rssi);
+}
+
+void handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi16_time(const epc_stats_t* stats) {
+  for (int i = 0; i < 12; i++) {
+    if (stats->epc[i] != 0xBB) {
+      return;
+    }
+  }
+
+  if (output_files[1] == NULL) {
+    output_files[1] = fopen(output_paths[1], "a");
+    if (output_files[1] == NULL) {
+      perror("Failed to open output file for RSSI 16-bit vs Time");
+      return;
+    }
+    setvbuf(output_files[1], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[1], "%llu\t%d\n",
+          (unsigned long long)stats->last_seen_timestamp_utc_microseconds,
+          stats->peak_rssi_16bit);
+}
+
+void handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_freq(const epc_stats_t* stats) {
+  for (int i = 0; i < 12; i++) {
+    if (stats->epc[i] != 0xBB) {
+      return;
+    }
+  }
+
+  if (output_files[2] == NULL) {
+    output_files[2] = fopen(output_paths[2], "a");
+    if (output_files[2] == NULL) {
+      perror("Failed to open output file for Phase Angle vs Frequency");
+      return;
+    }
+    setvbuf(output_files[2], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[2], "%u\t%d\n",
+          get_channel_frequency(stats->channel_index),
+          stats->rf_phase_angle);
+}
+
+void handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(const epc_stats_t* stats) {
+  for (int i = 0; i < 12; i++) {
+    if (stats->epc[i] != 0xBB) {
+      return;
+    }
+  }
+
+  if (output_files[3] == NULL) {
+    output_files[3] = fopen(output_paths[3], "a");
+    if (output_files[3] == NULL) {
+      perror("Failed to open output file for Doppler Frequency vs Frequency");
+      return;
+    }
+    setvbuf(output_files[3], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[3], "%u\t%d\n",
+          get_channel_frequency(stats->channel_index),
+          stats->rf_doppler_frequency);
+}
 
 epc_stats_t parse_r420_log_line(const char *log_line) {
   epc_stats_t stats;
@@ -68,8 +200,10 @@ int filter_log_line(const char *log_line) {
 } 
 
 int main(void) {
+  signal(SIGINT, signal_handler);
   setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered stdout
   setvbuf(stdin, NULL, _IOLBF, 0);  // line-buffered stdin
+  prepare_output_dir();
   char line[512];
   while (fgets(line, sizeof(line), stdin)) {
     line[strcspn(line, "\n")] = 0; // Remove newline
@@ -78,12 +212,18 @@ int main(void) {
       continue;
     }
     epc_stats_t stats = parse_r420_log_line(line);
+    static int counter = 0;
+    //printf("Counter: %d, Channel Index: %u, Frequency: %u kHz\n", ++counter, stats.channel_index, get_channel_frequency(stats.channel_index));
     printf("EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %d, RF Phase Angle: %d, RF Doppler Frequency: %d, 16-bit peak rssi: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u\n",
       stats.epc[0], stats.epc[1], stats.epc[2], stats.epc[3], stats.epc[4], stats.epc[5],
       stats.epc[6], stats.epc[7], stats.epc[8], stats.epc[9], stats.epc[10], stats.epc[11],
       stats.antenna_id, stats.peak_rssi, stats.rf_phase_angle, stats.rf_doppler_frequency,
       stats.peak_rssi_16bit, (unsigned long long)stats.first_seen_timestamp_utc_microseconds,
       (unsigned long long)stats.last_seen_timestamp_utc_microseconds, stats.tag_seen_count, stats.channel_index);
+    handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi8_time(&stats);
+    handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi16_time(&stats);
+    handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_freq(&stats);
+    handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(&stats);
   }
   fprintf(stderr, "Input stream closed. Exiting.\n");
   return 0;
