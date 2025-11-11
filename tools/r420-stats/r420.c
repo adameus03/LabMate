@@ -63,7 +63,7 @@ void r420_log(const r420_ctx_t* pCtx, const char* pMsg) {
 
 void r420_logf(const r420_ctx_t* pCtx, const char* fmt, ...) {
   if (pCtx->log_handler) {
-    char buf[256];
+    char buf[512];
     va_list args;
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
@@ -457,6 +457,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
         uint16_t antenna_id;
         uint16_t rf_phase_angle;
         int16_t rf_doppler_frequency;
+        uint16_t peak_rssi_16bit;
         uint64_t first_seen_timestamp_utc_microseconds;
         uint64_t last_seen_timestamp_utc_microseconds;
         uint16_t tag_seen_count;
@@ -467,6 +468,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
         int antenna_id_is_set = 0;
         int rf_phase_angle_is_set = 0;
         int rf_doppler_frequency_is_set = 0;
+        int peak_rssi_16bit_is_set = 0;
         int first_seen_timestamp_utc_microseconds_is_set = 0;
         int last_seen_timestamp_utc_microseconds_is_set = 0;
         int tag_seen_count_is_set = 0;
@@ -520,15 +522,18 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
                   switch (subtype) {
                     case R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_RF_PHASE_ANGLE:
                       assert(rf_phase_angle_is_set == 0);
-                      //rf_phase_angle = *(uint16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype));
                       rf_phase_angle = ntohs(*(uint16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
                       rf_phase_angle_is_set = 1;
                       break;
                     case R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_RF_DOPPLER_FREQUENCY:
-                      assert(rf_doppler_frequency_is_set == 0);
-                      //rf_doppler_frequency = *(int16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype));
+                      assert(rf_doppler_frequency_is_set == 0);                      
                       rf_doppler_frequency = ntohs(*(int16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
                       rf_doppler_frequency_is_set = 1;
+                      break;
+                    case R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_PEAK_RSSI:
+                      assert(peak_rssi_16bit_is_set == 0);                      
+                      peak_rssi_16bit = ntohs(*(uint16_t *)(pBody->buf + subparam_info.value_offset + sizeof(vendor_id) + sizeof(subtype)));
+                      peak_rssi_16bit_is_set = 1;
                       break;
                     default:
                       //TODO
@@ -548,11 +553,11 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
           suboffset += subparam_info.len;
         }
         
-        if (peak_rssi_is_set && epc96_is_set && antenna_id_is_set && rf_phase_angle_is_set && rf_doppler_frequency_is_set && first_seen_timestamp_utc_microseconds_is_set && last_seen_timestamp_utc_microseconds_is_set && tag_seen_count_is_set && channel_index_is_set) {
-          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %u, RF Phase Angle: %d, RF Doppler Frequency: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u",
+        if (peak_rssi_is_set && epc96_is_set && antenna_id_is_set && rf_phase_angle_is_set && rf_doppler_frequency_is_set &  peak_rssi_16bit_is_set && first_seen_timestamp_utc_microseconds_is_set && last_seen_timestamp_utc_microseconds_is_set && tag_seen_count_is_set && channel_index_is_set) {
+          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %u, RF Phase Angle: %d, RF Doppler Frequency: %d, 16-bit peak rssi: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u",
             epc96[0], epc96[1], epc96[2], epc96[3], epc96[4], epc96[5],
             epc96[6], epc96[7], epc96[8], epc96[9], epc96[10], epc96[11],
-            antenna_id, peak_rssi, rf_phase_angle, rf_doppler_frequency,
+            antenna_id, peak_rssi, rf_phase_angle, rf_doppler_frequency, peak_rssi_16bit,
             (unsigned long long)first_seen_timestamp_utc_microseconds,
             (unsigned long long)last_seen_timestamp_utc_microseconds,
             tag_seen_count, channel_index);
@@ -574,6 +579,21 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
           }
           if (!rf_doppler_frequency_is_set) {
             r420_logf(pCtx, "  Missing RF Doppler Frequency");
+          }
+          if (!peak_rssi_16bit_is_set) {
+            r420_logf(pCtx, "  Missing 16-bit Peak RSSI");
+          }
+          if (!first_seen_timestamp_utc_microseconds_is_set) {
+            r420_logf(pCtx, "  Missing First Seen Timestamp (UTC)");
+          }
+          if (!last_seen_timestamp_utc_microseconds_is_set) {
+            r420_logf(pCtx, "  Missing Last Seen Timestamp (UTC)");
+          }
+          if (!tag_seen_count_is_set) {
+            r420_logf(pCtx, "  Missing Tag Seen Count");
+          }
+          if (!channel_index_is_set) {
+            r420_logf(pCtx, "  Missing Channel Index");
           }
         }
         
@@ -751,6 +771,11 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   uint32_t impinj_enable_rf_phase_angle_subtype = 52;
   uint16_t rf_phase_angle_mode = 1; // Enable
 
+  //ImpinjEnablePeakRSSI
+  uint32_t impinj_enable_peak_rssi_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_enable_peak_rssi_subtype = 53;
+  uint16_t peak_rssi_mode = 1; // Enable
+
   //ImpinjEnableRFDopplerFrequency
   uint32_t impinj_enable_rf_doppler_frequency_vendor_id = IMPINJ_VENDOR_ID;
   uint32_t impinj_enable_rf_doppler_frequency_subtype = 67;
@@ -767,9 +792,14 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_enable_rf_doppler_frequency_vendor_id) + sizeof(impinj_enable_rf_doppler_frequency_subtype) + sizeof(rf_doppler_frequency_mode))
   };
 
+  r420_msg_body_param_tlv_hdr_t impinj_enable_peak_rssi_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_enable_peak_rssi_vendor_id) + sizeof(impinj_enable_peak_rssi_subtype) + sizeof(peak_rssi_mode))
+  };
+
   r420_msg_body_param_tlv_hdr_t impinj_tag_report_content_selector_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_tag_report_content_selector_vendor_id) + sizeof(impinj_tag_report_content_selector_subtype) + ntohs(impinj_enable_rf_phase_angle_param_hdr.param_len) + ntohs(impinj_enable_rf_doppler_frequency_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_tag_report_content_selector_vendor_id) + sizeof(impinj_tag_report_content_selector_subtype) + ntohs(impinj_enable_rf_phase_angle_param_hdr.param_len) + ntohs(impinj_enable_peak_rssi_param_hdr.param_len) + ntohs(impinj_enable_rf_doppler_frequency_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t c1g2_epc_memory_selector_param_hdr = {
@@ -834,6 +864,18 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   // Copy RFPhaseAngleMode
   *(uint16_t *)(body.buf + offset) = htons(rf_phase_angle_mode);
   offset += sizeof(rf_phase_angle_mode);
+  // Copy ImpinjEnablePeakRSSI tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_enable_peak_rssi_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy ImpinjEnablePeakRSSI vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_enable_peak_rssi_vendor_id);
+  offset += sizeof(impinj_enable_peak_rssi_vendor_id);
+  // Copy ImpinjEnablePeakRSSI subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_enable_peak_rssi_subtype);
+  offset += sizeof(impinj_enable_peak_rssi_subtype);
+  // Copy PeakRSSIMode
+  *(uint16_t *)(body.buf + offset) = htons(peak_rssi_mode);
+  offset += sizeof(peak_rssi_mode);
   // Copy ImpinjEnableRFDopplerFrequency tlv header
   *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_enable_rf_doppler_frequency_param_hdr;
   offset += sizeof(r420_msg_body_param_tlv_hdr_t);
@@ -846,6 +888,7 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   // Copy RFDopplerFrequencyMode
   *(uint16_t *)(body.buf + offset) = htons(rf_doppler_frequency_mode);
   offset += sizeof(rf_doppler_frequency_mode);
+
   assert(offset == body.len);
   r420_msg_hdr_t hdr = {
     /* version = ctx->llrp_version, message type = R420_MSG_TYPE_SET_READER_CONFIG */
