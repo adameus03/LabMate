@@ -52,18 +52,30 @@ void main_r420_loop_handler(const r420_ctx_t *pCtx) {
   }
 }
 
+// printf("Measurement count: %d\n", ++counter);
+//     return 0;
+
 int main_log_filter(const char *pMsg) {
-  return 1;
+  static int counter = 0;
+  // return 1;
   if (strstr(pMsg, "EPC:") == NULL) {
     return 0;
   }
+  return 1;
   // if (strstr(pMsg, "BBBBBBBBBBBBBBBBBBBBBBBB") != NULL) {
   //   return 1;
   // }
-  if (strstr(pMsg, "CCCCCCCCCCCCCCCCCCCCCCCC") != NULL) {
-    return 1;
-  }
+  // if (strstr(pMsg, "CCCCCCCCCCCCCCCCCCCCCCCC") != NULL) {
+  //   return 1;
+  // }
   // if (strstr(pMsg, "DDDDDDDDDDDDDDDDDDDDDDDD") != NULL) {
+  //   return 1;
+  // }
+
+  // if (strstr(pMsg, "AAAAAAAAAAAAAAAAAAAAAAAA") != NULL) {
+  //   return 1;
+  // }
+  // if (strstr(pMsg, "30396062C39662C0C12707A5") != NULL) {
   //   return 1;
   // }
   return 0;
@@ -74,6 +86,7 @@ void main_r420_log_handler(const r420_ctx_t *pCtx, const char *pMsg) {
     return;
   }
   printf("R420 Log: %s\n", pMsg);
+  // 
 }
 
 int main(int argc, char **argv) {

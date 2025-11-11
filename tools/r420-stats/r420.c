@@ -8,6 +8,20 @@
 #include <stddef.h>
 #include "r420.h"
 
+#if defined(__linux__)
+#  include <endian.h>
+#elif defined(__FreeBSD__) || defined(__NetBSD__)
+#  include <sys/endian.h>
+#elif defined(__OpenBSD__)
+#  include <sys/types.h>
+#  define be16toh(x) betoh16(x)
+#  define be32toh(x) betoh32(x)
+#  define be64toh(x) betoh64(x)
+#endif
+static uint64_t ntohll(uint64_t val) {
+  return be64toh(val);
+}
+
 #define R420_MSG_BODY_MAX_SIZE 4096
 #define IMPINJ_VENDOR_ID R420_CUSTOM_MESSAGE_VENDOR_ID_IMPINJ
 
@@ -128,6 +142,12 @@ r420_msg_param_info_t r420_process_param(const r420_ctx_t* pCtx, const r420_msg_
         return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
       case R420_PARAM_TYPE_FIRST_SEEN_TIMESTAMP_UTC:
         return (r420_msg_param_info_t){ .type = type, .len = 9, .value_offset = offset + sizeof(tv_hdr) };
+      case R420_PARAM_TYPE_LAST_SEEN_TIMESTAMP_UTC:
+        return (r420_msg_param_info_t){ .type = type, .len = 9, .value_offset = offset + sizeof(tv_hdr) };
+      case R420_PARAM_TYPE_TAG_SEEN_COUNT:
+        return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
+        case R420_PARAM_TYPE_CHANNEL_INDEX:
+        return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
       default:
         r420_logf(pCtx, "r420_process_param: Unknown TV parameter type 0x%X, cannot determine length", type);
         break;
@@ -417,11 +437,20 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
         uint16_t antenna_id;
         uint16_t rf_phase_angle;
         int16_t rf_doppler_frequency;
+        uint64_t first_seen_timestamp_utc_microseconds;
+        uint64_t last_seen_timestamp_utc_microseconds;
+        uint16_t tag_seen_count;
+        uint16_t channel_index;
+
         int peak_rssi_is_set = 0;
         int epc96_is_set = 0;
         int antenna_id_is_set = 0;
         int rf_phase_angle_is_set = 0;
         int rf_doppler_frequency_is_set = 0;
+        int first_seen_timestamp_utc_microseconds_is_set = 0;
+        int last_seen_timestamp_utc_microseconds_is_set = 0;
+        int tag_seen_count_is_set = 0;
+        int channel_index_is_set = 0;
 
         size_t suboffset = 0;
 
@@ -442,6 +471,26 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
               assert(peak_rssi_is_set == 0);
               peak_rssi = *(uint8_t*)(pBody->buf + subparam_info.value_offset);
               peak_rssi_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_FIRST_SEEN_TIMESTAMP_UTC:
+              assert(first_seen_timestamp_utc_microseconds_is_set == 0);
+              first_seen_timestamp_utc_microseconds = ntohll(*(uint64_t *)(pBody->buf + subparam_info.value_offset));
+              first_seen_timestamp_utc_microseconds_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_LAST_SEEN_TIMESTAMP_UTC:
+              assert(last_seen_timestamp_utc_microseconds_is_set == 0);
+              last_seen_timestamp_utc_microseconds = ntohll(*(uint64_t *)(pBody->buf + subparam_info.value_offset));
+              last_seen_timestamp_utc_microseconds_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_TAG_SEEN_COUNT:
+              assert(tag_seen_count_is_set == 0);
+              tag_seen_count = ntohs(*(uint16_t *)(pBody->buf + subparam_info.value_offset));
+              tag_seen_count_is_set = 1;
+              break;
+            case R420_PARAM_TYPE_CHANNEL_INDEX:
+              assert(channel_index_is_set == 0);
+              channel_index = ntohs(*(uint16_t *)(pBody->buf + subparam_info.value_offset));
+              channel_index_is_set = 1;
               break;
             case R420_PARAM_TYPE_CUSTOM_PARAMETER:
               uint32_t vendor_id = ntohl(*(uint32_t *)(pBody->buf + subparam_info.value_offset));
@@ -479,11 +528,15 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
           suboffset += subparam_info.len;
         }
         
-        if (peak_rssi_is_set && epc96_is_set && antenna_id_is_set && rf_phase_angle_is_set && rf_doppler_frequency_is_set) {
-          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %u, RF Phase Angle: %d, RF Doppler Frequency: %d",
+        if (peak_rssi_is_set && epc96_is_set && antenna_id_is_set && rf_phase_angle_is_set && rf_doppler_frequency_is_set && first_seen_timestamp_utc_microseconds_is_set && last_seen_timestamp_utc_microseconds_is_set && tag_seen_count_is_set && channel_index_is_set) {
+          r420_logf(pCtx, "Tag EPC: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X, Antenna ID: %u, Peak RSSI: %u, RF Phase Angle: %d, RF Doppler Frequency: %d, First Seen Timestamp (UTC): %llu us, Last Seen Timestamp (UTC): %llu us, Tag Seen Count: %u, Channel Index: %u",
             epc96[0], epc96[1], epc96[2], epc96[3], epc96[4], epc96[5],
             epc96[6], epc96[7], epc96[8], epc96[9], epc96[10], epc96[11],
-            antenna_id, peak_rssi, rf_phase_angle, rf_doppler_frequency);
+            antenna_id, peak_rssi, rf_phase_angle, rf_doppler_frequency,
+            (unsigned long long)first_seen_timestamp_utc_microseconds,
+            (unsigned long long)last_seen_timestamp_utc_microseconds,
+            tag_seen_count, channel_index);
+          //TODO pass to measurement-dspecific user handler
         } else {
           r420_logf(pCtx, "Incomplete tag report data received.");
           //TODO pass to user handler
@@ -640,11 +693,11 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   uint16_t enable_spec_index = 0;
   uint16_t enable_inventory_parameter_spec_id = 0;
   uint16_t enable_antenna_id = 1;
-  uint16_t enable_channel_index = 0;
+  uint16_t enable_channel_index = 1;
   uint16_t enable_peak_rssi = 1;
   uint16_t enable_first_seen_timestamp = 1;
-  uint16_t enable_last_seen_timestamp = 0;
-  uint16_t enable_tag_seen_count = 0;
+  uint16_t enable_last_seen_timestamp = 1;
+  uint16_t enable_tag_seen_count = 1;
   uint16_t enable_access_spec_id = 0;
   uint16_t tag_report_content_selector_reserved = 0;
 
