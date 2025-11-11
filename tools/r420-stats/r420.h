@@ -254,6 +254,7 @@ typedef struct r420_ctx {
   void* pUserData;
   int terminate_flag; // Set to 1 to non-zero value to stop `r420_loop()`
   int rospec_added;
+  int rospec_replace_flag;
   int rospec_enabled;
   int rospec_started;
 } r420_ctx_t;

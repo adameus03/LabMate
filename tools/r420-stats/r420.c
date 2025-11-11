@@ -24,6 +24,7 @@ static uint64_t ntohll(uint64_t val) {
 
 #define R420_MSG_BODY_MAX_SIZE 4096
 #define IMPINJ_VENDOR_ID R420_CUSTOM_MESSAGE_VENDOR_ID_IMPINJ
+#define REPLACE_ROSPEC 1
 
 typedef struct r420_msg_body {
   uint8_t buf[R420_MSG_BODY_MAX_SIZE];
@@ -80,7 +81,7 @@ r420_ctx_t r420_connect(const r420_connection_parameters_t conn_params) {
     .sin_addr.s_addr = htonl(conn_params.ip)  // Convert to network byte order
   };
   assert(0 == connect(fd, (struct sockaddr *)&addr, sizeof(addr)));
-  return (r420_ctx_t){ .fd = fd, .loop_handler = NULL, .log_handler = NULL, .next_tx_msg_id = 1, .llrp_version = 1, .terminate_flag = 0, .rospec_added = 0, .rospec_enabled = 0, .rospec_started = 0  };
+  return (r420_ctx_t){ .fd = fd, .loop_handler = NULL, .log_handler = NULL, .next_tx_msg_id = 1, .llrp_version = 1, .terminate_flag = 0, .rospec_added = 0,  .rospec_replace_flag = 0, .rospec_enabled = 0, .rospec_started = 0  };
 }
 
 void r420_ctx_set_loop_handler(r420_ctx_t *pCtx, r420_loop_callback_t loop_handler) {
@@ -348,6 +349,25 @@ void r420_process_add_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body_
   uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
   assert(status_code == 0); // We expect StatusCode=M_Success
   pCtx->rospec_added = 1;
+  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+  // We ignore the error description and error params for now
+  // TODO Handle the error description and error params
+}
+
+void r420_process_delete_rospec_response_msg(r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
+  // First 4 bytes - TLV header for LLRPStatus parameter
+  // Next 2 bytes - StatusCode
+  // Next 2 bytes - Error Description ByteCount
+  // ...
+  assert(pBody->len >= 8); // We expect at least 8 bytes
+  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
+  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
+  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+  assert(status_code == 0); // We expect StatusCode=M_Success
+  pCtx->rospec_added = 0;
+  pCtx->rospec_enabled = 0;
+  pCtx->rospec_started = 0;
   //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
   // We ignore the error description and error params for now
   // TODO Handle the error description and error params
@@ -896,11 +916,24 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(aispec_stop_trigger_type) + sizeof(aispec_duration_trigger_value))
   };
 
+  uint16_t hop_table_id = 1;
+  uint16_t channel_index = 29; // 918.750 MHz
+  uint16_t transmit_power = 81; // 30.00 dBm
+  r420_msg_body_param_tlv_hdr_t rf_transmiter_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_RF_TRANSMITTER), // reserved=0, type=RFTransmitter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(hop_table_id) + sizeof(channel_index) + sizeof(transmit_power))
+  };
+
+  r420_msg_body_param_tlv_hdr_t antenna_configuration_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_ANTENNA_CONFIGURATION), // reserved=0, type=AntennaConfiguration
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(antenna1_id) + ntohs(rf_transmiter_param_hdr.param_len))
+  };
+
   uint16_t inventory_parameter_spec_id = 1;
   uint8_t protocol_id = 1; // EPCGlobalClass1Gen2
   r420_msg_body_param_tlv_hdr_t inventory_parameter_spec_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_INVENTORY_PARAMETER_SPEC), // reserved=0, type=InventoryParameterSpec
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(inventory_parameter_spec_id) + sizeof(protocol_id))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(inventory_parameter_spec_id) + sizeof(protocol_id) + ntohs(antenna_configuration_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t aispec_param_hdr = {
@@ -974,6 +1007,25 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy ProtocolID
   body.buf[offset] = protocol_id;
   offset += sizeof(protocol_id);
+  // Copy AntennaConfiguration tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = antenna_configuration_param_hdr;
+  offset += sizeof(antenna_configuration_param_hdr);
+  // Copy AntennaID
+  *(uint16_t *)(body.buf + offset) = htons(antenna1_id);
+  offset += sizeof(antenna1_id);
+  // Copy RFTransmitter tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = rf_transmiter_param_hdr;
+  offset += sizeof(rf_transmiter_param_hdr);
+  // Copy HopTableID
+  *(uint16_t *)(body.buf + offset) = htons(hop_table_id);
+  offset += sizeof(hop_table_id);
+  // Copy ChannelIndex
+  *(uint16_t *)(body.buf + offset) = htons(channel_index);
+  offset += sizeof(channel_index);
+  // Copy TransmitPower
+  *(uint16_t *)(body.buf + offset) = htons(transmit_power);
+  offset += sizeof(transmit_power);
+
   //body.len = offset; // Set final body length
   assert(offset == body.len);
   r420_msg_hdr_t hdr = {
@@ -986,6 +1038,28 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_ADD_ROSPEC);
   assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
   assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+  r420_send_message(pCtx, &hdr, &body);
+}
+
+void r420_send_delete_rospec_msg(r420_ctx_t* pCtx) {
+  pCtx->rospec_replace_flag = 1;
+
+  uint32_t rospec_id = 1;
+
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(rospec_id) };
+  *(uint32_t *)(body.buf) = htonl(rospec_id);
+
+  r420_msg_hdr_t hdr = {
+    /* version = ctx->llrp_version, message type = R420_MSG_TYPE_DELETE_ROSPEC */
+    .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_DELETE_ROSPEC),
+    .message_length = htonl(sizeof(r420_msg_hdr_t) + body.len),
+    .message_id = htonl(pCtx->next_tx_msg_id)
+  };
+  assert(R420_MSG_HDR_VERSION(hdr) == pCtx->llrp_version);
+  assert(R420_MSG_HDR_MESSAGE_TYPE(hdr) == R420_MSG_TYPE_DELETE_ROSPEC);
+  assert(R420_MSG_HDR_MSG_LENGTH(hdr) == sizeof(r420_msg_hdr_t) + body.len);
+  assert(R420_MSG_HDR_MSG_ID(hdr) == pCtx->next_tx_msg_id);
+
   r420_send_message(pCtx, &hdr, &body);
 }
 
@@ -1114,7 +1188,9 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
     case R420_MSG_TYPE_GET_ROSPECS_RESPONSE:
       r420_process_get_rospecs_response_msg((r420_ctx_t*)pCtx, pBody);
       if (pCtx->rospec_added) {
-        if (pCtx->rospec_enabled) {
+        if (REPLACE_ROSPEC == 1 && !pCtx->rospec_replace_flag) {
+          r420_send_delete_rospec_msg((r420_ctx_t*)pCtx);
+        } else if (pCtx->rospec_enabled) {
           if (pCtx->rospec_started) {
             r420_logf(pCtx, "ROSPEC already started. No further action.");
           } else {
@@ -1131,6 +1207,10 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       break;
     case R420_MSG_TYPE_ADD_ROSPEC_RESPONSE:
       r420_process_add_rospec_response_msg((r420_ctx_t*)pCtx, pBody);
+      r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
+      break;
+    case R420_MSG_TYPE_DELETE_ROSPEC_RESPONSE:
+      r420_process_delete_rospec_response_msg((r420_ctx_t*)pCtx, pBody);
       r420_send_get_rospecs_msg((r420_ctx_t*)pCtx);
       break;
     case R420_MSG_TYPE_ENABLE_ROSPEC_RESPONSE:
