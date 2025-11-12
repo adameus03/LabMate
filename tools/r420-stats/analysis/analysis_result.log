@@ -1,0 +1,24 @@
+Valid data point: Frequency = 925750 kHz, Phase Angle = 920 pseudodegrees
+Valid data point: Frequency = 926250 kHz, Phase Angle = 798 pseudodegrees
+Valid data point: Frequency = 927250 kHz, Phase Angle = 624 pseudodegrees
+Valid data point: Frequency = 926750 kHz, Phase Angle = 708 pseudodegrees
+Valid data point: Frequency = 924750 kHz, Phase Angle = 1100 pseudodegrees
+Valid data point: Frequency = 926250 kHz, Phase Angle = 830 pseudodegrees
+Valid data point: Frequency = 924750 kHz, Phase Angle = 1132 pseudodegrees
+Valid data point: Frequency = 920750 kHz, Phase Angle = 1864 pseudodegrees
+Valid data point: Frequency = 925750 kHz, Phase Angle = 922 pseudodegrees
+Valid data point: Frequency = 926250 kHz, Phase Angle = 814 pseudodegrees
+Valid data point: Frequency = 922250 kHz, Phase Angle = 1576 pseudodegrees
+Valid data point: Frequency = 925750 kHz, Phase Angle = 892 pseudodegrees
+Valid data point: Frequency = 926250 kHz, Phase Angle = 836 pseudodegrees
+Valid data point: Frequency = 921750 kHz, Phase Angle = 1660 pseudodegrees
+Valid data point: Frequency = 923250 kHz, Phase Angle = 1394 pseudodegrees
+Processed 15 valid data points.
+Sum_xx: 12832117, Sum_xy: 22784, Sum_x: 13873, Sum_y: 24
+Average_x: 924.916667, Average_y: 1.643405, Average_xx: 855474.529167, Average_xy: 1518.936783
+Linear Regression Result:
+Slope: -0.291595 radians/MHz
+Intercept: 271.344445 radians
+Equation: Phase Angle = -0.291595 * Frequency + 271.344445
+----------------------------------------
+Note: phase angle is in radians and frequency is in MHz.
