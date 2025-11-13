@@ -121,9 +121,11 @@ r420_msg_body_t r420_receive_body(const r420_ctx_t *pCtx, size_t body_len) {
 }
 
 typedef struct r420_msg_param_info {
-  uint16_t type;
-  uint16_t len;
-  size_t value_offset; // Offset of the value field within the parameter (after header)
+  uint16_t type; // parameter type as per LLRP specification
+  uint16_t len; // total length of the parameter including header
+  uint16_t hdr_len; // Length of the parameter header. TODO This is redundant as hdr_len=value_offset - hdr_offset
+  size_t hdr_offset; // Offset of the parameter header within the message body
+  size_t value_offset; // Offset of the value field within the ~~parameter~~ message body (after header)
 } r420_msg_param_info_t;
 
 r420_msg_param_info_t r420_process_param(const r420_ctx_t* pCtx, const r420_msg_body_t *pBody, size_t offset) {
@@ -136,30 +138,30 @@ r420_msg_param_info_t r420_process_param(const r420_ctx_t* pCtx, const r420_msg_
     switch (type) {
       // TODO We should handle all TV parameter lengths here
       case R420_PARAM_TYPE_PEAK_RSSI:
-        return (r420_msg_param_info_t){ .type = type, .len = 2, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 2, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
       case R420_PARAM_TYPE_EPC_96:
-        return (r420_msg_param_info_t){ .type = type, .len = 13, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 13, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
       case R420_PARAM_TYPE_ANTENNA_ID:
-        return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 3, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
       case R420_PARAM_TYPE_FIRST_SEEN_TIMESTAMP_UTC:
-        return (r420_msg_param_info_t){ .type = type, .len = 9, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 9, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
       case R420_PARAM_TYPE_LAST_SEEN_TIMESTAMP_UTC:
-        return (r420_msg_param_info_t){ .type = type, .len = 9, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 9, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
       case R420_PARAM_TYPE_TAG_SEEN_COUNT:
-        return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 3, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
         case R420_PARAM_TYPE_CHANNEL_INDEX:
-        return (r420_msg_param_info_t){ .type = type, .len = 3, .value_offset = offset + sizeof(tv_hdr) };
+        return (r420_msg_param_info_t){ .type = type, .len = 3, .hdr_len = sizeof(tv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) };
       default:
         r420_logf(pCtx, "r420_process_param: Unknown TV parameter type 0x%X, cannot determine length", type);
         break;
     }
-    return (r420_msg_param_info_t){ .type = type, .len = 0xffff, .value_offset = offset + sizeof(tv_hdr) }; // TV has no length field
+    return (r420_msg_param_info_t){ .type = type, .len = 0xffff, .hdr_len = 0xffff, .hdr_offset = offset, .value_offset = offset + sizeof(tv_hdr) }; // TV has no length field
   } else {
     // TLV encoded
     r420_msg_body_param_tlv_hdr_t tlv_hdr = *(r420_msg_body_param_tlv_hdr_t *)(pBody->buf + offset);
     uint16_t type = R420_MSG_BODY_PARAM_TLV_HDR_TYPE(tlv_hdr);
     uint16_t len = R420_MSG_BODY_PARAM_TLV_HDR_LEN(tlv_hdr);
-    return (r420_msg_param_info_t){ .type = type, .len = len, .value_offset = offset + sizeof(tlv_hdr) };
+    return (r420_msg_param_info_t){ .type = type, .len = len, .hdr_len = sizeof(tlv_hdr), .hdr_offset = offset, .value_offset = offset + sizeof(tlv_hdr) };
   }
 }
 
@@ -229,15 +231,136 @@ void r420_process_get_reader_capabilities_response_msg(const r420_ctx_t *pCtx, c
   // Next 2 bytes - Error Description ByteCount
   // ...
   assert(pBody->len >= 8); // We expect at least 8 bytes
-  r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, 0);
-  assert(param_info.type == R420_PARAM_TYPE_LLRP_STATUS);
-  assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
-  uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
-  assert(status_code == 0); // We expect StatusCode=M_Success
-  //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
-  // We ignore the error description and error params for now
-  // TODO Handle the error description and error params
-  // TODO Parse other parameters in the GetReaderCapabilitiesResponse message
+
+  size_t offset = 0;
+  while (offset < pBody->len) {
+    r420_msg_param_info_t param_info = r420_process_param(pCtx, pBody, offset);
+    switch(param_info.type) {
+      case R420_PARAM_TYPE_LLRP_STATUS: {
+        r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: LLRPStatus begins at offset %zu", offset);
+        assert(param_info.len >= 4); // We expect at least 4 bytes for LLRPStatus
+        uint16_t status_code = *(uint16_t *)(pBody->buf + param_info.value_offset);
+        assert(status_code == 0); // We expect StatusCode=M_Success
+        //uint16_t err_desc_len = *(uint16_t *)(pBody->buf + param_info.value_offset + 2);
+        // We ignore the error description and error params for now
+        // TODO Handle the error description and error params
+        break;
+      }
+      case R420_PARAM_TYPE_GENERAL_DEVICE_CAPABILITIES: {
+        r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: GeneralDeviceCapabilities begins at offset %zu", offset);
+        // We can parse specific fields if needed
+        break;
+      }
+      case R420_PARAM_TYPE_LLRP_CAPABILITIES: {
+        r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: LLRPCapabilities begins at offset %zu", offset);
+        // We can parse specific fields if needed
+        break;
+      }
+      case R420_PARAM_TYPE_REGULATORY_CAPABILITIES: {
+        r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: RegulatoryCapabilities begins at offset %zu", offset);
+        assert(param_info.len >= 4); // We expect at least 4 bytes for the RegulatoryCapabilities parameter
+        size_t suboffset = 0;
+        uint16_t country_code = ntohs(*(uint16_t *)(pBody->buf + param_info.value_offset + suboffset)); // See ISO 3166, 0 means unspecified
+        suboffset += sizeof(country_code);
+        uint16_t communications_standard = ntohs(*(uint16_t *)(pBody->buf + param_info.value_offset + suboffset));
+        suboffset += sizeof(communications_standard);
+        // Process subparameters
+        while (param_info.value_offset + suboffset < param_info.hdr_offset + param_info.len) {
+          r420_msg_param_info_t subparam_info = r420_process_param(pCtx, pBody, param_info.value_offset + suboffset);
+          switch(subparam_info.type) {
+            case R420_PARAM_TYPE_UHF_BAND_CAPABILITIES:
+              r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: UHFBandCapabilities begins at suboffset %zu\n", suboffset);
+              assert(subparam_info.len >= 0);
+              size_t subsuboffset = 0;
+              while (subparam_info.value_offset + subsuboffset < subparam_info.hdr_offset + subparam_info.len) {
+                r420_msg_param_info_t subsubparam_info = r420_process_param(pCtx, pBody, subparam_info.value_offset + subsuboffset);
+                switch(subsubparam_info.type) {
+                  case R420_PARAM_TYPE_TRANSMIT_POWER_LEVL_TABLE_ENTRY:
+                    r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: TransmitPowerLevelTableEntry begins at subsuboffset %zu", subsuboffset);
+                    // We can parse specific fields if needed
+                    break;
+                  case R420_PARAM_TYPE_FREQUENCY_INFORMATION:
+                    r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: FrequencyInformation begins at subsuboffset %zu", subsuboffset);
+                    size_t subsubsuboffset = 0;
+                    uint8_t flags = *(uint8_t *)(pBody->buf + subsubparam_info.value_offset);
+                    subsubsuboffset += sizeof(flags);
+                    if (flags & 0x80) {
+                      r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Hopping flag is SET in FrequencyInformation");
+                    } else {
+                      r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Hopping flag is NOT set in FrequencyInformation");
+                    }
+                    while (subsubparam_info.value_offset + subsubsuboffset < subsubparam_info.hdr_offset + subsubparam_info.len) {
+                      r420_msg_param_info_t subsubsubparam_info = r420_process_param(pCtx, pBody, subsubparam_info.value_offset + subsubsuboffset);
+                      switch(subsubsubparam_info.type) {
+                        case R420_PARAM_TYPE_FREQUENCY_HOP_TABLE:
+                          r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: FrequencyHopTable begins at subsubsuboffset %zu\n", subsubsuboffset);
+                          size_t subsubsubsuboffset = 0;
+                          uint8_t hop_table_id = *(uint8_t *)(pBody->buf + subsubsubparam_info.value_offset);
+                          subsubsubsuboffset += sizeof(hop_table_id);
+                          uint8_t reserved = *(uint8_t *)(pBody->buf + subsubsubparam_info.value_offset + subsubsubsuboffset);
+                          subsubsubsuboffset += sizeof(reserved);
+                          uint16_t num_hops = ntohs(*(uint16_t *)(pBody->buf + subsubsubparam_info.value_offset + subsubsubsuboffset));
+                          subsubsubsuboffset += sizeof(num_hops);
+                          r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: FrequencyHopTable ID=%u, NumHops=%u", hop_table_id, num_hops);
+                          r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Current position in body: %zu, end of FrequencyHopTable at %zu", subsubsubparam_info.value_offset + subsubsubsuboffset, subsubsubparam_info.hdr_offset + subsubsubparam_info.len);
+                          assert(subsubsubparam_info.value_offset + subsubsubsuboffset + num_hops * sizeof(uint32_t) == subsubsubparam_info.hdr_offset + subsubsubparam_info.len);
+                          for (int i = 0; i < num_hops; i++) {
+                            uint32_t frequency = ntohl(*(uint32_t *)(pBody->buf + subsubsubparam_info.value_offset + subsubsubsuboffset + i * sizeof(uint32_t)));
+                            r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: FrequencyHopTable Entry %d: Frequency = %u kHz", i, frequency);
+                          }
+                          break;
+                        case R420_PARAM_TYPE_FIXED_FREQUENCY_TABLE:
+                          r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Found FixedFrequencyTable in FrequencyInformation, which is unsupported by this implementation");
+                          // We can parse specific fields if needed
+                          break;
+                        default:
+                          // Unknown sub-sub-sub-parameter type, we just skip it
+                          r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Skipping unknown sub-sub-sub-parameter type 0x%X in FrequencyInformation", subsubsubparam_info.type);
+                          //TODO Add a ctx handler to pass this event to the user
+                          break;
+                      }
+                      assert(subsubsubparam_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+                      subsubsuboffset += subsubsubparam_info.len;
+                    }
+                    
+                    break;
+                  case R420_PARAM_TYPE_UHF_C1G2_RF_MODE_TABLE:
+                    r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: UHF_C1G2_RFModeTable begins at subsuboffset %zu", subsuboffset);
+                    // We can parse specific fields if needed
+                    break;
+                  default:
+                    // Unknown sub-sub-parameter type, we just skip it
+                    r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Skipping unknown sub-sub-parameter type 0x%X in UHFBandCapabilities", subsubparam_info.type);
+                    //TODO Add a ctx handler to pass this event to the user
+                    break;
+                }
+                assert(subsubparam_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+                subsuboffset += subsubparam_info.len;
+              }
+              break;
+            default:
+              // Unknown sub-parameter type, we just skip it
+              r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Skipping unknown sub-parameter type 0x%X in RegulatoryCapabilities", subparam_info.type);
+              //TODO Add a ctx handler to pass this event to the user
+              break;
+          }
+          assert(subparam_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+          suboffset += subparam_info.len;
+        }
+        break;
+      }
+      case R420_PARAM_TYPE_C1G2_LLRP_CAPABILITIES:
+        // We can parse specific fields if needed
+        break;
+      default:
+        // Unknown parameter type, we just skip it
+        r420_logf(pCtx, "r420_process_get_reader_capabilities_response_msg: Skipping unknown parameter type 0x%X", param_info.type);
+        //TODO Add a ctx handler to pass this event to the user
+        break;
+    }
+    assert(param_info.len != 0xffff); // Make sure there are no unsupported TV params as that would break the parsing TODO
+    offset += param_info.len;
+  }
 }
 
 void r420_process_impinj_enable_extensions_response_msg(const r420_ctx_t *pCtx, const r420_msg_body_t *pBody) {
@@ -476,7 +599,7 @@ void r420_process_ro_access_report_msg(const r420_ctx_t *pCtx, const r420_msg_bo
 
         size_t suboffset = 0;
 
-        while (param_info.value_offset + suboffset < param_info.len) {
+        while (param_info.value_offset + suboffset < offset + param_info.len) {
           r420_msg_param_info_t subparam_info = r420_process_param(pCtx, pBody, param_info.value_offset + suboffset);
           switch(subparam_info.type) {
             case R420_PARAM_TYPE_EPC_96:
