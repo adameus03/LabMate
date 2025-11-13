@@ -41,15 +41,17 @@ const char* output_paths[] = {
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__rssi8_time.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__rssi16_time.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__phase_freq.dat",
-  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__doppler_freq.dat"
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__doppler_freq.dat",
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__phase_time.dat",
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__ccp_time.dat", // channel-corrected phase vs time
 };
 
-FILE* output_files[4] = { NULL, NULL, NULL, NULL };
+FILE* output_files[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
 
 static void signal_handler(int sig){
   if (sig == SIGINT) {
     printf("Caught SIGINT, closing output files...\n");
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
       if (output_files[i]) {
         fclose(output_files[i]);
         output_files[i] = NULL;
@@ -80,8 +82,9 @@ void prepare_output_dir() {
   if (stat(dir_path, &st) == -1) {
     assert(0 == mkdir(dir_path, 0700));
   } else {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
       // delete output_paths[i]
+      printf("Removing existing output file: %s\n", output_paths[i]);
       int rv = remove(output_paths[i]);
       if (rv != 0 && errno != ENOENT) {
         fprintf(stderr, "Failed to remove existing output file %s, errno: %d\n", output_paths[i], errno);
@@ -178,6 +181,26 @@ void handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(const epc_stats_t* stats) {
           stats->rf_doppler_frequency);
 }
 
+void handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_time(const epc_stats_t* stats) {
+  for (int i = 0; i < 12; i++) {
+    if (stats->epc[i] != 0xBB) {
+      return;
+    }
+  }
+
+  if (output_files[4] == NULL) {
+    output_files[4] = fopen(output_paths[4], "a");
+    if (output_files[4] == NULL) {
+      perror("Failed to open output file for Phase Angle vs Time");
+      return;
+    }
+    setvbuf(output_files[4], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[4], "%llu\t%d\n",
+          (unsigned long long)stats->last_seen_timestamp_utc_microseconds,
+          stats->rf_phase_angle);
+}
+
 epc_stats_t parse_r420_log_line(const char *log_line) {
   epc_stats_t stats;
   memset(&stats, 0, sizeof(stats));
@@ -224,6 +247,7 @@ int main(void) {
     handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi16_time(&stats);
     handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_freq(&stats);
     handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(&stats);
+    handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_time(&stats);
   }
   fprintf(stderr, "Input stream closed. Exiting.\n");
   return 0;
