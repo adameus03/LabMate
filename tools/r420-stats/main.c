@@ -57,7 +57,7 @@ void main_r420_loop_handler(const r420_ctx_t *pCtx) {
 
 int main_log_filter(const char *pMsg) {
   static int counter = 0;
-  //return 1;
+  return 1;
   if (strstr(pMsg, "EPC:") == NULL) {
     return 0;
   }
