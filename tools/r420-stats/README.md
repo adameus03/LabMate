@@ -6,7 +6,7 @@ gcc main.c r420.c -o r420-stats
 ### Building the collector
 ```
 cd collector
-gcc main.c -o r420-collector
+gcc main.c -o collector
 ```
 
 ### Usage
@@ -15,7 +15,8 @@ gcc main.c -o r420-collector
 ```
 View the realtime stats with 
 ```
-gnuplot plotting/scripts/<script_name>.plt
+cd plotting/scripts
+gnuplot <script_name>.plt
 ```
 To gracefully stop the r420-stats and collector processes, it's enough to send a SIGINT (Ctrl+C) using the tty. 
 

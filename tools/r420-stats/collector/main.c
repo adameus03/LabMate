@@ -44,15 +44,17 @@ const char* output_paths[] = {
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__phase_freq.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__doppler_freq.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__phase_time.dat",
+  "./output/bbbbbbbbbbbbbbbbbbbbbbbb__rssi16_freq.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__ccp_time.dat", // channel-corrected phase vs time
 };
 
-FILE* output_files[6] = { NULL, NULL, NULL, NULL, NULL, NULL };
+#define NUM_OUTPUT_FILES 7
+FILE* output_files[NUM_OUTPUT_FILES] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 static void signal_handler(int sig){
   if (sig == SIGINT) {
     printf("Caught SIGINT, closing output files...\n");
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_OUTPUT_FILES; i++) {
       if (output_files[i]) {
         fclose(output_files[i]);
         output_files[i] = NULL;
@@ -88,7 +90,7 @@ void prepare_output_dir() {
   if (stat(dir_path, &st) == -1) {
     assert(0 == mkdir(dir_path, 0700));
   } else {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_OUTPUT_FILES; i++) {
       // delete output_paths[i]
       printf("Removing existing output file: %s\n", output_paths[i]);
       int rv = remove(output_paths[i]);
@@ -165,6 +167,25 @@ void handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_freq(const epc_stats_t* stats) {
   fprintf(output_files[2], "%u\t%d\n",
           get_channel_frequency(stats->channel_index),
           stats->rf_phase_angle);
+}
+
+void handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi16_freq(const epc_stats_t* stats) {
+  for (int i = 0; i < 12; i++) {
+    if (stats->epc[i] != 0xBB) {
+      return;
+    }
+  }
+  if (output_files[5] == NULL) {
+    output_files[5] = fopen(output_paths[5], "a");
+    if (output_files[5] == NULL) {
+      perror("Failed to open output file for RSSI (16-bit) vs Frequency");
+      return;
+    }
+    setvbuf(output_files[5], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[5], "%u\t%d\n",
+          get_channel_frequency(stats->channel_index),
+          stats->peak_rssi_16bit);
 }
 
 void handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(const epc_stats_t* stats) {
@@ -308,6 +329,7 @@ int main(void) {
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_freq(&stats);
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(&stats);
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_time(&stats);
+      handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi16_freq(&stats);
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_ccp_time(&stats);
     }
   }
