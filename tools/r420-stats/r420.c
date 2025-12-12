@@ -1090,9 +1090,22 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(hop_table_id) + sizeof(channel_index) + sizeof(transmit_power))
   };
 
+  uint16_t mode_index = 1002; // AutoSet Static (default)
+  int16_t tari = 0;
+  r420_msg_body_param_tlv_hdr_t c1g2_rf_control_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_RF_CONTROL), // reserved=0, type=C1G2RFControl
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(mode_index) + sizeof(tari))
+  };
+
+  uint8_t c1g2_inventory_command_flags = 0; // S=0 ==> so TagInventoryStateAware=0
+  r420_msg_body_param_tlv_hdr_t c1g2_inventory_command_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_INVENTORY_COMMAND), // reserved=0, type=C1G2InventoryCommand
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_rf_control_param_hdr.param_len))
+  };
+
   r420_msg_body_param_tlv_hdr_t antenna_configuration_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_ANTENNA_CONFIGURATION), // reserved=0, type=AntennaConfiguration
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(antenna1_id) + ntohs(rf_transmiter_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(antenna1_id) + ntohs(rf_transmiter_param_hdr.param_len) + ntohs(c1g2_inventory_command_param_hdr.param_len))
   };
 
   uint16_t inventory_parameter_spec_id = 1;
@@ -1191,6 +1204,21 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy TransmitPower
   *(uint16_t *)(body.buf + offset) = htons(transmit_power);
   offset += sizeof(transmit_power);
+  // Copy C1G2InventoryCommand tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_inventory_command_param_hdr;
+  offset += sizeof(c1g2_inventory_command_param_hdr);
+  // Copy C1G2InventoryCommand flags
+  body.buf[offset] = c1g2_inventory_command_flags;
+  offset += sizeof(c1g2_inventory_command_flags);
+  // Copy C1G2RFControl tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_rf_control_param_hdr;
+  offset += sizeof(c1g2_rf_control_param_hdr);
+  // Copy ModeIndex
+  *(uint16_t *)(body.buf + offset) = htons(mode_index);
+  offset += sizeof(mode_index);
+  // Copy Tari
+  *(int16_t *)(body.buf + offset) = htons(tari);
+  offset += sizeof(tari);
 
   //body.len = offset; // Set final body length
   assert(offset == body.len);
