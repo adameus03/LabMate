@@ -45,11 +45,12 @@ const char* output_paths[] = {
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__doppler_freq.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__phase_time.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__rssi16_freq.dat",
+  "./output/all__epc_time.dat",
   "./output/bbbbbbbbbbbbbbbbbbbbbbbb__ccp_time.dat", // channel-corrected phase vs time
 };
 
-#define NUM_OUTPUT_FILES 7
-FILE* output_files[NUM_OUTPUT_FILES] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+#define NUM_OUTPUT_FILES 8
+FILE* output_files[NUM_OUTPUT_FILES] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 static void signal_handler(int sig){
   if (sig == SIGINT) {
@@ -228,6 +229,21 @@ void handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_time(const epc_stats_t* stats) {
           stats->rf_phase_angle);
 }
 
+void handle_all__epc_time(const epc_stats_t* stats) {
+  if (output_files[6] == NULL) {
+    output_files[6] = fopen(output_paths[6], "a");
+    if (output_files[6] == NULL) {
+      perror("Failed to open output file for All EPC vs Time");
+      return;
+    }
+    setvbuf(output_files[6], NULL, _IOLBF, 0); // line-buffered
+  }
+  fprintf(output_files[6], "%llu\t%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\n",
+          (unsigned long long)stats->last_seen_timestamp_utc_microseconds,
+          stats->epc[0], stats->epc[1], stats->epc[2], stats->epc[3], stats->epc[4], stats->epc[5],
+          stats->epc[6], stats->epc[7], stats->epc[8], stats->epc[9], stats->epc[10], stats->epc[11]);
+}
+
 void handle_bbbbbbbbbbbbbbbbbbbbbbbb_ccp_time(const epc_stats_t* stats) {
   
 }
@@ -330,6 +346,7 @@ int main(void) {
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_doppler_freq(&stats);
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_phase_time(&stats);
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_rssi16_freq(&stats);
+      handle_all__epc_time(&stats);
       handle_bbbbbbbbbbbbbbbbbbbbbbbb_ccp_time(&stats);
     }
   }
