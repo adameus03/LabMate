@@ -774,9 +774,36 @@ void r420_send_get_supported_version_msg(r420_ctx_t *pCtx) {
 
 void r420_send_get_reader_capabilities_msg(r420_ctx_t *pCtx) {
   uint8_t requested_data = R420_GET_READER_CAPABILITIES_REQUESTED_DATA_ALL;
-  r420_msg_body_t body = { .buf = {0}, .len = sizeof(requested_data) };
-  body.buf[0] = requested_data;
 
+  //ImpinjRequestedData
+  uint32_t impinj_requested_data_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_requested_data_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_REQUESTED_DATA;
+  uint32_t impinj_requested_data = 1000; // All_Capabilities
+
+  r420_msg_body_param_tlv_hdr_t impinj_requested_data_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_requested_data_vendor_id) + sizeof(impinj_requested_data_subtype) + sizeof(impinj_requested_data))
+  };
+
+  /* Construct the message body */
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(requested_data) + ntohs(impinj_requested_data_param_hdr.param_len) };
+  size_t offset = 0;
+  body.buf[offset] = requested_data;
+  offset += sizeof(requested_data);
+  // Copy ImpinjRequestedData tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_requested_data_param_hdr;
+  offset += sizeof(impinj_requested_data_param_hdr);
+  // Copy ImpinjRequestedData vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_requested_data_vendor_id);
+  offset += sizeof(impinj_requested_data_vendor_id);
+  // Copy ImpinjRequestedData subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_requested_data_subtype);
+  offset += sizeof(impinj_requested_data_subtype);
+  // Copy ImpinjRequestedData RequestedData
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_requested_data);
+  offset += sizeof(impinj_requested_data);
+
+  assert(offset == body.len);
   r420_msg_hdr_t hdr = {
     /* version = ctx->llrp_version, message type = R420_MSG_TYPE_GET_READER_CAPABILITIES */
     .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_GET_READER_CAPABILITIES),
@@ -887,22 +914,29 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
 
   //ImpinjTagReportContentSelector
   uint32_t impinj_tag_report_content_selector_vendor_id = IMPINJ_VENDOR_ID;
-  uint32_t impinj_tag_report_content_selector_subtype = 50;
+  uint32_t impinj_tag_report_content_selector_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_TAG_REPORT_CONTENT_SELECTOR;
 
   //ImpinjEnableRFPhaseAngle
   uint32_t impinj_enable_rf_phase_angle_vendor_id = IMPINJ_VENDOR_ID;
-  uint32_t impinj_enable_rf_phase_angle_subtype = 52;
+  uint32_t impinj_enable_rf_phase_angle_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_ENABLE_RF_PHASE_ANGLE;
   uint16_t rf_phase_angle_mode = 1; // Enable
 
   //ImpinjEnablePeakRSSI
   uint32_t impinj_enable_peak_rssi_vendor_id = IMPINJ_VENDOR_ID;
-  uint32_t impinj_enable_peak_rssi_subtype = 53;
+  uint32_t impinj_enable_peak_rssi_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_ENABLE_PEAK_RSSI;
   uint16_t peak_rssi_mode = 1; // Enable
 
   //ImpinjEnableRFDopplerFrequency
   uint32_t impinj_enable_rf_doppler_frequency_vendor_id = IMPINJ_VENDOR_ID;
-  uint32_t impinj_enable_rf_doppler_frequency_subtype = 67;
+  uint32_t impinj_enable_rf_doppler_frequency_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_ENABLE_RF_DOPPLER_FREQUENCY;
   uint16_t rf_doppler_frequency_mode = 1; // Enable
+
+#if defined(R420_OCTANE_LLRP_7_6)
+  //ImpinjReportBufferConfiguration
+  uint32_t impinj_report_buffer_configuration_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_report_buffer_configuration_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_REPORT_BUFFER_CONFIGURATION;
+  uint16_t report_buffer_mode = 1; // Low_Latency
+#endif
 
   // Construct the headers for body parameters
   r420_msg_body_param_tlv_hdr_t impinj_enable_rf_phase_angle_param_hdr = {
@@ -925,6 +959,15 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_tag_report_content_selector_vendor_id) + sizeof(impinj_tag_report_content_selector_subtype) + ntohs(impinj_enable_rf_phase_angle_param_hdr.param_len) + ntohs(impinj_enable_peak_rssi_param_hdr.param_len) + ntohs(impinj_enable_rf_doppler_frequency_param_hdr.param_len))
   };
 
+#if defined(R420_OCTANE_LLRP_7_6)
+  r420_msg_body_param_tlv_hdr_t impinj_report_buffer_configuration_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_report_buffer_configuration_vendor_id) + sizeof(impinj_report_buffer_configuration_subtype) + sizeof(report_buffer_mode))
+  };
+#endif
+
+
+
   r420_msg_body_param_tlv_hdr_t c1g2_epc_memory_selector_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_MEMORY_SELECTOR), // reserved=0, type=C1G2EPCMemorySelector
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_epc_memory_selector_flags))
@@ -937,7 +980,11 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
 
   r420_msg_body_param_tlv_hdr_t ro_report_spec_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_RO_REPORT_SPEC), // reserved=0, type=ROReportSpec
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(ro_report_trigger) + sizeof(n) + ntohs(tag_report_content_selector_param_hdr.param_len) + ntohs(impinj_tag_report_content_selector_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(ro_report_trigger) + sizeof(n) + ntohs(tag_report_content_selector_param_hdr.param_len) + ntohs(impinj_tag_report_content_selector_param_hdr.param_len) 
+#if defined(R420_OCTANE_LLRP_7_6)
+      + ntohs(impinj_report_buffer_configuration_param_hdr.param_len)
+#endif
+    )
   };
 
   /* Construct the message body */
@@ -1011,6 +1058,20 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   // Copy RFDopplerFrequencyMode
   *(uint16_t *)(body.buf + offset) = htons(rf_doppler_frequency_mode);
   offset += sizeof(rf_doppler_frequency_mode);
+#if defined(R420_OCTANE_LLRP_7_6)
+  // Copy ImpinjReportBufferConfiguration tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_report_buffer_configuration_param_hdr;
+  offset += sizeof(r420_msg_body_param_tlv_hdr_t);
+  // Copy ImpinjReportBufferConfiguration vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_report_buffer_configuration_vendor_id);
+  offset += sizeof(impinj_report_buffer_configuration_vendor_id);
+  // Copy ImpinjReportBufferConfiguration subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_report_buffer_configuration_subtype);
+  offset += sizeof(impinj_report_buffer_configuration_subtype);
+  // Copy ReportBufferMode
+  *(uint16_t *)(body.buf + offset) = htons(report_buffer_mode);
+  offset += sizeof(report_buffer_mode);
+#endif
 
   assert(offset == body.len);
   r420_msg_hdr_t hdr = {
@@ -1092,8 +1153,12 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
 
   uint8_t c1g2_tag_inventory_mask_flags = 0x40; // MB=1 ==> EPC memory bank
   uint16_t c1g2_tag_inventory_mask_bit_pointer = 0x20; // start at bit 32 (i.e., after the StoredCRC and StoredPC bits - that's where the EPC starts)
-  uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
+  //uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
   uint8_t c1g2_tag_inventory_mask_value[12] = { 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb };
+  uint16_t c1g2_tag_inventory_mask_bit_count = 96;
+  //uint8_t c1g2_tag_inventory_mask_value[12] = { 0x30, 0x2E, 0x33, 0x05, 0x48, 0xD0, 0xA8, 0x00, 0x00, 0x06, 0x08, 0xFD };
+  //uint16_t c1g2_tag_inventory_mask_bit_count = 0;
+  //uint8_t c1g2_tag_inventory_mask_value[0] = { };
   r420_msg_body_param_tlv_hdr_t c1g2_tag_inventory_mask_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_TAG_INVENTORY_MASK), // reserved=0, type=C1G2TagInventoryMask
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_tag_inventory_mask_flags) + sizeof(c1g2_tag_inventory_mask_bit_pointer) + sizeof(c1g2_tag_inventory_mask_bit_count) + sizeof(c1g2_tag_inventory_mask_value))
@@ -1403,7 +1468,7 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
         r420_send_stop_rospec_msg((r420_ctx_t*)pCtx);
       } else {
         //r420_send_get_supported_version_msg((r420_ctx_t*)pCtx);
-        r420_send_get_reader_capabilities_msg((r420_ctx_t*)pCtx);
+        r420_send_impinj_enable_extensions_msg((r420_ctx_t*)pCtx);
       }
       break;
     case R420_MSG_TYPE_GET_SUPPORTED_VERSION_RESPONSE:
@@ -1411,7 +1476,7 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       break;
     case R420_MSG_TYPE_GET_READER_CAPABILITIES_RESPONSE:
       r420_process_get_reader_capabilities_response_msg(pCtx, pBody);
-      r420_send_impinj_enable_extensions_msg((r420_ctx_t*)pCtx);
+      r420_send_set_reader_config_msg((r420_ctx_t*)pCtx);
       break;
     case R420_MSG_TYPE_CUSTOM_MESSAGE:
       assert(pBody->len >= 5);
@@ -1419,7 +1484,7 @@ void r420_process_message(const r420_ctx_t *pCtx, const r420_msg_hdr_t *pHdr, co
       switch (subtype) {
         case R420_CUSTOM_MESSAGE_SUBTYPE_IMPINJ_ENABLE_EXTENSIONS_RESPONSE:
           r420_process_impinj_enable_extensions_response_msg(pCtx, pBody);
-          r420_send_set_reader_config_msg((r420_ctx_t*)pCtx);
+          r420_send_get_reader_capabilities_msg((r420_ctx_t*)pCtx);
           break;
         default:
           r420_logf(pCtx, "Unhandled custom message subtype: 0x%X", subtype);
