@@ -963,13 +963,6 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   uint32_t impinj_enable_rf_doppler_frequency_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_ENABLE_RF_DOPPLER_FREQUENCY;
   uint16_t rf_doppler_frequency_mode = 1; // Enable
 
-#if defined(R420_OCTANE_LLRP_7_6)
-  //ImpinjReportBufferConfiguration
-  uint32_t impinj_report_buffer_configuration_vendor_id = IMPINJ_VENDOR_ID;
-  uint32_t impinj_report_buffer_configuration_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_REPORT_BUFFER_CONFIGURATION;
-  uint16_t report_buffer_mode = 1; // Low_Latency
-#endif
-
   // Construct the headers for body parameters
   r420_msg_body_param_tlv_hdr_t impinj_enable_rf_phase_angle_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
@@ -991,15 +984,6 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_tag_report_content_selector_vendor_id) + sizeof(impinj_tag_report_content_selector_subtype) + ntohs(impinj_enable_rf_phase_angle_param_hdr.param_len) + ntohs(impinj_enable_peak_rssi_param_hdr.param_len) + ntohs(impinj_enable_rf_doppler_frequency_param_hdr.param_len))
   };
 
-#if defined(R420_OCTANE_LLRP_7_6)
-  r420_msg_body_param_tlv_hdr_t impinj_report_buffer_configuration_param_hdr = {
-    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_report_buffer_configuration_vendor_id) + sizeof(impinj_report_buffer_configuration_subtype) + sizeof(report_buffer_mode))
-  };
-#endif
-
-
-
   r420_msg_body_param_tlv_hdr_t c1g2_epc_memory_selector_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_MEMORY_SELECTOR), // reserved=0, type=C1G2EPCMemorySelector
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_epc_memory_selector_flags))
@@ -1012,15 +996,21 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
 
   r420_msg_body_param_tlv_hdr_t ro_report_spec_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_RO_REPORT_SPEC), // reserved=0, type=ROReportSpec
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(ro_report_trigger) + sizeof(n) + ntohs(tag_report_content_selector_param_hdr.param_len) + ntohs(impinj_tag_report_content_selector_param_hdr.param_len) 
-#if defined(R420_OCTANE_LLRP_7_6)
-      + ntohs(impinj_report_buffer_configuration_param_hdr.param_len)
-#endif
-    )
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(ro_report_trigger) + sizeof(n) + ntohs(tag_report_content_selector_param_hdr.param_len) + ntohs(impinj_tag_report_content_selector_param_hdr.param_len))
+  };
+
+  //ImpinjReportBufferConfiguration
+  uint32_t impinj_report_buffer_configuration_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_report_buffer_configuration_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_REPORT_BUFFER_CONFIGURATION;
+  uint16_t report_buffer_mode = 1; // Low_Latency
+
+  r420_msg_body_param_tlv_hdr_t impinj_report_buffer_configuration_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_report_buffer_configuration_vendor_id) + sizeof(impinj_report_buffer_configuration_subtype) + sizeof(report_buffer_mode))
   };
 
   /* Construct the message body */
-  r420_msg_body_t body = { .buf = {0}, .len = sizeof(flags) + ntohs(ro_report_spec_param_hdr.param_len) };
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(flags) + ntohs(ro_report_spec_param_hdr.param_len) + ntohs(impinj_report_buffer_configuration_param_hdr.param_len) };
   size_t offset = 0;
   body.buf[offset] = flags;
   offset += sizeof(flags);
@@ -1090,7 +1080,6 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   // Copy RFDopplerFrequencyMode
   *(uint16_t *)(body.buf + offset) = htons(rf_doppler_frequency_mode);
   offset += sizeof(rf_doppler_frequency_mode);
-#if defined(R420_OCTANE_LLRP_7_6)
   // Copy ImpinjReportBufferConfiguration tlv header
   *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_report_buffer_configuration_param_hdr;
   offset += sizeof(r420_msg_body_param_tlv_hdr_t);
@@ -1103,7 +1092,6 @@ void r420_send_set_reader_config_msg(r420_ctx_t* pCtx) {
   // Copy ReportBufferMode
   *(uint16_t *)(body.buf + offset) = htons(report_buffer_mode);
   offset += sizeof(report_buffer_mode);
-#endif
 
   assert(offset == body.len);
   r420_msg_hdr_t hdr = {
