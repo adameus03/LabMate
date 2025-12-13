@@ -1173,9 +1173,9 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
 
   uint8_t c1g2_tag_inventory_mask_flags = 0x40; // MB=1 ==> EPC memory bank
   uint16_t c1g2_tag_inventory_mask_bit_pointer = 0x20; // start at bit 32 (i.e., after the StoredCRC and StoredPC bits - that's where the EPC starts)
-  //uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
+  uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
   uint8_t c1g2_tag_inventory_mask_value[12] = { 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb };
-  uint16_t c1g2_tag_inventory_mask_bit_count = 96;
+  //uint16_t c1g2_tag_inventory_mask_bit_count = 96;
   //uint8_t c1g2_tag_inventory_mask_value[12] = { 0x30, 0x2E, 0x33, 0x05, 0x48, 0xD0, 0xA8, 0x00, 0x00, 0x06, 0x08, 0xFD };
   //uint16_t c1g2_tag_inventory_mask_bit_count = 0;
   //uint8_t c1g2_tag_inventory_mask_value[0] = { };
@@ -1206,10 +1206,19 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_singulation_control_flags) + sizeof(tag_population) + sizeof(tag_transit_time))
   };
 
+  //InventorySearchMode
+  uint32_t impinj_inventory_search_mode_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_inventory_search_mode_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_INVENTORY_SEARCH_MODE;
+  uint16_t inventory_search_mode = 2; //Dual Target Inventory
+  r420_msg_body_param_tlv_hdr_t impinj_inventory_search_mode_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_inventory_search_mode_vendor_id) + sizeof(impinj_inventory_search_mode_subtype) + sizeof(inventory_search_mode))
+  };
+
   uint8_t c1g2_inventory_command_flags = 0; // S=0 ==> so TagInventoryStateAware=0
   r420_msg_body_param_tlv_hdr_t c1g2_inventory_command_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_INVENTORY_COMMAND), // reserved=0, type=C1G2InventoryCommand
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_filter_param_hdr.param_len) + ntohs(c1g2_rf_control_param_hdr.param_len) + ntohs(c1g2_singulation_control_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_filter_param_hdr.param_len) + ntohs(c1g2_rf_control_param_hdr.param_len) + ntohs(c1g2_singulation_control_param_hdr.param_len) + ntohs(impinj_inventory_search_mode_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t antenna_configuration_param_hdr = {
@@ -1361,6 +1370,18 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy TagTransitTime
   *(uint32_t *)(body.buf + offset) = htonl(tag_transit_time);
   offset += sizeof(tag_transit_time);
+  // Copy ImpinjInventorySearchMode tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_inventory_search_mode_param_hdr;
+  offset += sizeof(impinj_inventory_search_mode_param_hdr);
+  // Copy ImpinjInventorySearchMode vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_inventory_search_mode_vendor_id);
+  offset += sizeof(impinj_inventory_search_mode_vendor_id);
+  // Copy ImpinjInventorySearchMode subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_inventory_search_mode_subtype);
+  offset += sizeof(impinj_inventory_search_mode_subtype);
+  // Copy InventorySearchMode
+  *(uint16_t *)(body.buf + offset) = htons(inventory_search_mode);
+  offset += sizeof(inventory_search_mode);
 
   //body.len = offset; // Set final body length
   assert(offset == body.len);
