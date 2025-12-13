@@ -1097,10 +1097,18 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(mode_index) + sizeof(tari))
   };
 
+  uint8_t c1g2_singulation_control_flags = 0x40; // S=1 ==> Session 1
+  uint16_t tag_population = 32; //default
+  uint32_t tag_transit_time = 0; // default
+  r420_msg_body_param_tlv_hdr_t c1g2_singulation_control_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_SINGULATION_CONTROL), // reserved=0, type=C1G2SingulationControl
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_singulation_control_flags) + sizeof(tag_population) + sizeof(tag_transit_time))
+  };
+
   uint8_t c1g2_inventory_command_flags = 0; // S=0 ==> so TagInventoryStateAware=0
   r420_msg_body_param_tlv_hdr_t c1g2_inventory_command_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_INVENTORY_COMMAND), // reserved=0, type=C1G2InventoryCommand
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_rf_control_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_rf_control_param_hdr.param_len) + ntohs(c1g2_singulation_control_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t antenna_configuration_param_hdr = {
@@ -1219,6 +1227,18 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy Tari
   *(int16_t *)(body.buf + offset) = htons(tari);
   offset += sizeof(tari);
+  // Copy C1G2SingulationControl tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_singulation_control_param_hdr;
+  offset += sizeof(c1g2_singulation_control_param_hdr);
+  // Copy C1G2SingulationControl flags
+  body.buf[offset] = c1g2_singulation_control_flags;
+  offset += sizeof(c1g2_singulation_control_flags);
+  // Copy TagPopulation
+  *(uint16_t *)(body.buf + offset) = htons(tag_population);
+  offset += sizeof(tag_population);
+  // Copy TagTransitTime
+  *(uint32_t *)(body.buf + offset) = htonl(tag_transit_time);
+  offset += sizeof(tag_transit_time);
 
   //body.len = offset; // Set final body length
   assert(offset == body.len);
