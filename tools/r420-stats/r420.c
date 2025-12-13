@@ -850,12 +850,44 @@ void r420_send_get_reader_config_msg(r420_ctx_t* pCtx) {
   uint16_t gpi_port_num = 0; // 0 means all GPI ports
   uint16_t gpo_port_num = 0; // 0 means all GPO ports
 
-  r420_msg_body_t body = { .buf = {0}, .len = sizeof(antenna_id) + sizeof(requested_data) + sizeof(gpi_port_num) + sizeof(gpo_port_num) };
-  *(uint16_t *)(body.buf) = htons(antenna_id);
-  body.buf[2] = requested_data;
-  *(uint16_t *)(body.buf + 3) = htons(gpi_port_num);
-  *(uint16_t *)(body.buf + 5) = htons(gpo_port_num);
+  //ImpinjRequestedData
+  uint32_t impinj_requested_data_vendor_id = IMPINJ_VENDOR_ID;
+  uint32_t impinj_requested_data_subtype = R420_CUSTOM_PARAMETER_SUBTYPE_IMPINJ_REQUESTED_DATA;
+  uint32_t impinj_requested_data = 2000; // All_Configuration
 
+  r420_msg_body_param_tlv_hdr_t impinj_requested_data_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_CUSTOM_PARAMETER), // reserved=0, type=CustomParameter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(impinj_requested_data_vendor_id) + sizeof(impinj_requested_data_subtype) + sizeof(impinj_requested_data))
+  };
+
+  /* Construct the message body */
+  r420_msg_body_t body = { .buf = {0}, .len = sizeof(antenna_id) + sizeof(requested_data) + sizeof(gpi_port_num) + sizeof(gpo_port_num) + ntohs(impinj_requested_data_param_hdr.param_len) };
+  size_t offset = 0;
+  // Copy antenna ID
+  *(uint16_t *)(body.buf + offset) = htons(antenna_id);
+  offset += sizeof(antenna_id);
+  body.buf[offset] = requested_data;
+  offset += sizeof(requested_data);
+  // Copy GPIPortNum
+  *(uint16_t *)(body.buf + offset) = htons(gpi_port_num);
+  offset += sizeof(gpi_port_num);
+  // Copy GPOPortNum
+  *(uint16_t *)(body.buf + offset) = htons(gpo_port_num);
+  offset += sizeof(gpo_port_num);
+  // Copy ImpinjRequestedData tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_requested_data_param_hdr;
+  offset += sizeof(impinj_requested_data_param_hdr);
+  // Copy ImpinjRequestedData vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_requested_data_vendor_id);
+  offset += sizeof(impinj_requested_data_vendor_id);
+  // Copy ImpinjRequestedData subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_requested_data_subtype);
+  offset += sizeof(impinj_requested_data_subtype);
+  // Copy ImpinjRequestedData RequestedData
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_requested_data);
+  offset += sizeof(impinj_requested_data);
+
+  assert(offset == body.len);
   r420_msg_hdr_t hdr = {
     /* version = ctx->llrp_version, message type = R420_MSG_TYPE_GET_READER_CONFIG */
     .attrs = htons((pCtx->llrp_version << 10) | R420_MSG_TYPE_GET_READER_CONFIG),
@@ -1164,7 +1196,8 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_tag_inventory_mask_flags) + sizeof(c1g2_tag_inventory_mask_bit_pointer) + sizeof(c1g2_tag_inventory_mask_bit_count) + sizeof(c1g2_tag_inventory_mask_value))
   };
 
-  uint8_t c1g2_filter_flags = 0x40; // T=1 ==> No truncate
+  //uint8_t c1g2_filter_flags = 0x40; // T=1 ==> No truncate
+  uint8_t c1g2_filter_flags = 0x00; // T=0 ==> Docs say the truncate flag must be always set to 0 (unspecified)
   r420_msg_body_param_tlv_hdr_t c1g2_filter_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_FILTER), // reserved=0, type=C1G2Filter
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_filter_flags) + ntohs(c1g2_tag_inventory_mask_param_hdr.param_len))
