@@ -1090,6 +1090,21 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(hop_table_id) + sizeof(channel_index) + sizeof(transmit_power))
   };
 
+  uint8_t c1g2_tag_inventory_mask_flags = 0x40; // MB=1 ==> EPC memory bank
+  uint16_t c1g2_tag_inventory_mask_bit_pointer = 0x20; // start at bit 32 (i.e., after the StoredCRC and StoredPC bits - that's where the EPC starts)
+  uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
+  uint8_t c1g2_tag_inventory_mask_value[12] = { 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb };
+  r420_msg_body_param_tlv_hdr_t c1g2_tag_inventory_mask_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_TAG_INVENTORY_MASK), // reserved=0, type=C1G2TagInventoryMask
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_tag_inventory_mask_flags) + sizeof(c1g2_tag_inventory_mask_bit_pointer) + sizeof(c1g2_tag_inventory_mask_bit_count) + sizeof(c1g2_tag_inventory_mask_value))
+  };
+
+  uint8_t c1g2_filter_flags = 0x40; // T=1 ==> No truncate
+  r420_msg_body_param_tlv_hdr_t c1g2_filter_param_hdr = {
+    .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_FILTER), // reserved=0, type=C1G2Filter
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_filter_flags) + ntohs(c1g2_tag_inventory_mask_param_hdr.param_len))
+  };
+
   uint16_t mode_index = 1002; // AutoSet Static (default)
   int16_t tari = 0;
   r420_msg_body_param_tlv_hdr_t c1g2_rf_control_param_hdr = {
@@ -1098,7 +1113,7 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   };
 
   uint8_t c1g2_singulation_control_flags = 0x40; // S=1 ==> Session 1
-  uint16_t tag_population = 32; //default
+  uint16_t tag_population = 1; //default
   uint32_t tag_transit_time = 0; // default
   r420_msg_body_param_tlv_hdr_t c1g2_singulation_control_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_SINGULATION_CONTROL), // reserved=0, type=C1G2SingulationControl
@@ -1108,7 +1123,7 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   uint8_t c1g2_inventory_command_flags = 0; // S=0 ==> so TagInventoryStateAware=0
   r420_msg_body_param_tlv_hdr_t c1g2_inventory_command_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_INVENTORY_COMMAND), // reserved=0, type=C1G2InventoryCommand
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_rf_control_param_hdr.param_len) + ntohs(c1g2_singulation_control_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_inventory_command_flags) + ntohs(c1g2_filter_param_hdr.param_len) + ntohs(c1g2_rf_control_param_hdr.param_len) + ntohs(c1g2_singulation_control_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t antenna_configuration_param_hdr = {
@@ -1218,6 +1233,27 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy C1G2InventoryCommand flags
   body.buf[offset] = c1g2_inventory_command_flags;
   offset += sizeof(c1g2_inventory_command_flags);
+  // Copy C1G2Filter tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_filter_param_hdr;
+  offset += sizeof(c1g2_filter_param_hdr);
+  // Copy C1G2Filter flags
+  body.buf[offset] = c1g2_filter_flags;
+  offset += sizeof(c1g2_filter_flags);
+  // Copy C1G2TagInventoryMask tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_tag_inventory_mask_param_hdr;
+  offset += sizeof(c1g2_tag_inventory_mask_param_hdr);
+  // Copy C1G2TagInventoryMask flags
+  body.buf[offset] = c1g2_tag_inventory_mask_flags;
+  offset += sizeof(c1g2_tag_inventory_mask_flags);
+  // Copy C1G2TagInventoryMask pointer
+  *(uint16_t *)(body.buf + offset) = htons(c1g2_tag_inventory_mask_bit_pointer);
+  offset += sizeof(c1g2_tag_inventory_mask_bit_pointer);
+  // Copy C1G2TagInventoryMask MaskBitCount
+  *(uint16_t *)(body.buf + offset) = htons(c1g2_tag_inventory_mask_bit_count);
+  offset += sizeof(c1g2_tag_inventory_mask_bit_count);
+  // Copy C1G2TagInventoryMask Tag Mask
+  memcpy(body.buf + offset, c1g2_tag_inventory_mask_value, sizeof(c1g2_tag_inventory_mask_value));
+  offset += sizeof(c1g2_tag_inventory_mask_value);
   // Copy C1G2RFControl tlv header
   *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_rf_control_param_hdr;
   offset += sizeof(c1g2_rf_control_param_hdr);
