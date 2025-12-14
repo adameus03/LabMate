@@ -1,6 +1,8 @@
 from dnn import DenseNeuralNetwork
 
-nn = DenseNeuralNetwork([120, 168, 96, 66])
+oscillator_period = 120
+#nn = DenseNeuralNetwork([120, 168, 96, 66])
+nn = DenseNeuralNetwork([130, 182, 104, 71])
 
 def loss_cb():
   # Insert custom input data

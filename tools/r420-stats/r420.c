@@ -1173,12 +1173,14 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
 
   uint8_t c1g2_tag_inventory_mask_flags = 0x40; // MB=1 ==> EPC memory bank
   uint16_t c1g2_tag_inventory_mask_bit_pointer = 0x20; // start at bit 32 (i.e., after the StoredCRC and StoredPC bits - that's where the EPC starts)
-  uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
-  uint8_t c1g2_tag_inventory_mask_value[12] = { 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb };
+  //uint16_t c1g2_tag_inventory_mask_bit_count = 96; // length of EPC-96
+  //uint8_t c1g2_tag_inventory_mask_value[12] = { 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb };
   //uint16_t c1g2_tag_inventory_mask_bit_count = 96;
   //uint8_t c1g2_tag_inventory_mask_value[12] = { 0x30, 0x2E, 0x33, 0x05, 0x48, 0xD0, 0xA8, 0x00, 0x00, 0x06, 0x08, 0xFD };
   //uint16_t c1g2_tag_inventory_mask_bit_count = 0;
   //uint8_t c1g2_tag_inventory_mask_value[0] = { };
+  uint16_t c1g2_tag_inventory_mask_bit_count = 32;
+  uint8_t c1g2_tag_inventory_mask_value[4] = { 0x14, 0xb0, 0x04, 0x73 };
   r420_msg_body_param_tlv_hdr_t c1g2_tag_inventory_mask_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_TAG_INVENTORY_MASK), // reserved=0, type=C1G2TagInventoryMask
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_tag_inventory_mask_flags) + sizeof(c1g2_tag_inventory_mask_bit_pointer) + sizeof(c1g2_tag_inventory_mask_bit_count) + sizeof(c1g2_tag_inventory_mask_value))
