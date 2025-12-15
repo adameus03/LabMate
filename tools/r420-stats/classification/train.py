@@ -311,18 +311,19 @@ if __name__ == '__main__':
                 nn.train(loss_callback=loss_cb, epochs=1, device='cpu')
 
                 # Save network parameters after each epoch
-                filename = f"nn_params_epoch_{epoch}.npz"
-                save_dict = {}
-                for i, layer_params in enumerate(nn.params):
-                    if isinstance(layer_params, tuple):
-                        # Assume tuple is (weights, biases)
-                        save_dict[f'layer_{i}_weights'] = np.array(layer_params[0])
-                        if len(layer_params) > 1:
-                            save_dict[f'layer_{i}_biases'] = np.array(layer_params[1])
-                    else:
-                        save_dict[f'layer_{i}'] = np.array(layer_params)
-                np.savez(filename, **save_dict)
-                tqdm.write(f"Saved network parameters to {filename}")
+                if epoch % 100 == 0 or epoch == num_epochs:
+                  filename = f"nn_params_epoch_{epoch}.npz"
+                  save_dict = {}
+                  for i, layer_params in enumerate(nn.params):
+                      if isinstance(layer_params, tuple):
+                          # Assume tuple is (weights, biases)
+                          save_dict[f'layer_{i}_weights'] = np.array(layer_params[0])
+                          if len(layer_params) > 1:
+                              save_dict[f'layer_{i}_biases'] = np.array(layer_params[1])
+                      else:
+                          save_dict[f'layer_{i}'] = np.array(layer_params)
+                  np.savez(filename, **save_dict)
+                  tqdm.write(f"Saved network parameters to {filename}")
 
             print("Training complete!")
         else:
