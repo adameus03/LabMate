@@ -6,6 +6,7 @@ from tqdm import tqdm  # added tqdm for progress bars
 import numpy as np  # needed for saving params
 
 oscillator_period = 120
+tbptt_window_size = 120
 nn = DenseNeuralNetwork([130, 182, 104, 71])
 
 # Predefined frequency hops in kHz (default values, will be updated from file)
@@ -179,25 +180,34 @@ def load_data(path):
     # Convert once to JAX array at the end
     return jnp.array(measurements) if measurements else jnp.zeros((0, 7))
 
-
 def loss_cb():
     """
-    Calculate loss by processing all measurements and comparing network outputs
+    Calculate loss by processing a randomly chosen window of measurements 
+    of length tbptt_window_size and comparing network outputs
     to expected locus values.
     """
     global global_inputs, global_outputs, loaded_data
     
     if loaded_data is None or loaded_data.shape[0] == 0:
-        return 0.0
+        return jnp.array(0.0)
+    
+    n = loaded_data.shape[0]
+    if n < tbptt_window_size:
+        # If data is smaller than window, process all
+        window = loaded_data
+    else:
+        # Choose a random contiguous window
+        start = np.random.randint(0, n - tbptt_window_size + 1)
+        window = loaded_data[start : start + tbptt_window_size]
     
     # Reset global state at the beginning
     global_inputs = jnp.zeros(130)
     global_outputs = jnp.zeros(71)
     
-    accumulated_loss = 0.0
+    accumulated_loss = jnp.array(0.0)
     
-    # Use tqdm for progress bar
-    for entry in tqdm(loaded_data, desc="Processing measurements", unit="entries"):
+    # Use tqdm for progress bar over the window
+    for entry in tqdm(window, desc="Processing window", unit="entries"):
         tag_index = int(entry[0])  # -1 for tracked tag, 0-11 for reference tags
         locus = int(entry[1])  # -1 for none, 0-5 for loci
         measurement_values = entry[2:]  # 5 values: rssi, phase, doppler, freq, sine
@@ -229,8 +239,8 @@ def loss_cb():
         distance = jnp.linalg.norm(predicted_locus_vector - target_locus_vector)
         accumulated_loss += distance
     
-    return float(accumulated_loss)
-
+    print(f"Accumulated loss for window: {accumulated_loss}")
+    return accumulated_loss
 
 def show_data_summary(data):
     """
@@ -302,7 +312,16 @@ if __name__ == '__main__':
 
                 # Save network parameters after each epoch
                 filename = f"nn_params_epoch_{epoch}.npz"
-                np.savez(filename, **{k: np.array(v) for k, v in nn.params.items()})
+                save_dict = {}
+                for i, layer_params in enumerate(nn.params):
+                    if isinstance(layer_params, tuple):
+                        # Assume tuple is (weights, biases)
+                        save_dict[f'layer_{i}_weights'] = np.array(layer_params[0])
+                        if len(layer_params) > 1:
+                            save_dict[f'layer_{i}_biases'] = np.array(layer_params[1])
+                    else:
+                        save_dict[f'layer_{i}'] = np.array(layer_params)
+                np.savez(filename, **save_dict)
                 tqdm.write(f"Saved network parameters to {filename}")
 
             print("Training complete!")
