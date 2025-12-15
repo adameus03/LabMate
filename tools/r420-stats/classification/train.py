@@ -8,16 +8,17 @@ import numpy as np  # needed for saving params
 oscillator_period = 120
 nn = DenseNeuralNetwork([130, 182, 104, 71])
 
-# Predefined frequency hops in kHz
-frequency_hops = [
-    902750, 903250, 903750, 904250, 904750, 905250, 905750, 906250,
-    906750, 907250, 907750, 908250, 908750, 909250, 909750, 910250,
-    910750, 911250, 911750, 912250, 912750, 913250, 913750, 914250,
-    914750, 915250, 915750, 916250, 916750, 917250, 917750, 918250,
-    918750, 919250, 919750, 920250, 920750, 921250, 921750, 922250,
-    922750, 923250, 923750, 924250, 924750, 925250, 925750, 926250,
-    926750, 927250, 927750
-]
+# Predefined frequency hops in kHz (default values, will be updated from file)
+# frequency_hops = [
+#     902750, 903250, 903750, 904250, 904750, 905250, 905750, 906250,
+#     906750, 907250, 907750, 908250, 908750, 909250, 909750, 910250,
+#     910750, 911250, 911750, 912250, 912750, 913250, 913750, 914250,
+#     914750, 915250, 915750, 916250, 916750, 917250, 917750, 918250,
+#     918750, 919250, 919750, 920250, 920750, 921250, 921750, 922250,
+#     922750, 923250, 923750, 924250, 924750, 925250, 925750, 926250,
+#     926750, 927250, 927750
+# ]
+frequency_hops = []
 
 # Locus mapping
 locus_map = {
@@ -46,6 +47,45 @@ global_inputs = jnp.zeros(130)  # 130 input neurons
 global_outputs = jnp.zeros(71)  # 71 output neurons
 loaded_data = None  # Will store the data loaded from file
 
+def load_frequency_hops(path):
+    """
+    Load frequency hopping table from a file.
+    
+    Args:
+        path (str): Path to the frequency hopping table file.
+    
+    Returns:
+        list: List of frequencies in kHz, indexed by channel index.
+    """
+    freq_re = re.compile(r'Channel Index: (\d+), Frequency: (\d+) kHz')
+    
+    freq_table = {}
+    
+    with open(path, 'r') as f:
+        lines = f.readlines()
+    
+    for line in tqdm(lines, desc="Loading FH table", unit="lines"):
+        line = line.strip()
+        
+        if not line.startswith('Parsed FH Table entry'):
+            continue
+        
+        match = freq_re.search(line)
+        if match:
+            channel_idx = int(match.group(1))
+            frequency = int(match.group(2))
+            freq_table[channel_idx] = frequency
+    
+    # Convert to list, sorted by channel index
+    if not freq_table:
+        print("Warning: No frequency hop entries found in file!")
+        return None
+    
+    max_idx = max(freq_table.keys())
+    freq_list = [freq_table.get(i, 915000) for i in range(max_idx + 1)]
+    
+    return freq_list
+
 def load_data(path):
     """
     Load and parse RFID measurement data from a log file.
@@ -60,6 +100,14 @@ def load_data(path):
             - kHz frequency scaled from [902000, 928000] to [-1, 1]
             - sine oscillator value based on timestamp
     """
+    # assert frequency_hops is loaded
+    if not frequency_hops:
+        print("Error: Frequency hopping table not loaded!")
+        exit(1)
+    if len(frequency_hops) < 50:
+        print("Error: Frequency hopping table seems incomplete!")
+        exit(1)
+
     # Precompile regexes for speed
     epc_re = re.compile(r'EPC: ([0-9A-F]+)')
     rssi_re = re.compile(r'16-bit peak rssi: (-?\d+)')
@@ -212,22 +260,39 @@ def show_data_summary(data):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         print("Usage:")
-        print("  python script.py <data_file> --show")
-        print("  python script.py <data_file> --train <num_epochs>")
+        print("  python script.py <fh_table_file> <data_file> --show")
+        print("  python script.py <fh_table_file> <data_file> --train <num_epochs>")
         sys.exit(1)
     
-    data_path = sys.argv[1]
+    fh_table_path = sys.argv[1]
+    data_path = sys.argv[2]
+    
+    # Load frequency hopping table first
+    print(f"Loading frequency hopping table from {fh_table_path}...")
+    loaded_fh_table = load_frequency_hops(fh_table_path)
+    
+    if loaded_fh_table is not None:
+        frequency_hops = loaded_fh_table
+        print(f"Done loading frequency hopping table. Loaded {len(frequency_hops)} channels.\n")
+        print("Frequency Hopping Table:")
+        for idx, freq in enumerate(frequency_hops):
+            print(f"  Channel {idx}: {freq} kHz")
+        print()
+    else:
+        print("Failed to load frequency hopping table. Using default values.\n")
+    
+    # Load training data
     print(f"Loading training data from {data_path}...")
     loaded_data = load_data(data_path)
     print("Done loading training data.\n")
     
-    if len(sys.argv) >= 3:
-        if sys.argv[2] == '--show':
+    if len(sys.argv) >= 4:
+        if sys.argv[3] == '--show':
             show_data_summary(loaded_data)
-        elif sys.argv[2] == '--train' and len(sys.argv) >= 4:
-            num_epochs = int(sys.argv[3])
+        elif sys.argv[3] == '--train' and len(sys.argv) >= 5:
+            num_epochs = int(sys.argv[4])
             print(f"Training for {num_epochs} epochs...")
 
             # Outer loop: epochs
