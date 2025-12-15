@@ -1,24 +1,15 @@
 from dnn import DenseNeuralNetwork
 import re
 import jax.numpy as jnp
+import jax
 import sys
-from tqdm import tqdm  # added tqdm for progress bars
-import numpy as np  # needed for saving params
+from tqdm import tqdm
+import numpy as np
 
 oscillator_period = 120
 tbptt_window_size = 120
 nn = DenseNeuralNetwork([130, 182, 104, 71])
 
-# Predefined frequency hops in kHz (default values, will be updated from file)
-# frequency_hops = [
-#     902750, 903250, 903750, 904250, 904750, 905250, 905750, 906250,
-#     906750, 907250, 907750, 908250, 908750, 909250, 909750, 910250,
-#     910750, 911250, 911750, 912250, 912750, 913250, 913750, 914250,
-#     914750, 915250, 915750, 916250, 916750, 917250, 917750, 918250,
-#     918750, 919250, 919750, 920250, 920750, 921250, 921750, 922250,
-#     922750, 923250, 923750, 924250, 924750, 925250, 925750, 926250,
-#     926750, 927250, 927750
-# ]
 frequency_hops = []
 
 # Locus mapping
@@ -44,22 +35,13 @@ locus_names = {
 }
 
 # Global arrays for neural network state
-global_inputs = jnp.zeros(130)  # 130 input neurons
-global_outputs = jnp.zeros(71)  # 71 output neurons
-loaded_data = None  # Will store the data loaded from file
+global_inputs = jnp.zeros(130)
+global_outputs = jnp.zeros(71)
+loaded_data = None
 
 def load_frequency_hops(path):
-    """
-    Load frequency hopping table from a file.
-    
-    Args:
-        path (str): Path to the frequency hopping table file.
-    
-    Returns:
-        list: List of frequencies in kHz, indexed by channel index.
-    """
+    """Load frequency hopping table from a file."""
     freq_re = re.compile(r'Channel Index: (\d+), Frequency: (\d+) kHz')
-    
     freq_table = {}
     
     with open(path, 'r') as f:
@@ -67,41 +49,24 @@ def load_frequency_hops(path):
     
     for line in tqdm(lines, desc="Loading FH table", unit="lines"):
         line = line.strip()
-        
         if not line.startswith('Parsed FH Table entry'):
             continue
-        
         match = freq_re.search(line)
         if match:
             channel_idx = int(match.group(1))
             frequency = int(match.group(2))
             freq_table[channel_idx] = frequency
     
-    # Convert to list, sorted by channel index
     if not freq_table:
         print("Warning: No frequency hop entries found in file!")
         return None
     
     max_idx = max(freq_table.keys())
     freq_list = [freq_table.get(i, 915000) for i in range(max_idx + 1)]
-    
     return freq_list
 
 def load_data(path):
-    """
-    Load and parse RFID measurement data from a log file.
-    
-    Returns:
-        jnp.ndarray: Array of shape (n_measurements, 7) where each row contains:
-            - tag index (0-11 for reference tags, -1 for tracked tag)
-            - index of current locus (0-5) or -1 if [none]
-            - 16-bit peak rssi scaled from [-32768, 32767] to [-1, 1]
-            - RF Phase Angle scaled from [0, 4096] to [-1, 1]
-            - RF Doppler Frequency scaled from [-32768, 32767] to [-1, 1]
-            - kHz frequency scaled from [902000, 928000] to [-1, 1]
-            - sine oscillator value based on timestamp
-    """
-    # assert frequency_hops is loaded
+    """Load and parse RFID measurement data from a log file."""
     if not frequency_hops:
         print("Error: Frequency hopping table not loaded!")
         exit(1)
@@ -109,7 +74,6 @@ def load_data(path):
         print("Error: Frequency hopping table seems incomplete!")
         exit(1)
 
-    # Precompile regexes for speed
     epc_re = re.compile(r'EPC: ([0-9A-F]+)')
     rssi_re = re.compile(r'16-bit peak rssi: (-?\d+)')
     phase_re = re.compile(r'RF Phase Angle: (\d+)')
@@ -118,16 +82,14 @@ def load_data(path):
     channel_re = re.compile(r'Channel Index: (\d+)')
 
     measurements = []
-    current_locus = -1  # Start with [none]
+    current_locus = -1
 
     with open(path, 'r') as f:
         lines = f.readlines()
 
-    # Use tqdm for progress bar
     for line in tqdm(lines, desc="Loading data", unit="lines"):
         line = line.strip()
 
-        # Check for locus markers
         if line in locus_map:
             current_locus = locus_map[line]
             continue
@@ -135,30 +97,26 @@ def load_data(path):
         if not line.startswith('Measurement entry'):
             continue
 
-        # Extract EPC
         epc_match = epc_re.search(line)
         if not epc_match:
             continue
         epc = epc_match.group(1)
 
-        # Determine tag index
         if epc == '14B004730000000000000000':
-            tag_index = -1  # Tracked tag
+            tag_index = -1
         elif epc.startswith('14B00473DEADBEEF'):
             tag_hex = epc[-8:]
             tag_num = int(tag_hex, 16)
             tag_index = tag_num % 12
         else:
-            continue  # Unknown tag format
+            continue
 
-        # Extract measurement values
         peak_rssi_16bit = int(rssi_re.search(line).group(1))
         phase_angle = int(phase_re.search(line).group(1))
         doppler_freq = int(doppler_re.search(line).group(1))
         last_seen_us = int(timestamp_re.search(line).group(1))
         channel_index = int(channel_re.search(line).group(1))
 
-        # Scale values to [-1, 1]
         rssi_scaled = peak_rssi_16bit / 32768.0
         phase_scaled = (phase_angle / 4096.0) * 2.0 - 1.0
         doppler_scaled = doppler_freq / 32768.0
@@ -166,7 +124,6 @@ def load_data(path):
         freq_scaled = (freq_khz - 915000) / 13000.0
         sine_value = jnp.sin((2 * jnp.pi * last_seen_us / 1e6) / oscillator_period)
 
-        # Append as Python list
         measurements.append([
             tag_index,
             current_locus,
@@ -177,14 +134,54 @@ def load_data(path):
             float(sine_value)
         ])
 
-    # Convert once to JAX array at the end
     return jnp.array(measurements) if measurements else jnp.zeros((0, 7))
+
+@jax.jit
+def process_single_entry(global_inputs, global_outputs, entry, nn_params):
+    """
+    Process a single measurement entry (JIT-compiled for speed).
+    
+    Returns:
+        tuple: (updated_global_inputs, updated_global_outputs, loss_contribution)
+    """
+    tag_index = jnp.int32(entry[0])
+    locus = jnp.int32(entry[1])
+    measurement_values = entry[2:]
+    
+    # Update global input array with measurement values using dynamic update
+    # start_idx = (tag_index + 1) * 5, and we update 5 consecutive elements
+    start_idx = (tag_index + 1) * 5
+    global_inputs = jax.lax.dynamic_update_slice(
+        global_inputs, 
+        measurement_values, 
+        (start_idx,)
+    )
+    
+    # Update feedback loop (static indices - no problem)
+    global_inputs = global_inputs.at[65:130].set(global_outputs[6:71])
+    
+    # Run neural network forward pass
+    inputs_batch = global_inputs.reshape(1, -1)
+    outputs_batch = nn.forward(nn_params, inputs_batch)
+    global_outputs = outputs_batch.flatten()
+    
+    # Calculate loss - need to handle dynamic indexing for target vector
+    predicted_locus_vector = global_outputs[:6]
+    
+    # Create one-hot encoded target using scatter instead of conditional indexing
+    target_locus_vector = jnp.zeros(6)
+    # Use a mask to set the appropriate index to 1.0
+    mask = jnp.arange(6) == locus
+    mask = jnp.where((locus >= 0) & (locus < 6), mask, False)
+    target_locus_vector = jnp.where(mask, 1.0, 0.0)
+    
+    distance = jnp.linalg.norm(predicted_locus_vector - target_locus_vector)
+    
+    return global_inputs, global_outputs, distance
 
 def loss_cb():
     """
-    Calculate loss by processing a randomly chosen window of measurements 
-    of length tbptt_window_size and comparing network outputs
-    to expected locus values.
+    Calculate loss by processing a randomly chosen window of measurements.
     """
     global global_inputs, global_outputs, loaded_data
     
@@ -193,65 +190,30 @@ def loss_cb():
     
     n = loaded_data.shape[0]
     if n < tbptt_window_size:
-        # If data is smaller than window, process all
         window = loaded_data
     else:
-        # Choose a random contiguous window
         start = np.random.randint(0, n - tbptt_window_size + 1)
         window = loaded_data[start : start + tbptt_window_size]
     
-    # Reset global state at the beginning
+    # Reset global state
     global_inputs = jnp.zeros(130)
     global_outputs = jnp.zeros(71)
-    
     accumulated_loss = jnp.array(0.0)
     
-    # Use tqdm for progress bar over the window
-    for entry in tqdm(window, desc="Processing window", unit="entries"):
-        tag_index = int(entry[0])  # -1 for tracked tag, 0-11 for reference tags
-        locus = int(entry[1])  # -1 for none, 0-5 for loci
-        measurement_values = entry[2:]  # 5 values: rssi, phase, doppler, freq, sine
-        
-        # Update global input array with measurement values
-        start_idx = (tag_index + 1) * 5
-        end_idx = start_idx + 5
-        global_inputs = global_inputs.at[start_idx:end_idx].set(measurement_values)
-        
-        # Update feedback loop: indices 65 to 129 (13*5+1 to 129)
-        global_inputs = global_inputs.at[65:130].set(global_outputs[6:71])
-        
-        # Run neural network forward pass
-        inputs_batch = global_inputs.reshape(1, -1)
-        outputs_batch = nn.forward(nn.params, inputs_batch)
-        
-        # Update global outputs
-        global_outputs = outputs_batch.flatten()
-        
-        # Calculate loss based on locus prediction
-        predicted_locus_vector = global_outputs[:6]
-        
-        # Create target vector
-        target_locus_vector = jnp.zeros(6)
-        if 0 <= locus <= 5:
-            target_locus_vector = target_locus_vector.at[locus].set(1.0)
-        
-        # Calculate Euclidean distance
-        distance = jnp.linalg.norm(predicted_locus_vector - target_locus_vector)
-        accumulated_loss += distance
+    # Process window WITHOUT progress bar (this gets JIT-compiled)
+    for entry in window:
+        global_inputs, global_outputs, loss_contrib = process_single_entry(
+            global_inputs, global_outputs, entry, nn.params
+        )
+        accumulated_loss += loss_contrib
     
-    print(f"Accumulated loss for window: {accumulated_loss}")
+    # Cannot print here as this function gets traced during JIT compilation
     return accumulated_loss
 
 def show_data_summary(data):
-    """
-    Display first 10 entries for each locus.
-    
-    Args:
-        data (jnp.ndarray): Loaded measurement data.
-    """
+    """Display first 10 entries for each locus."""
     print(f"Loaded {data.shape[0]} measurements total\n")
     
-    # Group by locus and print first 10 for each
     for locus_idx in sorted(locus_names.keys()):
         locus_data = data[data[:, 1] == locus_idx]
         count = locus_data.shape[0]
@@ -265,9 +227,7 @@ def show_data_summary(data):
             print(locus_data[:10])
         else:
             print("No measurements for this locus")
-        
         print()
-
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
@@ -279,7 +239,7 @@ if __name__ == '__main__':
     fh_table_path = sys.argv[1]
     data_path = sys.argv[2]
     
-    # Load frequency hopping table first
+    # Load frequency hopping table
     print(f"Loading frequency hopping table from {fh_table_path}...")
     loaded_fh_table = load_frequency_hops(fh_table_path)
     
@@ -287,11 +247,14 @@ if __name__ == '__main__':
         frequency_hops = loaded_fh_table
         print(f"Done loading frequency hopping table. Loaded {len(frequency_hops)} channels.\n")
         print("Frequency Hopping Table:")
-        for idx, freq in enumerate(frequency_hops):
+        for idx, freq in enumerate(frequency_hops[:10]):  # Show first 10
             print(f"  Channel {idx}: {freq} kHz")
+        if len(frequency_hops) > 10:
+            print(f"  ... and {len(frequency_hops) - 10} more channels")
         print()
     else:
-        print("Failed to load frequency hopping table. Using default values.\n")
+        print("Failed to load frequency hopping table.")
+        sys.exit(1)
     
     # Load training data
     print(f"Loading training data from {data_path}...")
@@ -304,28 +267,34 @@ if __name__ == '__main__':
         elif sys.argv[3] == '--train' and len(sys.argv) >= 5:
             num_epochs = int(sys.argv[4])
             print(f"Training for {num_epochs} epochs...")
+            print("Note: First epoch will be slower due to JIT compilation.\n")
 
-            # Outer loop: epochs
-            for epoch in tqdm(range(1, num_epochs + 1), desc="Epochs", unit="epoch"):
-                # Train for 1 epoch at a time
+            for epoch in tqdm(range(1, num_epochs + 1), desc="Training", unit="epoch"):
+                # Train and capture the loss if possible
+                # Note: nn.train() may not return loss, so this is just the training call
                 nn.train(loss_callback=loss_cb, epochs=1, device='cpu')
+                
+                # Optionally compute and display loss every N epochs
+                if epoch % 10 == 0:
+                    # Call loss_cb directly to get current loss (outside of gradient computation)
+                    current_loss = loss_cb()
+                    tqdm.write(f"Epoch {epoch}: Loss = {float(current_loss):.4f}")
 
-                # Save network parameters after each epoch
+                # Save parameters periodically
                 if epoch % 100 == 0 or epoch == num_epochs:
-                  filename = f"nn_params_epoch_{epoch}.npz"
-                  save_dict = {}
-                  for i, layer_params in enumerate(nn.params):
-                      if isinstance(layer_params, tuple):
-                          # Assume tuple is (weights, biases)
-                          save_dict[f'layer_{i}_weights'] = np.array(layer_params[0])
-                          if len(layer_params) > 1:
-                              save_dict[f'layer_{i}_biases'] = np.array(layer_params[1])
-                      else:
-                          save_dict[f'layer_{i}'] = np.array(layer_params)
-                  np.savez(filename, **save_dict)
-                  tqdm.write(f"Saved network parameters to {filename}")
+                    filename = f"nn_params_epoch_{epoch}.npz"
+                    save_dict = {}
+                    for i, layer_params in enumerate(nn.params):
+                        if isinstance(layer_params, tuple):
+                            save_dict[f'layer_{i}_weights'] = np.array(layer_params[0])
+                            if len(layer_params) > 1:
+                                save_dict[f'layer_{i}_biases'] = np.array(layer_params[1])
+                        else:
+                            save_dict[f'layer_{i}'] = np.array(layer_params)
+                    np.savez(filename, **save_dict)
+                    tqdm.write(f"Saved parameters to {filename}")
 
-            print("Training complete!")
+            print("\nTraining complete!")
         else:
             print("Invalid arguments. Use --show or --train <num_epochs>")
     else:
