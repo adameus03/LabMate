@@ -1181,6 +1181,8 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   //uint8_t c1g2_tag_inventory_mask_value[0] = { };
   uint16_t c1g2_tag_inventory_mask_bit_count = 32;
   uint8_t c1g2_tag_inventory_mask_value[4] = { 0x14, 0xb0, 0x04, 0x73 };
+  //uint16_t c1g2_tag_inventory_mask_bit_count = 64;
+  //uint8_t c1g2_tag_inventory_mask_value[8] = { 0x14, 0xb0, 0x04, 0x73, 0x00, 0x00, 0x00, 0x00 };
   r420_msg_body_param_tlv_hdr_t c1g2_tag_inventory_mask_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_TAG_INVENTORY_MASK), // reserved=0, type=C1G2TagInventoryMask
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_tag_inventory_mask_flags) + sizeof(c1g2_tag_inventory_mask_bit_pointer) + sizeof(c1g2_tag_inventory_mask_bit_count) + sizeof(c1g2_tag_inventory_mask_value))

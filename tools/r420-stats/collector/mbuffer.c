@@ -49,6 +49,7 @@ void mbuffer_update_unit(mbuffer_t *mbuf, uint8_t antenna_id, uint32_t tag_index
   assert(channel <= NUM_CHANNELS);
   assert(channel >= 1);
   uint16_t physical_channel = fh_get_physical_channel_index(channel);
+  assert(physical_channel < NUM_CHANNELS);
   mbuffer_unit_t *unit = &mbuf->data[tag_index * NUM_ANTENNAS + antenna_id - 1];
   uint32_t* counter = &unit->counter[physical_channel];
   // if (*counter <= MOVING_AVERAGE_WINDOW) { // Use averaging filter

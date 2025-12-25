@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #define NUM_REFERENCE_TAGS 12
+//#define NUM_REFERENCE_TAGS 0
 #define NUM_TRACKED_ASSETS 1
 #define NUM_ANTENNAS 1
 #define NUM_CHANNELS 50

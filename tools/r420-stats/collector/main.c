@@ -69,6 +69,39 @@ static void signal_handler(int sig){
   }
 }
 
+static void mbuffer_stats(mbuffer_t *mbuf) {
+  // Compute and print basic statistics of the mbuffer
+  size_t num_measured_ta_ideal = NUM_ANTENNAS * (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS);
+  size_t num_measured_ta_actual = 0;
+
+  size_t tag_measurement_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
+  memset(tag_measurement_counts, 0, sizeof(tag_measurement_counts));
+
+  for (size_t i = 0; i < NUM_ANTENNAS * (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS); i++) {
+    for (size_t j = 0; j < NUM_CHANNELS; j++) {
+      if (mbuf->data[i].counter[j] > 0) {
+        if (tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
+          num_measured_ta_actual++;
+        }
+        tag_measurement_counts[i / NUM_ANTENNAS] += mbuf->data[i].counter[j];
+      }
+      if (j == NUM_CHANNELS - 1 && tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
+        // No measurements for this tag-antenna pair
+        printf("MBUFFER STATS: Tag-Antenna pair %zu is missing measurements.\n", i);
+      }
+    }
+  }
+  printf("MBUFFER STATS: Measured Tag-Antenna pairs: %zu / %zu\n",
+         num_measured_ta_actual, num_measured_ta_ideal);
+  for (size_t tag_index = 0; tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; tag_index++) {
+    printf("MBUFFER STATS: Tag %zu measurement counts across antennas & channels: ", tag_index);
+    for (size_t antenna_id = 0; antenna_id < NUM_ANTENNAS; antenna_id++) {
+      printf("%zu ", tag_measurement_counts[tag_index]);
+    }
+    printf("\n");
+  }
+}
+
 static void handle_mbuffer_capture(mbuffer_t *mbuf) {
   // for each (tag, antenna, metric) tuple, output recorded frequency-domain data to file `outputs/mbuf_<tag_index>_<antenna_index>_<metric>.csv` (replace file contents)
   for (uint32_t tag_index = 0; tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; tag_index++) {
@@ -191,7 +224,9 @@ int main(void) {
       mcounter++;
       if (mcounter % MBUF_CAPTURE_INTERVAL == 0) {
         // Capture mbuffer state
+
         printf("Capturing mbuffer state after %u measurements.\n", MBUF_CAPTURE_INTERVAL);
+        mbuffer_stats(&mbuf);
         handle_mbuffer_capture(&mbuf);
         // if (mcounter % MBUF_FLUSH_INTERVAL == 0) {
         //   printf("Flushing mbuffer after %u measurements.\n", MBUF_FLUSH_INTERVAL * MBUF_CAPTURE_INTERVAL);
