@@ -1195,7 +1195,7 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_filter_flags) + ntohs(c1g2_tag_inventory_mask_param_hdr.param_len))
   };
 
-  uint16_t mode_index = 1002; // AutoSet Static (default)
+  uint16_t mode_index = 1003; // AutoSet Static Fast
   int16_t tari = 0;
   r420_msg_body_param_tlv_hdr_t c1g2_rf_control_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_RF_CONTROL), // reserved=0, type=C1G2RFControl
