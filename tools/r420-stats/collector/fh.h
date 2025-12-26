@@ -25,4 +25,11 @@ void fh_create_entry(freq_hop_table_entry_t entry);
  */
 uint16_t fh_get_physical_channel_index(uint16_t channel_index);
 
+/**
+ * Convert physical channel index to logical channel index.
+ * @param physical_channel_index Physical channel index (0-based)
+ * @return Logical channel index (1-based)
+ */
+uint16_t fh_get_logical_channel_index(uint16_t physical_channel_index);
+
 #endif // FH_H

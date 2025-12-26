@@ -6,7 +6,9 @@
 uint32_t freq_hop_table[TOTAL_CHANNELS] = {0};
 uint8_t channel_mapped[TOTAL_CHANNELS] = {0};
 uint16_t channels_ranks_by_freq[TOTAL_CHANNELS] = {0}; // For converting logical to physical channel index
+uint16_t logical_channels_sorted_by_freq[TOTAL_CHANNELS] = {0}; // For converting physical to locgical channel index
 int channel_ranks_up_to_date = 0; // used to validate/invalidate the ranks array
+int logical_channels_sorted_by_freq_up_to_date = 0; //used to validate/invalidate the corresponding sorted array
 
 uint32_t get_channel_frequency(uint16_t channel_index) {
   assert(channel_index >= 1);
@@ -58,4 +60,16 @@ uint16_t fh_get_physical_channel_index(uint16_t channel_index) {
     channel_ranks_up_to_date = 1; // Ranks array is now valid
   }
   return channels_ranks_by_freq[channel_index - 1];
+}
+
+uint16_t fh_get_logical_channel_index(uint16_t physical_channel_index) {
+  assert(physical_channel_index < TOTAL_CHANNELS);
+  if (!logical_channels_sorted_by_freq_up_to_date) {
+    for (int i = 0; i < TOTAL_CHANNELS; i++) {
+      logical_channels_sorted_by_freq[i] = i + 1;
+    }
+    qsort(logical_channels_sorted_by_freq, TOTAL_CHANNELS, sizeof(uint16_t), compare_channel_frequencies);
+    logical_channels_sorted_by_freq_up_to_date = 1;
+  }
+  return logical_channels_sorted_by_freq[physical_channel_index];
 }

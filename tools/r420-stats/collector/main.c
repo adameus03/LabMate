@@ -75,7 +75,12 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
   size_t num_measured_ta_actual = 0;
 
   size_t tag_measurement_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
+  size_t tag_channels_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
   memset(tag_measurement_counts, 0, sizeof(tag_measurement_counts));
+  memset(tag_channels_counts, 0, sizeof(tag_measurement_counts));
+
+  uint8_t channels_usage[NUM_CHANNELS] = {0};
+  memset(channels_usage, 0, sizeof(channels_usage));
 
   for (size_t i = 0; i < NUM_ANTENNAS * (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS); i++) {
     for (size_t j = 0; j < NUM_CHANNELS; j++) {
@@ -83,11 +88,17 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
         if (tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
           num_measured_ta_actual++;
         }
+        tag_channels_counts[i / NUM_ANTENNAS]++;
         tag_measurement_counts[i / NUM_ANTENNAS] += mbuf->data[i].counter[j];
+        channels_usage[j]++;
       }
-      if (j == NUM_CHANNELS - 1 && tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
-        // No measurements for this tag-antenna pair
-        printf("MBUFFER STATS: Tag-Antenna pair %zu is missing measurements.\n", i);
+      if (j == NUM_CHANNELS - 1) {
+        if (tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
+          // No measurements for this tag-antenna pair
+          printf("MBUFFER STATS: Tag-Antenna pair %zu is missing measurements.\n", i);
+        } else {
+          printf("MBUFFER STATS: Tag-Antenna pair %zu has %zu measurements.\n", i, tag_measurement_counts[i / NUM_ANTENNAS]);
+        }
       }
     }
   }
@@ -95,11 +106,23 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
          num_measured_ta_actual, num_measured_ta_ideal);
   for (size_t tag_index = 0; tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; tag_index++) {
     printf("MBUFFER STATS: Tag %zu measurement counts across antennas & channels: ", tag_index);
-    for (size_t antenna_id = 0; antenna_id < NUM_ANTENNAS; antenna_id++) {
-      printf("%zu ", tag_measurement_counts[tag_index]);
-    }
+    printf("%zu ", tag_measurement_counts[tag_index]);
+    printf(" (%zu channels)", tag_channels_counts[tag_index]);
     printf("\n");
   }
+  for (size_t channel_index = 1; channel_index <= NUM_CHANNELS; channel_index++) {
+    // printf("MBUFFER STATS: Channel %zu measurement counts across antennas & tags: ", channel_index);
+    // printf("%zu ", channels_usage[channel_index]);
+    // //printf(" (%zu times)", tag_channels_counts[tag_index]);
+    // printf("\n");
+    uint16_t physical_channel_index = fh_get_physical_channel_index(channel_index);
+    if (channels_usage[physical_channel_index] > 0) {
+      printf("🟩");
+    } else {
+      printf("🟥");
+    }
+  }
+  printf("\n");
 }
 
 static void handle_mbuffer_capture(mbuffer_t *mbuf) {
