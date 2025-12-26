@@ -8,7 +8,7 @@
 #include "fh.h"
 #include "mbuffer.h"
 
-#define MBUF_CAPTURE_WINDOW_SCALER 1
+#define MBUF_CAPTURE_WINDOW_SCALER 7
 //#define MBUF_FLUSH_INTERVAL 10
 #define MBUF_CAPTURE_WINDOW_DIV 1
 #define MBUF_CAPTURE_INTERVAL ((NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) * NUM_ANTENNAS * NUM_CHANNELS * MBUF_CAPTURE_WINDOW_SCALER / MBUF_CAPTURE_WINDOW_DIV)
@@ -120,6 +120,18 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
       printf("🟩");
     } else {
       printf("🟥");
+    }
+  }
+  printf("\n");
+  for (size_t channel_index = 1; channel_index <= NUM_CHANNELS; channel_index++) {
+    // printf("MBUFFER STATS: Channel %zu measurement counts across antennas & tags: ", channel_index);
+    // printf("%zu ", channels_usage[channel_index]);
+    // //printf(" (%zu times)", tag_channels_counts[tag_index]);
+    // printf("\n");
+    if (channels_usage[channel_index] > 0) {
+      printf("🟦");
+    } else {
+      printf("🟥");//⬜
     }
   }
   printf("\n");
