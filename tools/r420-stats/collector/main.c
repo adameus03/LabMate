@@ -75,36 +75,46 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
   size_t num_measured_ta_actual = 0;
 
   size_t tag_measurement_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
+  //size_t ta_measurement_counts[NUM_ANTENNAS * (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS)] = {0};
   size_t tag_channels_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
   size_t tag_antennas_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
   memset(tag_measurement_counts, 0, sizeof(tag_measurement_counts));
-  memset(tag_channels_counts, 0, sizeof(tag_measurement_counts));
+  //memset(ta_measurement_counts, 0, sizeof(ta_measurement_counts));
+  memset(tag_channels_counts, 0, sizeof(tag_channels_counts));
   memset(tag_antennas_counts, 0, sizeof(tag_antennas_counts));
 
   uint8_t channels_usage[NUM_CHANNELS] = {0};
   memset(channels_usage, 0, sizeof(channels_usage));
 
-  for (size_t i = 0; i < NUM_ANTENNAS * (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS); i++) {
+  for (size_t i1 = 0; i1 < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; i1++) {
+    size_t antenna_usage[NUM_ANTENNAS] = {0};
+    memset(antenna_usage, 0, sizeof(antenna_usage));
     for (size_t j = 0; j < NUM_CHANNELS; j++) {
-      if (mbuf->data[i].counter[j] > 0) {
-        if (tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
-          num_measured_ta_actual++;
+      int num_measurements = 0;
+      for (size_t i0 = 0; i0 < NUM_ANTENNAS; i0++) {
+        if (mbuf->data[i1 * NUM_ANTENNAS + i0].counter[j] > 0) {
+          uint32_t n = mbuf->data[i1 * NUM_ANTENNAS + i0].counter[j];
+          num_measurements += n;
+          tag_measurement_counts[i1] += n;
+          antenna_usage[i0] += n;
         }
-        tag_channels_counts[i / NUM_ANTENNAS]++;
-        tag_measurement_counts[i / NUM_ANTENNAS] += mbuf->data[i].counter[j];
-        channels_usage[j]++;
       }
-      if (j == NUM_CHANNELS - 1) {
-        if (tag_measurement_counts[i / NUM_ANTENNAS] == 0) {
-          // No measurements for this tag-antenna pair
-          printf("MBUFFER STATS: Tag-Antenna pair %zu is missing measurements.\n", i);
-        } else {
-          printf("MBUFFER STATS: Tag-Antenna pair %zu has %zu measurements.\n", i, tag_measurement_counts[i / NUM_ANTENNAS]);
-          tag_antennas_counts[i / NUM_ANTENNAS]++;
-        }
+      if (num_measurements > 0) {
+        tag_channels_counts[i1]++;
+        channels_usage[j] += num_measurements;
+      }
+    }
+    for (size_t j = 0; j < NUM_ANTENNAS; j++) {
+      if (antenna_usage[j] > 0) {
+        tag_antennas_counts[i1]++;
+        num_measured_ta_actual++;
+        printf("MBUFFER STATS: Tag-Antenna pair %zu,%zu has %zu measurements.\n", i1, j, antenna_usage[j]);
+      } else {
+        printf("MBUFFER STATS: Tag-Antenna pair %zu,%zu is missing measurements.\n", i1, j);
       }
     }
   }
+
   printf("MBUFFER STATS: Measured Tag-Antenna pairs: %zu / %zu\n",
          num_measured_ta_actual, num_measured_ta_ideal);
   for (size_t tag_index = 0; tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; tag_index++) {
