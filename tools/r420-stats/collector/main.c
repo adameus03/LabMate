@@ -10,7 +10,7 @@
 
 #define MBUF_CAPTURE_WINDOW_SCALER 1
 //#define MBUF_FLUSH_INTERVAL 10
-#define MBUF_CAPTURE_WINDOW_DIV 4
+#define MBUF_CAPTURE_WINDOW_DIV 8
 #define MBUF_CAPTURE_INTERVAL ((NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) * NUM_ANTENNAS * NUM_CHANNELS * MBUF_CAPTURE_WINDOW_SCALER / MBUF_CAPTURE_WINDOW_DIV)
 
 
@@ -76,8 +76,10 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
 
   size_t tag_measurement_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
   size_t tag_channels_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
+  size_t tag_antennas_counts[NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS] = {0};
   memset(tag_measurement_counts, 0, sizeof(tag_measurement_counts));
   memset(tag_channels_counts, 0, sizeof(tag_measurement_counts));
+  memset(tag_antennas_counts, 0, sizeof(tag_antennas_counts));
 
   uint8_t channels_usage[NUM_CHANNELS] = {0};
   memset(channels_usage, 0, sizeof(channels_usage));
@@ -98,6 +100,7 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
           printf("MBUFFER STATS: Tag-Antenna pair %zu is missing measurements.\n", i);
         } else {
           printf("MBUFFER STATS: Tag-Antenna pair %zu has %zu measurements.\n", i, tag_measurement_counts[i / NUM_ANTENNAS]);
+          tag_antennas_counts[i / NUM_ANTENNAS]++;
         }
       }
     }
@@ -107,7 +110,7 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
   for (size_t tag_index = 0; tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; tag_index++) {
     printf("MBUFFER STATS: Tag %zu measurement counts across antennas & channels: ", tag_index);
     printf("%zu ", tag_measurement_counts[tag_index]);
-    printf(" (%zu channels)", tag_channels_counts[tag_index]);
+    printf(" (%zu channels, %zu antennas)", tag_channels_counts[tag_index], tag_antennas_counts[tag_index]);
     printf("\n");
   }
   for (size_t channel_index = 1; channel_index <= NUM_CHANNELS; channel_index++) {

@@ -4,14 +4,12 @@
 #include "fh.h"
 
 mbuffer_unit_t mbuffer_get_unit(mbuffer_t *mbuf, uint8_t antenna_id, uint32_t tag_index) {
-  assert(antenna_id <= 1);
   assert(antenna_id <= NUM_ANTENNAS);
   assert(tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS);
   return mbuf->data[tag_index * NUM_ANTENNAS + antenna_id - 1];
 }
 
 mbuffer_normalized_unit_t mbuffer_get_normalized_unit(mbuffer_t *mbuf, uint8_t antenna_id, uint32_t tag_index) {
-  assert(antenna_id <= 1);
   assert(antenna_id <= NUM_ANTENNAS);
   assert(tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS);
   mbuffer_unit_t unit = mbuffer_get_unit(mbuf, antenna_id, tag_index);

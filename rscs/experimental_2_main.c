@@ -114,17 +114,18 @@ int main() {
     printf("Select action = 0x%02X\n", action);
     uint8_t memBank = UHFMAN_SELECT_MEMBANK_EPC;
     uint32_t ptr = 0x20;
-    //uint8_t maskLen = 0x60;
-    uint8_t maskLen = 0x00;
+    uint8_t maskLen = 0x60;
+    //uint8_t maskLen = 0x00;
     uint8_t truncate = UHFMAN_SELECT_TRUNCATION_DISABLED;
-    const uint8_t mask[0] = {};
-    //const uint8_t mask[12] = {
+    //const uint8_t mask[0] = {};
+    const uint8_t mask[12] = {
         //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBC
         //0xE2, 0x80, 0x69, 0x15, 0x00, 0x00, 0x40, 0x17, 0xAA, 0xE6, 0x69, 0xBD
         //0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA, 0xEA 
         //0xE2, 0x80, 0x68, 0x94, 0x00, 0x00, 0x40, 0x24, 0xED, 0x64, 0x21, 0x84 
         //0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB
-    //};
+        0x14, 0xB0, 0x04, 0x73, 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x00, 0x00, 0x02
+    };
 
     err = uhfman_set_select_param(&uhfmanCtx, target, action, memBank, ptr, maskLen, truncate, mask);
     if (err != UHFMAN_SET_SELECT_PARAM_ERR_SUCCESS) {
@@ -242,7 +243,7 @@ int main() {
     // }
 
     fprintf(stdout, "Calling uhfman_dbg_multiple_polling\n");
-    err = uhfman_multiple_polling(&uhfmanCtx, 5000000, NULL);
+    err = uhfman_multiple_polling(&uhfmanCtx, 500000000, NULL);
     if (err != UHFMAN_MULTIPLE_POLLING_ERR_SUCCESS) {
         P_ERROR("USB related error");
         fprintf(stderr, "ERROR (ignoring): uhfman_dbg_multiple_polling returned %d\n", err);
