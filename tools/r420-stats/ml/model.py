@@ -30,8 +30,9 @@ class LSTMCell(nn.Module):
     output_gate_output = torch.tanh(new_cell_state) * torch.sigmoid(self.perceptrons[6](input) + self.perceptrons[7](hidden_state))
     return new_cell_state, output_gate_output
   
-####################### 
-#  
+#######################
+#  rssi,phase,doppler,freq,readrate 
+#  Input: 13 x  5
 #
 #
 #####################
@@ -40,3 +41,4 @@ class Model(nn.Module):
     super().__init__()
     
   def forward(self, input: torch.Tensor, cell_state: torch.Tensor, hidden_state: torch.Tensor):
+

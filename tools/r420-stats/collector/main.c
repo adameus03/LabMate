@@ -5,13 +5,14 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 #include "fh.h"
 #include "mbuffer.h"
 
-#define MBUF_CAPTURE_WINDOW_SCALER 1
-//#define MBUF_FLUSH_INTERVAL 10
-#define MBUF_CAPTURE_WINDOW_DIV 8
-#define MBUF_CAPTURE_INTERVAL ((NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) * NUM_ANTENNAS * NUM_CHANNELS * MBUF_CAPTURE_WINDOW_SCALER / MBUF_CAPTURE_WINDOW_DIV)
+// #define MBUF_CAPTURE_WINDOW_SCALER 1
+// //#define MBUF_FLUSH_INTERVAL 10
+// #define MBUF_CAPTURE_WINDOW_DIV 8
+// #define MBUF_CAPTURE_INTERVAL ((NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) * NUM_ANTENNAS * NUM_CHANNELS * MBUF_CAPTURE_WINDOW_SCALER / MBUF_CAPTURE_WINDOW_DIV)
 
 
 int fh_ready_flag = 0;
@@ -209,6 +210,12 @@ int main(void) {
 
   char line[512];
   uint32_t mcounter = 0;
+  uint64_t window_counter = 0;
+  int channel = -1;
+  int antenna = -1;
+  time_t t = time(NULL);
+  uint64_t num_windows_this_second = 0;
+  int window_acquisition_rate = 0;
   while (fgets(line, sizeof(line), stdin)) {
     line[strcspn(line, "\n")] = 0; // Remove newline
     if (filter_log_line_freq_hopping_table(line)) {
@@ -267,14 +274,23 @@ int main(void) {
         continue; // Unknown tag
       }
 
-      mbuffer_update_unit(&mbuf, (uint8_t)stats.antenna_id, tag_index, stats.channel_index,
-                          stats.peak_rssi_16bit, stats.rf_phase_angle, stats.rf_doppler_frequency);
-      mcounter++;
-      if (mcounter % MBUF_CAPTURE_INTERVAL == 0) {
+      //if (mcounter % MBUF_CAPTURE_INTERVAL == 0) {
+      if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
         // Capture mbuffer state
 
-        printf("Capturing mbuffer state after %u measurements.\n", MBUF_CAPTURE_INTERVAL);
+        //printf("Capturing mbuffer state after %u measurements.\n", MBUF_CAPTURE_INTERVAL);
+        printf("Capturing mbuffer state after %u measurements.\n", mcounter);
         mbuffer_stats(&mbuf);
+        window_counter++;
+        num_windows_this_second++;
+        printf("Window counter: %llu\n", window_counter);
+        time_t now = time(NULL);
+        if (now > t) {
+          window_acquisition_rate = num_windows_this_second;
+          t = time(NULL);
+          num_windows_this_second = 0;
+        }
+        printf("Window acquisition rate: %llu Hz\n", window_acquisition_rate);
         handle_mbuffer_capture(&mbuf);
         // if (mcounter % MBUF_FLUSH_INTERVAL == 0) {
         //   printf("Flushing mbuffer after %u measurements.\n", MBUF_FLUSH_INTERVAL * MBUF_CAPTURE_INTERVAL);
@@ -282,6 +298,12 @@ int main(void) {
         // }
         mcounter = 0;
       }
+      channel = stats.channel_index;
+      antenna = stats.antenna_id;
+
+      mbuffer_update_unit(&mbuf, (uint8_t)stats.antenna_id, tag_index, stats.channel_index,
+                          stats.peak_rssi_16bit, stats.rf_phase_angle, stats.rf_doppler_frequency);
+      mcounter++;
     }
     
   }
