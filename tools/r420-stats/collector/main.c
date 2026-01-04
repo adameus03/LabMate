@@ -5,7 +5,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
+//#include <inttypes.h>
 #include "fh.h"
 #include "mbuffer.h"
 
@@ -151,6 +153,56 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
   printf("\n");
 }
 
+static void mbuffer_stats_extremes(mbuffer_t *mbuf) {
+  static int16_t rssi_min=RSSI_MAX_VALUE, rssi_max=RSSI_MIN_VALUE;
+  static uint16_t phase_angle_min=0xffff, phase_angle_max=0x0000;
+  static int16_t doppler_frequency_min=INT16_MAX, doppler_frequency_max=INT16_MIN;
+  static uint32_t counter_min=UINT32_MAX, counter_max=0;
+  static double nrssi_min = 10.0, nrssi_max = -10.0;
+  static double nphase_min = 10.0, nphase_max = -10.0;
+  static double ndoppler_min = 10.0, ndoppler_max = -10.0;
+  
+  for (int i = 0; i < NUM_ANTENNAS * (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS); i++) {
+    mbuffer_unit_t unit = mbuf->data[i];
+    mbuffer_normalized_unit_t nunit = mbuffer_get_normalized_unit(mbuf, (i % NUM_ANTENNAS) + 1, i / NUM_ANTENNAS);
+    for (int j = 0; j < NUM_CHANNELS; j++) {
+      for (int k = 0; k < NUM_MEASUREMENTS; k++) {
+        int16_t rssi = unit.rssi[j][k];
+        uint16_t phase_angle = unit.phase_angle[j][k];
+        int16_t doppler_frequency = unit.doppler_frequency[j][k];
+        uint32_t counter = unit.counter[j];
+        if (rssi > rssi_max) rssi_max = rssi;
+        if ((rssi < rssi_min) && (rssi != RSSI_MIN_VALUE)) rssi_min = rssi;
+        if ((phase_angle > phase_angle_max) && (phase_angle != 0)) phase_angle_max = phase_angle;
+        if ((phase_angle < phase_angle_min) && (phase_angle != 0)) phase_angle_min = phase_angle;
+        if ((doppler_frequency > doppler_frequency_max) && (doppler_frequency != 0)) doppler_frequency_max = doppler_frequency;
+        if ((doppler_frequency < doppler_frequency_min) && (doppler_frequency != 0)) doppler_frequency_min = doppler_frequency;
+        if (counter > counter_max) counter_max = counter;
+        if (counter < counter_min) counter_min = counter;
+
+        double nrssi = nunit.rssi[j][k];
+        double nphase = nunit.phase_angle[j][k];
+        double ndoppler = nunit.doppler_frequency[j][k];
+        if (nrssi > nrssi_max) nrssi_max = nrssi;
+        if ((nrssi < nrssi_min) && (rssi != RSSI_MIN_VALUE)) nrssi_min = nrssi;
+        if ((nphase > nphase_max) && (phase_angle != 0)) nphase_max = nphase;
+        if ((nphase < nphase_min) && (phase_angle != 0)) nphase_min = nphase;
+        if ((ndoppler > ndoppler_max) && (doppler_frequency != 0)) ndoppler_max = ndoppler;
+        if ((ndoppler < ndoppler_min) && (doppler_frequency != 0)) ndoppler_min = ndoppler;
+
+      }
+    }
+  }
+  printf("Mbufer extremes stats:\n");
+  printf("  rssi --> [%hd, %hd]\n", rssi_min, rssi_max);
+  printf("  phase_angle --> [%hu, %hu]\n", phase_angle_min, phase_angle_max);
+  printf("  doppler_frequency --> [%hd, %hd]\n", doppler_frequency_min, doppler_frequency_max);
+  printf("  counter --> [%u, %u]\n", counter_min, counter_max);
+  printf("  Normalized rssi --> [%f, %f]\n", nrssi_min, nrssi_max);
+  printf("  Normalized phase angle --> [%f, %f]\n", nphase_min, nphase_max);
+  printf("  Normalized doppler frequency --> [%f, %f]\n", ndoppler_min, ndoppler_max);
+}
+
 static void handle_mbuffer_capture(mbuffer_t *mbuf) {
   // for each (tag, antenna, metric) tuple, output recorded frequency-domain data to file `outputs/mbuf_<tag_index>_<antenna_index>_<metric>.csv` (replace file contents)
   for (uint32_t tag_index = 0; tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS; tag_index++) {
@@ -175,9 +227,15 @@ static void handle_mbuffer_capture(mbuffer_t *mbuf) {
       FILE *file_doppler_tmp = fopen(filename_doppler_tmp, "w");
       if (file_rssi_tmp && file_phase_tmp && file_doppler_tmp) {
         for (size_t i = 0; i < NUM_CHANNELS; i++) {
-          assert(0 < fprintf(file_rssi_tmp, "%f\n", normalized_unit.rssi[i]));
-          assert(0 < fprintf(file_phase_tmp, "%f\n", normalized_unit.phase_angle[i]));
-          assert(0 < fprintf(file_doppler_tmp, "%f\n", normalized_unit.doppler_frequency[i]));
+          if (normalized_unit.counter[i] > 0) {
+            assert(0 < fprintf(file_rssi_tmp, "%f\n", normalized_unit.rssi[i][normalized_unit.counter[i] - 1]));
+            assert(0 < fprintf(file_phase_tmp, "%f\n", normalized_unit.phase_angle[i][normalized_unit.counter[i] - 1]));
+            assert(0 < fprintf(file_doppler_tmp, "%f\n", normalized_unit.doppler_frequency[i][normalized_unit.counter[i] - 1]));
+          } else {
+            assert(0 < fprintf(file_rssi_tmp, "%f\n", normalized_unit.rssi[i][0]));
+            assert(0 < fprintf(file_phase_tmp, "%f\n", normalized_unit.phase_angle[i][0]));
+            assert(0 < fprintf(file_doppler_tmp, "%f\n", normalized_unit.doppler_frequency[i][0]));
+          }
         }
       } else {
         assert(0 < fprintf(stderr, "Error opening output files for tag %u, antenna %u (errno: %d)\n",
@@ -200,10 +258,55 @@ static void handle_mbuffer_capture(mbuffer_t *mbuf) {
   }
 }
 
-int main(void) {
+#define NUM_FEATURES ((NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) * NUM_ANTENNAS * NUM_MEASUREMENTS * 4)
+
+static void handle_mbuffer_capture2(mbuffer_t *mbuf, uint16_t channel, const char* output_csv_file_path) {
+  //printf("--> Channel: %hu\n", channel);
+  uint16_t physical_channel = fh_get_physical_channel_index(channel);
+  double features[NUM_FEATURES] = {0};
+  for (int i = 0; i < (NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) * NUM_ANTENNAS; i++) {
+    mbuffer_normalized_unit_t nunit = mbuffer_get_normalized_unit(mbuf, (i % NUM_ANTENNAS) + 1, i / NUM_ANTENNAS);
+    for (int j = 0; j < NUM_MEASUREMENTS; j++) {
+      double* measurement_features = &features[i * NUM_MEASUREMENTS * 4 + j];
+      measurement_features[0] = nunit.rssi[physical_channel][j];
+      measurement_features[1] = nunit.phase_angle[physical_channel][j];
+      measurement_features[2] = nunit.phase_angle[physical_channel][j];
+      measurement_features[3] = 2.0 * (((double)physical_channel) / ((double)(NUM_CHANNELS - 1))) - 1.0;
+    }
+  }
+
+  FILE *fp = fopen(output_csv_file_path, "a");
+  if (fp != NULL) {
+    for (int i = 0; i < NUM_FEATURES; i++) {
+      fprintf(fp, "%.6f", features[i]);
+      if (i < NUM_FEATURES - 1) {
+        fprintf(fp, ",");
+      }
+    }
+    fprintf(fp, "\n");
+    fclose(fp);
+  }
+}
+
+int main(int argc, char** argv) {
   signal(SIGINT, signal_handler);
   setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered stdout
   setvbuf(stdin, NULL, _IOLBF, 0);  // line-buffered stdin
+
+  if (argc < 2) {
+    fprintf(stderr, "Error: Missing output CSV file path.\n");
+    return 1;
+  } else if (argc != 2) {
+    fprintf(stderr, "Error: Extra arguments detected. The only argument needed is the output CSV file path.\n");
+    return 1;
+  }
+
+  const char* output_csv_file_path = argv[1];
+  if (access(output_csv_file_path, F_OK) == 0) {
+    fprintf(stderr, "Error: File '%s' already exists. Please specify a different output CSV file path.\n", output_csv_file_path);
+    return 1;
+  }
+
   fh_init();
   mbuffer_t mbuf;
   mbuffer_flush(&mbuf);
@@ -213,6 +316,7 @@ int main(void) {
   uint64_t window_counter = 0;
   int channel = -1;
   int antenna = -1;
+  int num_antennas_traversed = 0;
   time_t t = time(NULL);
   uint64_t num_windows_this_second = 0;
   int window_acquisition_rate = 0;
@@ -274,13 +378,20 @@ int main(void) {
         continue; // Unknown tag
       }
 
-      //if (mcounter % MBUF_CAPTURE_INTERVAL == 0) {
       if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
+        num_antennas_traversed++;
+      }
+      // if (mcounter % MBUF_CAPTURE_INTERVAL == 0) {
+      //if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
+      if (num_antennas_traversed == NUM_ANTENNAS) {
+      //if ((channel != -1) && (channel != stats.channel_index)) {
+        num_antennas_traversed = 0;
         // Capture mbuffer state
 
         //printf("Capturing mbuffer state after %u measurements.\n", MBUF_CAPTURE_INTERVAL);
         printf("Capturing mbuffer state after %u measurements.\n", mcounter);
         mbuffer_stats(&mbuf);
+        //mbuffer_stats_extremes(&mbuf);
         window_counter++;
         num_windows_this_second++;
         printf("Window counter: %llu\n", window_counter);
@@ -291,7 +402,8 @@ int main(void) {
           num_windows_this_second = 0;
         }
         printf("Window acquisition rate: %llu Hz\n", window_acquisition_rate);
-        handle_mbuffer_capture(&mbuf);
+        //handle_mbuffer_capture(&mbuf);
+        handle_mbuffer_capture2(&mbuf, channel, output_csv_file_path);
         // if (mcounter % MBUF_FLUSH_INTERVAL == 0) {
         //   printf("Flushing mbuffer after %u measurements.\n", MBUF_FLUSH_INTERVAL * MBUF_CAPTURE_INTERVAL);
            mbuffer_flush(&mbuf);

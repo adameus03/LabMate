@@ -9,24 +9,28 @@
 #define NUM_TRACKED_ASSETS 1
 #define NUM_ANTENNAS 2
 #define NUM_CHANNELS 50
+#define NUM_MEASUREMENTS 2
 #define MOVING_AVERAGE_WINDOW 5
 
 //#define RSSI_MIN_VALUE -32768 // Minimum int16_t value
 //#define RSSI_MAX_VALUE 32767  // Maximum int16_t value
 #define RSSI_MIN_VALUE -10000
-#define RSSI_MAX_VALUE 0
+#define RSSI_MAX_VALUE -3000
+#define DOPPLER_MIN_VALUE -12000
+#define DOPPLER_MAX_VALUE 12000
 
 typedef struct mbuffer_unit {
-  int16_t rssi[NUM_CHANNELS];
-  uint16_t phase_angle[NUM_CHANNELS];
-  int16_t doppler_frequency[NUM_CHANNELS];
+  int16_t rssi[NUM_CHANNELS][NUM_MEASUREMENTS];
+  uint16_t phase_angle[NUM_CHANNELS][NUM_MEASUREMENTS];
+  int16_t doppler_frequency[NUM_CHANNELS][NUM_MEASUREMENTS];
   uint32_t counter[NUM_CHANNELS];
 } mbuffer_unit_t;
 
 typedef struct mbuffer_normalized_unit {
-  double rssi[NUM_CHANNELS];
-  double phase_angle[NUM_CHANNELS];
-  double doppler_frequency[NUM_CHANNELS];
+  double rssi[NUM_CHANNELS][NUM_MEASUREMENTS];
+  double phase_angle[NUM_CHANNELS][NUM_MEASUREMENTS];
+  double doppler_frequency[NUM_CHANNELS][NUM_MEASUREMENTS];
+  uint32_t counter[NUM_CHANNELS];
 } mbuffer_normalized_unit_t;
 
 typedef struct mbuffer { // measurement buffer struct
