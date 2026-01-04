@@ -36,7 +36,7 @@ class LSTMCell(nn.Module):
 #  Output: 3 (num places -> piano, table segment 1, table segment 2)
 #####################
 class Model(nn.Module):
-  def __init__(self):
+  def __init__(self, dropout_rate=0.3):
     super().__init__()
     self.stack = nn.ModuleList([
       LSTMCell(208, 104),
@@ -45,14 +45,19 @@ class Model(nn.Module):
       LSTMCell(26,10),
       LSTMCell(10, 3)
     ])
+    self.dropout = nn.Dropout(dropout_rate)
     
   def forward(self, input: torch.Tensor, cell_states: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], hidden_states: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     c1,c2,c3,c4,c5 = cell_states
     h1,h2,h3,h4,h5 = hidden_states
     c1new,h1new = self.stack[0](input, c1, h1)
+    h1new = self.dropout(h1new)
     c2new,h2new = self.stack[1](h1new, c2, h2)
+    h2new = self.dropout(h2new)
     c3new,h3new = self.stack[2](h2new, c3, h3)
+    h3new = self.dropout(h3new)
     c4new,h4new = self.stack[3](h3new, c4, h4)
+    h4new = self.dropout(h4new)
     c5new,h5new = self.stack[4](h4new, c5, h5)
     return c1new,c2new,c3new,c4new,c5new,h1new,h2new,h3new,h4new,h5new
 

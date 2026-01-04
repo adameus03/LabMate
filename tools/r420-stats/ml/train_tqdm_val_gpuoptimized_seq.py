@@ -302,7 +302,7 @@ if __name__ == "__main__":
         train_datasets=train_datasets,
         val_datasets=val_datasets,
         num_epochs=100,
-        batch_size=32,  # Process 32 sequences in parallel
+        batch_size=1024,  # Process 32 sequences in parallel
         learning_rate=0.001,
         device=device,
         use_amp=True,  # Use mixed precision for speed
