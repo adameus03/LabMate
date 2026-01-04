@@ -219,6 +219,8 @@ def train_on_sequences_optimized(
             
             avg_val_loss = total_val_loss / num_val_batches
             scheduler.step(avg_val_loss)
+            current_lr = optimizer.param_groups[0]['lr']
+            print(f'Current LR: {current_lr:.6f}')
             
             # Save best model
             if avg_val_loss < best_loss:
@@ -234,6 +236,8 @@ def train_on_sequences_optimized(
                 print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.6f}, Val Loss: {avg_val_loss:.6f}')
         else:
             scheduler.step(avg_loss)
+            current_lr = optimizer.param_groups[0]['lr']
+            print(f'Current LR: {current_lr:.6f}')
             
             if avg_loss < best_loss:
                 best_loss = avg_loss
@@ -301,7 +305,7 @@ if __name__ == "__main__":
         model, 
         train_datasets=train_datasets,
         val_datasets=val_datasets,
-        num_epochs=100,
+        num_epochs=10000,
         batch_size=1024,  # Process 32 sequences in parallel
         learning_rate=0.001,
         device=device,
