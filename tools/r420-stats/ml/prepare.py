@@ -19,14 +19,14 @@ def create_datasets_from_csv():
     # Configuration
     csv_files = {
         'train': {
-            'piano': '../piano_1.csv',           # Dataset 1: Piano location
-            'table1': '../stol_l_1.csv',         # Dataset 2: Table segment 1
-            'table2': '../stol_r_1.csv'          # Dataset 3: Table segment 2
+            'piano': '../ds_piano_1.csv',           # Dataset 1: Piano location
+            'table1': '../ds_stol_L_1.csv',         # Dataset 2: Table segment 1
+            'table2': '../ds_stol_R_1.csv'          # Dataset 3: Table segment 2
         },
         'val': {
-            'piano': '../piano_2.csv',             # Validation 1: Piano
-            'table1': '../stol_l_2.csv',           # Validation 2: Table segment 1
-            'table2': '../stol_r_2.csv'            # Validation 3: Table segment 2
+            'piano': '../ds_piano_2.csv',             # Validation 1: Piano
+            'table1': '../ds_stol_L_2.csv',           # Validation 2: Table segment 1
+            'table2': '../ds_stol_R_2.csv'            # Validation 3: Table segment 2
         }
     }
     
@@ -42,7 +42,7 @@ def create_datasets_from_csv():
             csv_file=csv_file,
             location_name=location_name,
             location_idx=idx - 1,  # 0, 1, 2
-            output_prefix=f'dataset{idx}',
+            output_prefix=f'Dataset{idx}',
             has_header=has_header
         )
     
@@ -56,7 +56,7 @@ def create_datasets_from_csv():
             csv_file=csv_file,
             location_name=location_name,
             location_idx=idx - 1,  # 0, 1, 2
-            output_prefix=f'val{idx}',
+            output_prefix=f'Val{idx}',
             has_header=has_header
         )
     
