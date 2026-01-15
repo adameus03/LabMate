@@ -127,17 +127,13 @@ def train_on_sequences_optimized(
             sequence_length = batch_inputs.size(1)
             
             # Initialize states for entire batch
-            c1 = torch.zeros(current_batch_size, 104, device=device)
-            c2 = torch.zeros(current_batch_size, 52, device=device)
-            c3 = torch.zeros(current_batch_size, 26, device=device)
-            c4 = torch.zeros(current_batch_size, 10, device=device)
-            c5 = torch.zeros(current_batch_size, 3, device=device)
+            c1 = torch.zeros(current_batch_size, 200, device=device)
+            c2 = torch.zeros(current_batch_size, 96, device=device)
+            c3 = torch.zeros(current_batch_size, 3, device=device)
             
-            h1 = torch.zeros(current_batch_size, 104, device=device)
-            h2 = torch.zeros(current_batch_size, 52, device=device)
-            h3 = torch.zeros(current_batch_size, 26, device=device)
-            h4 = torch.zeros(current_batch_size, 10, device=device)
-            h5 = torch.zeros(current_batch_size, 3, device=device)
+            h1 = torch.zeros(current_batch_size, 200, device=device)
+            h2 = torch.zeros(current_batch_size, 96, device=device)
+            h3 = torch.zeros(current_batch_size, 3, device=device)
             
             optimizer.zero_grad()
             
@@ -149,19 +145,19 @@ def train_on_sequences_optimized(
                 # Process sequence step by step (all batch items in parallel)
                 for t in range(sequence_length):
                     # Forward pass for entire batch
-                    c1, c2, c3, c4, c5, h1, h2, h3, h4, h5 = model(
+                    c1, c2, c3, h1, h2, h3 = model(
                         batch_inputs[:, t, :],  # (batch_size, 208)
-                        (c1, c2, c3, c4, c5),
-                        (h1, h2, h3, h4, h5)
+                        (c1, c2, c3),
+                        (h1, h2, h3)
                     )
                     
                     # h5 shape: (batch_size, 3) - raw logits
                     # batch_outputs[:, t] shape: (batch_size,) - class indices
-                    step_loss = criterion(h5, batch_outputs[:, t])
+                    step_loss = criterion(h3, batch_outputs[:, t])
                     sequence_loss += step_loss
                     
                     # Calculate accuracy for this timestep
-                    step_acc = calculate_accuracy(h5, batch_outputs[:, t])
+                    step_acc = calculate_accuracy(h3, batch_outputs[:, t])
                     sequence_acc += step_acc
                 
                 # Average loss and accuracy over sequence
@@ -212,33 +208,29 @@ def train_on_sequences_optimized(
                     sequence_length = batch_inputs.size(1)
                     
                     # Initialize states for entire batch
-                    c1 = torch.zeros(current_batch_size, 104, device=device)
-                    c2 = torch.zeros(current_batch_size, 52, device=device)
-                    c3 = torch.zeros(current_batch_size, 26, device=device)
-                    c4 = torch.zeros(current_batch_size, 10, device=device)
-                    c5 = torch.zeros(current_batch_size, 3, device=device)
+                    c1 = torch.zeros(current_batch_size, 200, device=device)
+                    c2 = torch.zeros(current_batch_size, 96, device=device)
+                    c3 = torch.zeros(current_batch_size, 3, device=device)
                     
-                    h1 = torch.zeros(current_batch_size, 104, device=device)
-                    h2 = torch.zeros(current_batch_size, 52, device=device)
-                    h3 = torch.zeros(current_batch_size, 26, device=device)
-                    h4 = torch.zeros(current_batch_size, 10, device=device)
-                    h5 = torch.zeros(current_batch_size, 3, device=device)
+                    h1 = torch.zeros(current_batch_size, 200, device=device)
+                    h2 = torch.zeros(current_batch_size, 96, device=device)
+                    h3 = torch.zeros(current_batch_size, 3, device=device)
                     
                     with torch.cuda.amp.autocast(enabled=(scaler is not None)):
                         sequence_loss = 0.0
                         sequence_acc = 0.0
                         
                         for t in range(sequence_length):
-                            c1, c2, c3, c4, c5, h1, h2, h3, h4, h5 = model(
+                            c1, c2, c3, h1, h2, h3 = model(
                                 batch_inputs[:, t, :],
-                                (c1, c2, c3, c4, c5),
-                                (h1, h2, h3, h4, h5)
+                                (c1, c2, c3),
+                                (h1, h2, h3)
                             )
                             
-                            step_loss = criterion(h5, batch_outputs[:, t])
+                            step_loss = criterion(h3, batch_outputs[:, t])
                             sequence_loss += step_loss
                             
-                            step_acc = calculate_accuracy(h5, batch_outputs[:, t])
+                            step_acc = calculate_accuracy(h3, batch_outputs[:, t])
                             sequence_acc += step_acc
                         
                         sequence_loss = sequence_loss / sequence_length

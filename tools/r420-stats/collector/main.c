@@ -319,7 +319,9 @@ int main(int argc, char** argv) {
   int num_antennas_traversed = 0;
   time_t t = time(NULL);
   uint64_t num_windows_this_second = 0;
+  uint64_t num_measurements_this_second = 0;
   int window_acquisition_rate = 0;
+  int measurement_acquisition_rate = 0;
   while (fgets(line, sizeof(line), stdin)) {
     line[strcspn(line, "\n")] = 0; // Remove newline
     if (filter_log_line_freq_hopping_table(line)) {
@@ -381,6 +383,9 @@ int main(int argc, char** argv) {
       if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
         num_antennas_traversed++;
       }
+
+      num_measurements_this_second++;
+
       // if (mcounter % MBUF_CAPTURE_INTERVAL == 0) {
       //if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
       if (num_antennas_traversed == NUM_ANTENNAS) {
@@ -398,10 +403,13 @@ int main(int argc, char** argv) {
         time_t now = time(NULL);
         if (now > t) {
           window_acquisition_rate = num_windows_this_second;
+          measurement_acquisition_rate = num_measurements_this_second;
           t = time(NULL);
           num_windows_this_second = 0;
+          num_measurements_this_second = 0;
         }
         printf("Window acquisition rate: %llu Hz\n", window_acquisition_rate);
+        printf("Measurement acquisition rate: %llu Hz\n", measurement_acquisition_rate);
         //handle_mbuffer_capture(&mbuf);
         handle_mbuffer_capture2(&mbuf, channel, output_csv_file_path);
         // if (mcounter % MBUF_FLUSH_INTERVAL == 0) {

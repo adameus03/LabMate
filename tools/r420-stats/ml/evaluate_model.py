@@ -84,29 +84,26 @@ def evaluate_model_sequences(model_path, sequence_length=100, device='cuda', eva
             # batch_outputs shape: (batch_size, sequence_length, 3)
             
             # Initialize states for entire batch
-            c1 = torch.zeros(current_batch_size, 104, device=device)
-            c2 = torch.zeros(current_batch_size, 52, device=device)
-            c3 = torch.zeros(current_batch_size, 26, device=device)
-            c4 = torch.zeros(current_batch_size, 10, device=device)
-            c5 = torch.zeros(current_batch_size, 3, device=device)
+            c1 = torch.zeros(current_batch_size, 200, device=device)
+            c2 = torch.zeros(current_batch_size, 96, device=device)
+            c3 = torch.zeros(current_batch_size, 3, device=device)
             
-            h1 = torch.zeros(current_batch_size, 104, device=device)
-            h2 = torch.zeros(current_batch_size, 52, device=device)
-            h3 = torch.zeros(current_batch_size, 26, device=device)
-            h4 = torch.zeros(current_batch_size, 10, device=device)
-            h5 = torch.zeros(current_batch_size, 3, device=device)
+
+            h1 = torch.zeros(current_batch_size, 200, device=device)
+            h2 = torch.zeros(current_batch_size, 96, device=device)
+            h3 = torch.zeros(current_batch_size, 3, device=device)
             
             # Process sequence timestep by timestep
             for t in range(sequence_length):
-                c1, c2, c3, c4, c5, h1, h2, h3, h4, h5 = model(
+                c1, c2, c3, h1, h2, h3 = model(
                     batch_inputs[:, t, :],
-                    (c1, c2, c3, c4, c5),
-                    (h1, h2, h3, h4, h5)
+                    (c1, c2, c3),
+                    (h1, h2, h3)
                 )
                 
                 # Collect predictions based on eval_mode
                 if eval_mode == 'all' or (eval_mode == 'final' and t == sequence_length - 1):
-                    predicted_classes = torch.argmax(h5, dim=1).cpu().numpy()
+                    predicted_classes = torch.argmax(h3, dim=1).cpu().numpy()
                     true_classes = torch.argmax(batch_outputs[:, t, :], dim=1).cpu().numpy()
                     
                     all_predictions.extend(predicted_classes)
