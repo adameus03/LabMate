@@ -1153,9 +1153,11 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + ntohs(rospec_start_trigger_param_hdr.param_len) + ntohs(rospec_stop_trigger_param_hdr.param_len))
   };
 
-  uint16_t antenna_count = 2;
+  uint16_t antenna_count = 4;
   uint16_t antenna1_id = 1; // Antenna 1
   uint16_t antenna2_id = 2; // Antenna 2
+  uint16_t antenna3_id = 3; // Antenna 3
+  uint16_t antenna4_id = 4; // Antenna 4
 
   uint8_t aispec_stop_trigger_type = 0; // Null - stop when ROSpec is done
   uint32_t aispec_duration_trigger_value = 0; // ignored in this case because stop trigger is Null
@@ -1235,12 +1237,12 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   uint8_t protocol_id = 1; // EPCGlobalClass1Gen2
   r420_msg_body_param_tlv_hdr_t inventory_parameter_spec_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_INVENTORY_PARAMETER_SPEC), // reserved=0, type=InventoryParameterSpec
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(inventory_parameter_spec_id) + sizeof(protocol_id) + 2 * ntohs(antenna_configuration_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(inventory_parameter_spec_id) + sizeof(protocol_id) + 4 * ntohs(antenna_configuration_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t aispec_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_AISPEC), // reserved=0, type=AISpec
-    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(antenna_count) + sizeof(antenna1_id) + sizeof(antenna2_id) + ntohs(aispec_stop_trigger_param_hdr.param_len) + ntohs(inventory_parameter_spec_param_hdr.param_len))
+    .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(antenna_count) + sizeof(antenna1_id) + sizeof(antenna2_id) + sizeof(antenna3_id) + sizeof(antenna4_id) + ntohs(aispec_stop_trigger_param_hdr.param_len) + ntohs(inventory_parameter_spec_param_hdr.param_len))
   };
 
   r420_msg_body_param_tlv_hdr_t rospec_param_hdr = {
@@ -1294,6 +1296,12 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy AntennaID#2
   *(uint16_t *)(body.buf + offset) = htons(antenna2_id);
   offset += sizeof(antenna2_id);
+  // Copy AntennaID#3
+  *(uint16_t *)(body.buf + offset) = htons(antenna3_id);
+  offset += sizeof(antenna3_id);
+  // Copy AntennaID#4
+  *(uint16_t *)(body.buf + offset) = htons(antenna4_id);
+  offset += sizeof(antenna4_id);
   // Copy AISpecStopTrigger tlv header
   *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = aispec_stop_trigger_param_hdr;
   offset += sizeof(aispec_stop_trigger_param_hdr);
@@ -1396,6 +1404,162 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
   // Copy AntennaID
   *(uint16_t *)(body.buf + offset) = htons(antenna2_id);
   offset += sizeof(antenna2_id);
+  // Copy RFTransmitter tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = rf_transmiter_param_hdr;
+  offset += sizeof(rf_transmiter_param_hdr);
+  // Copy HopTableID
+  *(uint16_t *)(body.buf + offset) = htons(hop_table_id);
+  offset += sizeof(hop_table_id);
+  // Copy ChannelIndex
+  *(uint16_t *)(body.buf + offset) = htons(channel_index);
+  offset += sizeof(channel_index);
+  // Copy TransmitPower
+  *(uint16_t *)(body.buf + offset) = htons(transmit_power);
+  offset += sizeof(transmit_power);
+  // Copy C1G2InventoryCommand tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_inventory_command_param_hdr;
+  offset += sizeof(c1g2_inventory_command_param_hdr);
+  // Copy C1G2InventoryCommand flags
+  body.buf[offset] = c1g2_inventory_command_flags;
+  offset += sizeof(c1g2_inventory_command_flags);
+  // Copy C1G2Filter tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_filter_param_hdr;
+  offset += sizeof(c1g2_filter_param_hdr);
+  // Copy C1G2Filter flags
+  body.buf[offset] = c1g2_filter_flags;
+  offset += sizeof(c1g2_filter_flags);
+  // Copy C1G2TagInventoryMask tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_tag_inventory_mask_param_hdr;
+  offset += sizeof(c1g2_tag_inventory_mask_param_hdr);
+  // Copy C1G2TagInventoryMask flags
+  body.buf[offset] = c1g2_tag_inventory_mask_flags;
+  offset += sizeof(c1g2_tag_inventory_mask_flags);
+  // Copy C1G2TagInventoryMask pointer
+  *(uint16_t *)(body.buf + offset) = htons(c1g2_tag_inventory_mask_bit_pointer);
+  offset += sizeof(c1g2_tag_inventory_mask_bit_pointer);
+  // Copy C1G2TagInventoryMask MaskBitCount
+  *(uint16_t *)(body.buf + offset) = htons(c1g2_tag_inventory_mask_bit_count);
+  offset += sizeof(c1g2_tag_inventory_mask_bit_count);
+  // Copy C1G2TagInventoryMask Tag Mask
+  memcpy(body.buf + offset, c1g2_tag_inventory_mask_value, sizeof(c1g2_tag_inventory_mask_value));
+  offset += sizeof(c1g2_tag_inventory_mask_value);
+  // Copy C1G2RFControl tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_rf_control_param_hdr;
+  offset += sizeof(c1g2_rf_control_param_hdr);
+  // Copy ModeIndex
+  *(uint16_t *)(body.buf + offset) = htons(mode_index);
+  offset += sizeof(mode_index);
+  // Copy Tari
+  *(int16_t *)(body.buf + offset) = htons(tari);
+  offset += sizeof(tari);
+  // Copy C1G2SingulationControl tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_singulation_control_param_hdr;
+  offset += sizeof(c1g2_singulation_control_param_hdr);
+  // Copy C1G2SingulationControl flags
+  body.buf[offset] = c1g2_singulation_control_flags;
+  offset += sizeof(c1g2_singulation_control_flags);
+  // Copy TagPopulation
+  *(uint16_t *)(body.buf + offset) = htons(tag_population);
+  offset += sizeof(tag_population);
+  // Copy TagTransitTime
+  *(uint32_t *)(body.buf + offset) = htonl(tag_transit_time);
+  offset += sizeof(tag_transit_time);
+  // Copy ImpinjInventorySearchMode tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_inventory_search_mode_param_hdr;
+  offset += sizeof(impinj_inventory_search_mode_param_hdr);
+  // Copy ImpinjInventorySearchMode vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_inventory_search_mode_vendor_id);
+  offset += sizeof(impinj_inventory_search_mode_vendor_id);
+  // Copy ImpinjInventorySearchMode subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_inventory_search_mode_subtype);
+  offset += sizeof(impinj_inventory_search_mode_subtype);
+  // Copy InventorySearchMode
+  *(uint16_t *)(body.buf + offset) = htons(inventory_search_mode);
+  offset += sizeof(inventory_search_mode);
+  // Copy AntennaConfiguration tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = antenna_configuration_param_hdr;
+  offset += sizeof(antenna_configuration_param_hdr);
+  // Copy AntennaID
+  *(uint16_t *)(body.buf + offset) = htons(antenna3_id);
+  offset += sizeof(antenna3_id);
+  // Copy RFTransmitter tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = rf_transmiter_param_hdr;
+  offset += sizeof(rf_transmiter_param_hdr);
+  // Copy HopTableID
+  *(uint16_t *)(body.buf + offset) = htons(hop_table_id);
+  offset += sizeof(hop_table_id);
+  // Copy ChannelIndex
+  *(uint16_t *)(body.buf + offset) = htons(channel_index);
+  offset += sizeof(channel_index);
+  // Copy TransmitPower
+  *(uint16_t *)(body.buf + offset) = htons(transmit_power);
+  offset += sizeof(transmit_power);
+  // Copy C1G2InventoryCommand tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_inventory_command_param_hdr;
+  offset += sizeof(c1g2_inventory_command_param_hdr);
+  // Copy C1G2InventoryCommand flags
+  body.buf[offset] = c1g2_inventory_command_flags;
+  offset += sizeof(c1g2_inventory_command_flags);
+  // Copy C1G2Filter tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_filter_param_hdr;
+  offset += sizeof(c1g2_filter_param_hdr);
+  // Copy C1G2Filter flags
+  body.buf[offset] = c1g2_filter_flags;
+  offset += sizeof(c1g2_filter_flags);
+  // Copy C1G2TagInventoryMask tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_tag_inventory_mask_param_hdr;
+  offset += sizeof(c1g2_tag_inventory_mask_param_hdr);
+  // Copy C1G2TagInventoryMask flags
+  body.buf[offset] = c1g2_tag_inventory_mask_flags;
+  offset += sizeof(c1g2_tag_inventory_mask_flags);
+  // Copy C1G2TagInventoryMask pointer
+  *(uint16_t *)(body.buf + offset) = htons(c1g2_tag_inventory_mask_bit_pointer);
+  offset += sizeof(c1g2_tag_inventory_mask_bit_pointer);
+  // Copy C1G2TagInventoryMask MaskBitCount
+  *(uint16_t *)(body.buf + offset) = htons(c1g2_tag_inventory_mask_bit_count);
+  offset += sizeof(c1g2_tag_inventory_mask_bit_count);
+  // Copy C1G2TagInventoryMask Tag Mask
+  memcpy(body.buf + offset, c1g2_tag_inventory_mask_value, sizeof(c1g2_tag_inventory_mask_value));
+  offset += sizeof(c1g2_tag_inventory_mask_value);
+  // Copy C1G2RFControl tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_rf_control_param_hdr;
+  offset += sizeof(c1g2_rf_control_param_hdr);
+  // Copy ModeIndex
+  *(uint16_t *)(body.buf + offset) = htons(mode_index);
+  offset += sizeof(mode_index);
+  // Copy Tari
+  *(int16_t *)(body.buf + offset) = htons(tari);
+  offset += sizeof(tari);
+  // Copy C1G2SingulationControl tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = c1g2_singulation_control_param_hdr;
+  offset += sizeof(c1g2_singulation_control_param_hdr);
+  // Copy C1G2SingulationControl flags
+  body.buf[offset] = c1g2_singulation_control_flags;
+  offset += sizeof(c1g2_singulation_control_flags);
+  // Copy TagPopulation
+  *(uint16_t *)(body.buf + offset) = htons(tag_population);
+  offset += sizeof(tag_population);
+  // Copy TagTransitTime
+  *(uint32_t *)(body.buf + offset) = htonl(tag_transit_time);
+  offset += sizeof(tag_transit_time);
+  // Copy ImpinjInventorySearchMode tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = impinj_inventory_search_mode_param_hdr;
+  offset += sizeof(impinj_inventory_search_mode_param_hdr);
+  // Copy ImpinjInventorySearchMode vendor ID
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_inventory_search_mode_vendor_id);
+  offset += sizeof(impinj_inventory_search_mode_vendor_id);
+  // Copy ImpinjInventorySearchMode subtype
+  *(uint32_t *)(body.buf + offset) = htonl(impinj_inventory_search_mode_subtype);
+  offset += sizeof(impinj_inventory_search_mode_subtype);
+  // Copy InventorySearchMode
+  *(uint16_t *)(body.buf + offset) = htons(inventory_search_mode);
+  offset += sizeof(inventory_search_mode);
+  // Copy AntennaConfiguration tlv header
+  *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = antenna_configuration_param_hdr;
+  offset += sizeof(antenna_configuration_param_hdr);
+  // Copy AntennaID
+  *(uint16_t *)(body.buf + offset) = htons(antenna4_id);
+  offset += sizeof(antenna4_id);
   // Copy RFTransmitter tlv header
   *(r420_msg_body_param_tlv_hdr_t *)(body.buf + offset) = rf_transmiter_param_hdr;
   offset += sizeof(rf_transmiter_param_hdr);
