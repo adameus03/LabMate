@@ -53,6 +53,9 @@ void mbuffer_update_unit(mbuffer_t *mbuf, uint8_t antenna_id, uint32_t tag_index
   
   assert(antenna_id >= 1);
   assert(antenna_id <= NUM_ANTENNAS);
+  if (tag_index >= NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) {
+    printf("Error: tag_index %u out of bounds (max %u)\n", tag_index, NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS - 1);
+  }
   assert(tag_index < NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS);
   assert(channel <= NUM_CHANNELS);
   assert(channel >= 1);
