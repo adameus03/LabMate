@@ -421,6 +421,12 @@ int main(int argc, char** argv) {
       channel = stats.channel_index;
       antenna = stats.antenna_id;
 
+      if (tag_index >= NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS) {
+        printf("Error: unexpected tag index %u (max %u). Tag EPC is: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\n",
+          tag_index, NUM_REFERENCE_TAGS + NUM_TRACKED_ASSETS - 1,
+          stats.epc[0], stats.epc[1], stats.epc[2], stats.epc[3], stats.epc[4], stats.epc[5],
+          stats.epc[6], stats.epc[7], stats.epc[8], stats.epc[9], stats.epc[10], stats.epc[11]);
+      }
       mbuffer_update_unit(&mbuf, (uint8_t)stats.antenna_id, tag_index, stats.channel_index,
                           stats.peak_rssi_16bit, stats.rf_phase_angle, stats.rf_doppler_frequency);
       mcounter++;
