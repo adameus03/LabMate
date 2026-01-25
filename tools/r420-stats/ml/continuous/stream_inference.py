@@ -75,54 +75,69 @@ def run_stream_inference(
         f"Model loaded. Epoch={checkpoint.get('epoch', 'unknown')}, "
         f"loss={checkpoint.get('loss', 'unknown')}"
     )
-    print(f"Waiting for data on pipe: {pipe_path}")
-    sys.stdout.flush()
 
     buffer: List[np.ndarray] = []
 
-    # Open the pipe for reading text lines
-    with open(pipe_path, "r") as f:
-        for line in f:
-            sample = parse_csv_line(line)
-            if sample is None:
-                continue
+    # Continuously reopen the pipe so we keep running even if the writer closes.
+    while True:
+        print(f"Waiting for data on pipe: {pipe_path}")
+        sys.stdout.flush()
 
-            buffer.append(sample)
-            if len(buffer) < sequence_length:
-                continue  # Not enough history yet
+        # Open the pipe for reading text lines (blocks until a writer connects).
+        try:
+            with open(pipe_path, "r") as f:
+                for line in f:
+                    sample = parse_csv_line(line)
+                    if sample is None:
+                        continue
 
-            # Keep only the last `sequence_length` samples
-            if len(buffer) > sequence_length:
-                buffer = buffer[-sequence_length:]
+                    buffer.append(sample)
+                    if len(buffer) < sequence_length:
+                        continue  # Not enough history yet
 
-            # Build (1, L, 416) tensor
-            window = np.stack(buffer, axis=0).astype(np.float32)
-            window_t = torch.FloatTensor(window[None, ...]).to(device)  # (1, L, 416)
+                    # Keep only the last `sequence_length` samples
+                    if len(buffer) > sequence_length:
+                        buffer = buffer[-sequence_length:]
 
-            # Initialize hidden/cell states for a fresh sequence
-            batch_size = 1
-            c1 = torch.zeros(batch_size, 200, device=device)
-            c2 = torch.zeros(batch_size, 96, device=device)
-            c3 = torch.zeros(batch_size, 1, device=device)
+                    # Build (1, L, 416) tensor
+                    window = np.stack(buffer, axis=0).astype(np.float32)
+                    window_t = torch.FloatTensor(window[None, ...]).to(device)  # (1, L, 416)
 
-            h1 = torch.zeros(batch_size, 200, device=device)
-            h2 = torch.zeros(batch_size, 96, device=device)
-            h3 = torch.zeros(batch_size, 1, device=device)
+                    # Initialize hidden/cell states for a fresh sequence
+                    batch_size = 1
+                    c1 = torch.zeros(batch_size, 200, device=device)
+                    c2 = torch.zeros(batch_size, 96, device=device)
+                    c3 = torch.zeros(batch_size, 1, device=device)
 
-            with torch.no_grad():
-                for t in range(sequence_length):
-                    c1, c2, c3, h1, h2, h3 = model(
-                        window_t[:, t, :],
-                        (c1, c2, c3),
-                        (h1, h2, h3),
-                    )
+                    h1 = torch.zeros(batch_size, 200, device=device)
+                    h2 = torch.zeros(batch_size, 96, device=device)
+                    h3 = torch.zeros(batch_size, 1, device=device)
 
-                # h3: (1, 1) -> scalar
-                coord = float(h3.item())
+                    with torch.no_grad():
+                        for t in range(sequence_length):
+                            c1, c2, c3, h1, h2, h3 = model(
+                                window_t[:, t, :],
+                                (c1, c2, c3),
+                                (h1, h2, h3),
+                            )
 
-            # Print prediction (one per line) and flush so consumers see it immediately
-            print(coord)
-            sys.stdout.flush()
+                        # h3: (1, 1) -> scalar
+                        coord = float(h3.item())
+
+                    # Print prediction (one per line) and flush so consumers see it immediately
+                    print(coord)
+                    sys.stdout.flush()
+
+            # If we exit the for-loop, the writer closed the pipe (EOF).
+            sys.stderr.write("[INFO] Writer closed the pipe. Reopening...\n")
+            sys.stderr.flush()
+        except FileNotFoundError:
+            # Pipe was removed while running.
+            sys.stderr.write(
+                f"[ERROR] Pipe '{pipe_path}' disappeared. Exiting.\n"
+            )
+            sys.stderr.flush()
+            break
 
 
 def stat_is_fifo(path: str) -> bool:

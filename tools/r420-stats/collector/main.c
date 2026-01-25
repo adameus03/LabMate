@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <time.h>
 //#include <inttypes.h>
 #include "fh.h"
@@ -292,19 +293,65 @@ int main(int argc, char** argv) {
   signal(SIGINT, signal_handler);
   setvbuf(stdout, NULL, _IOLBF, 0);  // line-buffered stdout
   setvbuf(stdin, NULL, _IOLBF, 0);  // line-buffered stdin
+  
+  // Argument parsing:
+  //   collector <output_csv_file_path> [--fifo]
+  //   or: collector --fifo <output_csv_file_path>
+  int use_fifo = 0;
+  const char* output_csv_file_path = NULL;
 
-  if (argc < 2) {
-    fprintf(stderr, "Error: Missing output CSV file path.\n");
-    return 1;
-  } else if (argc != 2) {
-    fprintf(stderr, "Error: Extra arguments detected. The only argument needed is the output CSV file path.\n");
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--fifo") == 0) {
+      use_fifo = 1;
+    } else if (argv[i][0] == '-' && strcmp(argv[i], "-") != 0) {
+      fprintf(stderr, "Error: Unknown option '%s'. Only '--fifo' is supported.\n", argv[i]);
+      return 1;
+    } else if (output_csv_file_path == NULL) {
+      output_csv_file_path = argv[i];
+    } else {
+      fprintf(stderr, "Error: Too many positional arguments. Expected only one output CSV file path.\n");
+      return 1;
+    }
+  }
+
+  if (output_csv_file_path == NULL) {
+    fprintf(stderr, "Usage: %s <output_csv_file_path> [--fifo]\n", argv[0]);
+    fprintf(stderr, "       Use '--fifo' to create/open a named pipe instead of a regular file.\n");
     return 1;
   }
 
-  const char* output_csv_file_path = argv[1];
-  if (access(output_csv_file_path, F_OK) == 0) {
-    fprintf(stderr, "Error: File '%s' already exists. Please specify a different output CSV file path.\n", output_csv_file_path);
-    return 1;
+  // If the path already exists, handle according to mode (regular file vs FIFO).
+  struct stat st;
+  if (stat(output_csv_file_path, &st) == 0) {
+    if (use_fifo) {
+      // Require that the existing path is already a FIFO
+      if (!S_ISFIFO(st.st_mode)) {
+        fprintf(stderr,
+                "Error: Path '%s' exists and is not a FIFO. "
+                "Either remove it or choose a different path when using --fifo.\n",
+                output_csv_file_path);
+        return 1;
+      }
+      // Existing FIFO is fine; we'll write to it.
+    } else {
+      fprintf(stderr,
+              "Error: File '%s' already exists. Please specify a different output CSV file path.\n",
+              output_csv_file_path);
+      return 1;
+    }
+  } else {
+    // Path does not exist yet
+    if (use_fifo) {
+      if (mkfifo(output_csv_file_path, 0666) != 0) {
+        fprintf(stderr,
+                "Error: Failed to create FIFO '%s' (errno: %d).\n",
+                output_csv_file_path, errno);
+        return 1;
+      }
+      fprintf(stderr, "Created FIFO at '%s'.\n", output_csv_file_path);
+    }
+    // For regular file mode, nothing to create here; handle_mbuffer_capture2
+    // will create it on first write.
   }
 
   fh_init();
