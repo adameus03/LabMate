@@ -271,7 +271,7 @@ static void handle_mbuffer_capture2(mbuffer_t *mbuf, uint16_t channel, const cha
       double* measurement_features = &features[i * NUM_MEASUREMENTS * 4 + j];
       measurement_features[0] = nunit.rssi[physical_channel][j];
       measurement_features[1] = nunit.phase_angle[physical_channel][j];
-      measurement_features[2] = nunit.phase_angle[physical_channel][j];
+      measurement_features[2] = nunit.doppler_frequency[physical_channel][j];
       measurement_features[3] = 2.0 * (((double)physical_channel) / ((double)(NUM_CHANNELS - 1))) - 1.0;
     }
   }
@@ -427,7 +427,10 @@ int main(int argc, char** argv) {
         continue; // Unknown tag
       }
 
-      if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
+      // if ((!((channel == -1) && (antenna == -1))) && ((channel != stats.channel_index) || (antenna != stats.antenna_id))) {
+      //   num_antennas_traversed++;
+      // }
+      if ((!((channel == -1) && (antenna == -1))) && (antenna != stats.antenna_id)) {
         num_antennas_traversed++;
       }
 

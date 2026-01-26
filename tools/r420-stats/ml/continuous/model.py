@@ -69,7 +69,6 @@ class Model(nn.Module):
         super().__init__()
         self.stack = nn.ModuleList(
             [
-                # 416-dimensional input as in the original architecture
                 LSTMCell(416, 200),
                 LSTMCell(200, 96),
                 LSTMCell(96, 1),
@@ -102,6 +101,6 @@ class Model(nn.Module):
         h2_new = self.dropout(h2_new)
 
         c3_new, h3_new = self.stack[2](h2_new, c3, h3)
-        # h3_new is of shape (batch_size, 1) and is used as the continuous coordinate
+        # h3_new is of shape (<batchsize>, 1) and is used as the continuous coordinate
         return c1_new, c2_new, c3_new, h1_new, h2_new, h3_new
 

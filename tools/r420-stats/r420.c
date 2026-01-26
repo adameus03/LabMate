@@ -1168,7 +1168,7 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
 
   uint16_t hop_table_id = 1;
   uint16_t channel_index = 29; // 918.750 MHz
-  uint16_t transmit_power = 81; // 30.00 dBm
+  uint16_t transmit_power = 87; // 30.00 dBm
   r420_msg_body_param_tlv_hdr_t rf_transmiter_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_RF_TRANSMITTER), // reserved=0, type=RFTransmitter
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(hop_table_id) + sizeof(channel_index) + sizeof(transmit_power))
@@ -1198,8 +1198,8 @@ void r420_send_add_rospec_msg(r420_ctx_t* pCtx) {
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(c1g2_filter_flags) + ntohs(c1g2_tag_inventory_mask_param_hdr.param_len))
   };
 
-  uint16_t mode_index = 1003; // AutoSet Static Fast
-  int16_t tari = 0;
+  uint16_t mode_index = 0; // AutoSet Static Fast
+  int16_t tari = 16000;
   r420_msg_body_param_tlv_hdr_t c1g2_rf_control_param_hdr = {
     .attrs = htons((0 << 10) | R420_PARAM_TYPE_C1G2_RF_CONTROL), // reserved=0, type=C1G2RFControl
     .param_len = htons(sizeof(r420_msg_body_param_tlv_hdr_t) + sizeof(mode_index) + sizeof(tari))
