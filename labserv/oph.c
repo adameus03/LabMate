@@ -71,6 +71,7 @@ static char* oph_endpoint_url(oph_t* pOph, const char* endpoint) {
     return NULL;
   }
   strcpy(url, pOph->host);
+  LOG_V("oph_endpoint_url: host=%s", pOph->host);
   strcat(url, endpoint);
   return url;
 }
@@ -102,6 +103,7 @@ int oph_trigger_embodiment(oph_t* pOph, const char* epc, const char* apwd, const
 
   //Send request to on-premise server
   const char* endpoint_url = oph_endpoint_url(pOph, "/api/ite");
+  LOG_V("oph_trigger_embodiment: endpoint_url = %s", endpoint_url);
   assert(CURLE_OK == curl_easy_setopt(pOph->pCurl, CURLOPT_URL, endpoint_url));
   assert(CURLE_OK == curl_easy_setopt(pOph->pCurl, CURLOPT_POSTFIELDS, reqText));
   __oph_libcurl_write_data_t writeData = {0};

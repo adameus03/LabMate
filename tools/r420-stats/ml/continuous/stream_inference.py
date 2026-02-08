@@ -2,6 +2,8 @@ import argparse
 import os
 import sys
 from typing import List
+import itertools
+import time
 
 import numpy as np
 import torch
@@ -78,6 +80,8 @@ def run_stream_inference(
 
     buffer: List[np.ndarray] = []
 
+    counter = 0
+
     # Continuously reopen the pipe so we keep running even if the writer closes.
     while True:
         print(f"Waiting for data on pipe: {pipe_path}")
@@ -86,7 +90,11 @@ def run_stream_inference(
         # Open the pipe for reading text lines (blocks until a writer connects).
         try:
             with open(pipe_path, "r") as f:
-                for line in f:
+                #counter = 0
+                #for line in f:
+                for line in itertools.islice(f, counter, None):
+                    counter += 1
+                    print(f"len(buffer)={len(buffer)}")
                     sample = parse_csv_line(line)
                     if sample is None:
                         continue
@@ -125,12 +133,13 @@ def run_stream_inference(
                         coord = float(h3.item())
 
                     # Print prediction (one per line) and flush so consumers see it immediately
-                    print(coord)
+                    print(f"{counter} ({len(buffer)})-> {coord}")
                     sys.stdout.flush()
 
             # If we exit the for-loop, the writer closed the pipe (EOF).
             sys.stderr.write("[INFO] Writer closed the pipe. Reopening...\n")
             sys.stderr.flush()
+            time.sleep(0.1)
         except FileNotFoundError:
             # Pipe was removed while running.
             sys.stderr.write(

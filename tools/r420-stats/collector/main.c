@@ -140,7 +140,7 @@ static void mbuffer_stats(mbuffer_t *mbuf) {
     }
   }
   printf("\n");
-  for (size_t channel_index = 1; channel_index <= NUM_CHANNELS; channel_index++) {
+  for (size_t channel_index = 0; channel_index < NUM_CHANNELS; channel_index++) {
     // printf("MBUFFER STATS: Channel %zu measurement counts across antennas & tags: ", channel_index);
     // printf("%zu ", channels_usage[channel_index]);
     // //printf(" (%zu times)", tag_channels_counts[tag_index]);

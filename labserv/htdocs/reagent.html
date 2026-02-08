@@ -1007,6 +1007,8 @@
     }
 
     function __setActions_inventoryFormSubmission(elements, reagentId, username, sesskey) {
+      console.log("__setActions_inventoryFormSubmission");
+      console.log({elements, reagentId, username, sesskey});
       elements.modalInventoryItemForm
       .addEventListener("submit", async function (event) {
         event.preventDefault();
@@ -1142,7 +1144,7 @@
     }
 
     function setActions(elements, reagentId, username, sesskey) {
-      __setActions_inventoryFormSubmission(elements, reagentId);
+      __setActions_inventoryFormSubmission(elements, reagentId, username, sesskey);
       __setActions_inventoryFilterOptionsChange(elements);
       __setActions_inventoryFilterApply(elements, reagentId, username, sesskey);
       __setActions_canvasModalOpenClose(username, sesskey);

@@ -1,0 +1,48 @@
+[0.000s] Paced audio generator starting
+[0.000s] Chunk: 2048 samples = 46.4ms
+[0.001s] Waiting for first input...
+[2.486s] FIRST INPUT: value=0.0000 freq=141Hz | line: 60 (60)-> 6.626616573177091e-13
+[2.489s] Chunk #1: inputs=1 | freq=200Hz->target=200Hz
+[2.582s] INPUT #2: value=0.0000 freq=141Hz | delay=24.2ms gap=72ms | line: 61 (60)-> 3.890418803081941e-12
+[2.628s] Chunk #4: inputs=1 | freq=200Hz->target=200Hz
+[2.674s] INPUT #3: value=0.0000 freq=141Hz | delay=40.6ms gap=76ms | line: 62 (60)-> 3.1437769054676323e-10
+[2.722s] Chunk #6: inputs=1 | freq=200Hz->target=200Hz
+[2.722s] INPUT #4: value=0.0000 freq=141Hz | delay=17.6ms gap=71ms | line: 63 (60)-> -9.404047318639641e-09
+[2.768s] Chunk #7: inputs=1 | freq=200Hz->target=200Hz
+[2.814s] INPUT #5: value=0.0000 freq=141Hz | delay=21.3ms gap=88ms | line: 64 (60)-> -1.0702032149367824e-08
+[2.860s] Chunk #9: inputs=1 | freq=200Hz->target=200Hz
+[2.906s] INPUT #6: value=0.0000 freq=141Hz | delay=38.2ms gap=75ms | line: 65 (60)-> -7.673534696550632e-07
+[2.952s] Chunk #11: inputs=1 | freq=200Hz->target=200Hz
+[2.952s] INPUT #7: value=0.0000 freq=141Hz | delay=22.0ms gap=63ms | line: 66 (60)-> -1.2916741980006918e-05
+[2.999s] Chunk #12: inputs=1 | freq=200Hz->target=200Hz
+[2.999s] INPUT #8: value=0.0000 freq=141Hz | delay=6.8ms gap=62ms | line: 67 (60)-> -5.273535862215795e-06
+[3.046s] Chunk #13: inputs=1 | freq=200Hz->target=200Hz
+[3.092s] INPUT #9: value=0.0000 freq=141Hz | delay=35.3ms gap=65ms | line: 68 (60)-> -4.9235477490583435e-05
+[3.139s] Chunk #15: inputs=1 | freq=200Hz->target=200Hz
+[3.139s] INPUT #10: value=0.0000 freq=141Hz | delay=17.6ms gap=64ms | line: 69 (60)-> -0.0002756227331701666
+[3.185s] Chunk #16: inputs=1 | freq=200Hz->target=200Hz
+[3.231s] INPUT #11: value=0.0000 freq=141Hz | delay=45.1ms gap=65ms | line: 70 (60)-> -0.004472876433283091
+[3.278s] Chunk #18: inputs=1 | freq=200Hz->target=200Hz
+[3.278s] INPUT #12: value=0.0000 freq=141Hz | delay=24.3ms gap=68ms | line: 71 (60)-> -0.08340722322463989
+[3.325s] Chunk #19: inputs=1 | freq=200Hz->target=200Hz
+[3.372s] INPUT #13: value=0.0000 freq=141Hz | delay=39.0ms gap=79ms | line: 72 (60)-> -0.28458261489868164
+[3.419s] Chunk #21: inputs=1 | freq=200Hz->target=200Hz
+[3.419s] INPUT #14: value=0.0000 freq=141Hz | delay=18.5ms gap=68ms | line: 73 (60)-> -0.33086252212524414
+[3.464s] Chunk #22: inputs=1 | freq=200Hz->target=200Hz
+[3.530s] INPUT #15: value=0.0000 freq=141Hz | delay=36.2ms gap=93ms | line: 74 (60)-> -0.3492477238178253
+[3.557s] Chunk #24: inputs=1 | freq=200Hz->target=200Hz
+[3.649s] INPUT #16: value=0.0000 freq=141Hz | delay=34.8ms gap=121ms | line: 75 (60)-> -0.35520851612091064
+[3.696s] Chunk #27: inputs=1 | freq=200Hz->target=200Hz
+[3.696s] INPUT #17: value=0.0000 freq=141Hz | delay=3.5ms gap=78ms | line: 76 (60)-> -0.2679889500141144
+[3.743s] Chunk #28: inputs=1 | freq=200Hz->target=200Hz
+[3.835s] INPUT #18: value=0.0000 freq=141Hz | delay=44.9ms gap=98ms | line: 77 (60)-> -0.2111320048570633
+[3.881s] Chunk #31: inputs=1 | freq=200Hz->target=200Hz
+[3.882s] INPUT #19: value=0.0000 freq=141Hz | delay=16.6ms gap=74ms | line: 78 (60)-> -0.10585891455411911
+[3.928s] Chunk #32: inputs=1 | freq=200Hz->target=200Hz
+
+[3.965s] Stopped. Total inputs: 19, chunks: 32
+Fatal Python error: _enter_buffered_busy: could not acquire lock for <_io.BufferedReader name='<stdin>'> at interpreter shutdown, possibly due to daemon threads
+Python runtime state: finalizing (tstate=0x0000000000a840f8)
+
+Current thread 0x00007f0accd19540 (most recent call first):
+  <no Python frame>
