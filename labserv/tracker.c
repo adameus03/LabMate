@@ -349,7 +349,8 @@ typedef struct tracker_point {
   float z;
 } tracker_point_t;
 
-#define TRACKER_MVECTOR_NDIMS_MAX 128
+//#define TRACKER_MVECTOR_NDIMS_MAX 128
+#define TRACKER_MVECTOR_NDIMS_MAX 8192
 #define TRACKER_TIMESTAMP_LEN_MAX 32
 
 typedef tracker_point_t tracker_target_location_t;

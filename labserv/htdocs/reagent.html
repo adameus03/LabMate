@@ -876,7 +876,8 @@
           filterValue = Number(filterSelectWhatOpt);
           assert(Number.isInteger(filterValue), "filterValue is not an integer");
           //inventoryItems = await fetchInventoryItemsByLabId(filterValue, 0, 10);
-          inventoryItems = await fetchInventoryItemsByRidLid(reagentId, filterValue, 0, 10);
+          //inventoryItems = await fetchInventoryItemsByRidLid(reagentId, filterValue, 0, 10);
+          inventoryItems = await fetchInventoryItemsByRidLid(reagentId, filterValue, 0, 100);
           break;
         case "2": //faculty
           filterParam = "fid";
